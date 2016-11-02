@@ -16,6 +16,7 @@ import random, os, copy
 from six.moves import xrange
 import xlearn.utils
 import numpy as np
+import scipy.misc
 
 
 class Pipe(object):
@@ -77,6 +78,13 @@ class PipeSingleInput(Pipe):
 
     def _father(self):
         return self._branches[0]
+
+    def _process(self, result):
+        return result
+
+    def output(self):
+        self._seal_check()
+        yield self._process(self._father.output().next())
 
 
 class PipeFileReader(Pipe):
@@ -276,6 +284,41 @@ class PipeCopyer(PipeSingleInput):
             self._new_buffer()
         self._copyed += 1
         yield self._buffer
+
+# class DownSampler(PipeSingleInput):
+#     def __init__(self, pipe, ratio=1, method='nearest'):
+#         super(DownSampler, self).__init__(pipe)
+#         self._ratio = float(ratio)
+#         self._method = method
+
+#     def _new_shape(self, sz_old):
+#         sz = list(sz_old)
+#         sz[0] = np.ceil(sz[0]/self._ratio)
+#         sz[1] = np.ceil(sz[1]/self._ratio)
+#         return sz
+
+#     def _down_sample(self, img):
+#         sz = self._new_shape(img.shape)
+#         return scipy.misc.imresize(img, sz, interp=method)
+
+#     def _process(self, tensor_in):
+#         if xlearn.utils.tensor.image_type(tensor_in) == 'gray':
+#             return self._down_sample(tensor_in)
+#         if xlearn.utils.tensor.image_type(tensor_in) == 'RGB':
+#             sz = self._new_shape(tensor_in[:2])
+#             tensor_out = np.zeros(sz+[3])
+#             for i in xrange(3):
+#                 tensor_out[:, :, i] = self._down_sample(tensor_in[:, :, i])
+#         if xlearn.utils.tensor.image_type(tensor_in) == 'Ngray1':
+#             sz = self._new_shape(tensor_in[1:3])
+#             nimg = tensor_in.shape[0]
+#             tensor_out = np.zeros([nimg]+sz+[1])
+#             for i in xrange(tensor_in.shape[0]):
+#                 tensor_out[i, :, :, 0] = self._down_sample(tensor_in[i, :, :, 0])
+        
+
+        
+
 
         
 

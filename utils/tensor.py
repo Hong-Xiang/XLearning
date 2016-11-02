@@ -8,6 +8,24 @@ import numpy as np
 import scipy
 import h5py
 
+def image_type(tensor):    
+    if len(tensor.shape) == 2
+        return 'gray'
+    if len(tensor.shape) == 3 and tensor.shape[2] == 3:
+        return 'RGB'        
+    if len(tensor.shape) == 3 
+        return 'Ngray'
+    if len(tensor.shape) == 4 and tensor.shape[3] == 1:
+        return 'Ngray1'
+    if len(tensor.shape) == 4 and tensor.shape[3] == 3:
+        return 'NRGB'
+    if len(tensor.shape) == 4
+        return 'NHWC'
+    if len(tensor.shape) == 5
+        return 'NHWDC'
+    return 'unknown'
+    
+
 def unpack_tensor_ndlist(tensor_list):
     result = []
     for tensor_maybe in tensor_list:
