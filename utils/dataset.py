@@ -1,3 +1,4 @@
+#!/usr/bin/python
 # -*- coding: utf-8 -*-
 """
 Created on 2016-10-28 15:08:21
@@ -5,64 +6,217 @@ Created on 2016-10-28 15:08:21
 @author: HongXiang
 
 General dataset manipulations.
-    rename all items in a folder
-    merge multiple folders
+   rename all items in a folder
+   merge multiple folders
 """
+
 from __future__ import absolute_import, division, print_function
-import os
-import sys
-import re
-import random
-import argparse
-import time
+import os, sys, re, random, argparse, time, struct
+import scipy.misc
+import numpy as np
+import Image
+#from PIL import BmpImagePlugin
+from six.moves import xrange
 
+IMAGE_SUFFIX = ['bmp','png','jpg']
 
-def rename_all(folder_name, prefix=None):    
+def seperate_file_name(file):
+    pfn = re.compile('\D+\d+\w*')
+    if not pfn.match(file):
+        raise ValueError('Invalid file name.')        
+    pid = re.compile('\D\d+')
+    psu = re.compile('.\w*')    
+    mid = pid.search(file)
+    prefix = file[:mid.start()+1]
+    id = int(file[mid.start()+1:mid.end()])
+    suffix = file[mid.end()+1:]
+    if suffix != '':
+        seperater = file[mid.end()]
+        if seperater != '.':
+            raise ValueError('Invalid file name, seperater should be "."')
+    return prefix, id, suffix
+
+def form_file_name(prefix, id, suffix):
+    fn = prefix + '%09d'%id + '.' + suffix
+    return fn
+
+def rename(folder_name, prefix=None):    
+    folder_name = os.path.abspath(folder_name)    
     if prefix is None:    
-        l = list(str(time.time()))        
-        l.remove('.')        
+        l = list(str(time.time()))
+        l.remove('.')
         t = ''.join(l)
         prefix = 'TMP'+str(t)
         listing = os.listdir(folder_name)
         for infile in listing:
-            if infile[0] == '.':            
+            if os.path.isdir(infile):            
                 continue
             fname_new = prefix+infile
             old_name = os.path.join(folder_name, infile)
             new_name = os.path.join(folder_name, fname_new)
             os.rename(old_name, new_name)
-        else:
-            rename_all(folder_name)
-            listing = os.listdir(folder_name)
-            cid = 0            
-            for infile in listing:
-                if infile[0] == '.':                    
-                    continue
-                index = infile.rfind('.')
-                suffix = infile[index:]
-                prefix_now = prefix + str(cid)
-                fname_new = prefix_now+suffix
-                old_name = os.path.join(folder_name, infile)
-                new_name = os.path.join(folder_name, fname_new)                
-                os.rename(old_name, new_name)
-                cid += 1
+    else:
+        print('renaming:',folder_name)
+        rename(folder_name)        
+        listing = os.listdir(folder_name)
+        cid = 0            
+        for infile in listing:
+            if os.path.isdir(infile):                    
+                continue
+            index = infile.rfind('.')
+            if index < len(infile) - 1:
+                suffix = infile[index+1:]
+            else:
+                suffix = ''
+            fname_new = form_file_name(prefix, cid, suffix)
+            old_name = os.path.join(folder_name, infile)
+            new_name = os.path.join(folder_name, fname_new)                
+            os.rename(old_name, new_name)
+            cid += 1
 
-def down_sample(src, tar, ratio=2):
-    pass
+def img2jpeg(folder_name):
+    path = os.path.abspath(folder_name)
+    files = os.listdir(path)    
+    for file in files:        
+        prefix, id, suffix = seperate_file_name(file)
+        if suffix == 'jpg':
+            continue
+        fullname = os.path.join(path, file)
+        # im = Image.open(fullname)
+        im = scipy.misc.imread(fullname)
+        if im.mode != 'RGB':
+            im.convert('RGB')
+        newname = form_file_name(prefix, id, 'jpg')
+        print('convert:',file,newname)
+        fullnamenew = os.path.join(path, newname)
+        im.save(fullnamenew, 'JPEG')
 
-def main(argv):
-    parser = argparse.ArgumentParser(description='General Dataset manipulations.')
-    parser.add_argument('--rename', '-r', dest='rename_folder_list')
-    parser.add_argument('--merge', '-m', dest='merge_folder_list')    
-    parser.add_argument('--targe', '-t', dest='targe_folder_name')
+def jpg2npy(folder_name, prefix, suffix, id0, id1):
+    print("JPEG to NPY Tool...")
+    path = os.path.abspath(folder_name)
+    files = os.listdir(path)
+    ids = list(xrange(int(id0), int(id1)+1))
+    print(ids)
+    for file in files:
+        fullname = os.path.join(path, file)
+        if os.path.isdir(fullname):
+            continue        
+        prefix_f, id_f, suffix_f = seperate_file_name(file)
+        
+        if prefix_f != prefix:
+            continue
+        if suffix_f != suffix:
+            continue                       
+        if id_f not in ids:
+            continue         
+        im = scipy.misc.imread(fullname)
+        im = np.array(im)
+        filename = form_file_name(prefix, id_f, 'npy')
+        np.save(filename, im)
 
-    args = parser.parse_args(argv[1:])
-    #if merge is required, rename them into random names first
-    for folder in args.merge_folder_list:
-        rename_all(folder)
+def raw2npy(folder_name, prefix, suffix, id0, id1, shape):
+    path = os.path.abspath(folder_name)
+    files = os.listdir(path)
+    ids = list(xrange(int(id0), int(id1)+1))    
+    for file in files:
+        fullname = os.path.join(path, file)        
+        if os.path.isdir(fullname):
+            continue        
+        prefix_f, id_f, suffix_f = seperate_file_name(file)
+        if prefix_f != prefix:
+            continue
+        if suffix_f != suffix:
+            continue            
+        if not id_f in ids:
+            continue
+        height = shape[0]
+        width = shape[1]
+        frame = shape[2]
+        pixel = height * width * frame        
+        data = np.zeros([pixel])
+        with open(fullname) as f:
+            bindata = f.read()
+            for i in xrange(pixel):
+                res = struct.unpack('<f',bindata[i*4:i*4+4])   
+                data[i] = res[0]
+        data2 = np.zeros([height, width, frame])        
+        for i in range(width):
+            for j in range(height):
+                for k in range(frame):
+                    idf = i + j * width + k * width * height
+                    data2[j, i, k] = data[idf]        
+        filename = form_file_name(prefix_f, id_f, 'npy')        
+        np.save(filename, data2)
     
+def main(argv):
+    print('Dataset tools for command line.')
+    parser = argparse.ArgumentParser(description='Dataset construction.')
+    parser.add_argument('--rename',
+                        action='store_true',
+                        default=False,
+                        help='rename all data items.')
+    parser.add_argument('--img2jpg',
+                        action='store_true',
+                        default=False,
+                        help='convert all images to JPEG.')
+    parser.add_argument('--jpg2npy',
+                        action='store_true',
+                        default=False,
+                        help='convert all JPEG to npy.')
+    parser.add_argument('--raw2npy',
+                        action='store_true',
+                        default=False,
+                        help='read raw data to npy')
+    parser.add_argument('--filename',
+                        action='store_true',
+                        default=False,
+                        help='Analysis file name.')
+    parser.add_argument('--noaction', '-n', 
+                        action='store_true',
+                        default=False,
+                        help='print setting, do noting.')        
+    parser.add_argument('--source', '-s',
+                        dest='source',
+                        required=True,
+                        help='working folder/file.')                 
+    parser.add_argument('--suffix',
+                        dest='suffix', default='',
+                        help='suffix')
+    parser.add_argument('--prefix', dest='prefix')
+    parser.add_argument('--shape', dest='shape', nargs='+', type=int)
+    parser.add_argument('--index0', dest='id0', type=int)
+    parser.add_argument('--index1', dest='id1', type=int)
+    parser.add_argument('--endian',
+                        dest='endian',
+                        default='l',
+                        help='Endianness, l or b')
 
+    args = parser.parse_args(argv)
+    if args.noaction:
+        print(args)
+        return
+    if args.filename:
+        print(seperate_file_name(args.source))
+        return
+    
+    if args.rename:
+        rename(args.source, args.prefix)
+    
+    if args.img2jpg:
+        img2jpeg(args.source)
+    
+    if args.jpg2npy:
+        jpg2npy(args.source, args.prefix, args.suffix, args.id0, args.id1)
+    
+    if args.raw2npy:
+        raw2npy(args.source, args.prefix, args.suffix, args.id0, args.id1, args.shape)
+    # if argv[1] == 'rename':        
+    #     rename(argv[2], argv[3])
+    # if argv[1] == 'jpeg':
+    #     to_jpeg(argv[2])
+    # if argv[1] == 'npy':
+    #     to_npy(argv[2], argv[3], argv[4], argv[5], argv[6])
 
 if __name__=="__main__":
-    main(sys.argv)
+    main(sys.argv[1:])
     
