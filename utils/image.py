@@ -37,6 +37,9 @@ def down_sample(img, down_sample_factor = 2):
     return img_down
 
 def patch_generator(image, patch_height, patch_width, stride_v, stride_h):   
+    """
+    WARNNING: DeprecationWarning
+    """
     image_height = image.shape[0]
     image_width = image.shape[1] 
     if len(image.shape) == 3:        
@@ -61,6 +64,9 @@ def patch_generator(image, patch_height, patch_width, stride_v, stride_h):
             y_offset = image_height - patch_height
 
 def patch_random_generator(image, patch_height, patch_width, n_patches):
+    """
+    WARNNING: DeprecationWarning
+    """
     image_height = image.shape[0]
     image_width = image.shape[1]
     assert(image_height >= patch_height)

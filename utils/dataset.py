@@ -91,12 +91,11 @@ def img2jpeg(folder_name):
         fullnamenew = os.path.join(path, newname)
         im.save(fullnamenew, 'JPEG')
 
-def jpg2npy(folder_name, prefix, suffix, id0, id1):
+def jpg2npy(folder_name, prefix, id0, id1):
     print("JPEG to NPY Tool...")
     path = os.path.abspath(folder_name)
     files = os.listdir(path)
-    ids = list(xrange(int(id0), int(id1)+1))
-    print(ids)
+    ids = list(xrange(int(id0), int(id1)+1))    
     for file in files:
         fullname = os.path.join(path, file)
         if os.path.isdir(fullname):
@@ -105,7 +104,7 @@ def jpg2npy(folder_name, prefix, suffix, id0, id1):
         
         if prefix_f != prefix:
             continue
-        if suffix_f != suffix:
+        if suffix_f != 'jpg':
             continue                       
         if id_f not in ids:
             continue         
@@ -206,7 +205,7 @@ def main(argv):
         img2jpeg(args.source)
     
     if args.jpg2npy:
-        jpg2npy(args.source, args.prefix, args.suffix, args.id0, args.id1)
+        jpg2npy(args.source, args.prefix, args.id0, args.id1)
     
     if args.raw2npy:
         raw2npy(args.source, args.prefix, args.suffix, args.id0, args.id1, args.shape)

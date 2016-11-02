@@ -1,4 +1,4 @@
 from __future__ import absolute_import
-import utils.dataset
-#import utils.image
-#import utils.tensor
+import xlearn.utils.dataset
+import xlearn.utils.image
+import xlearn.utils.tensor
