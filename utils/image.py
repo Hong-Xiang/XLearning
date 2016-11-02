@@ -18,9 +18,17 @@ def imread(filename):
     return misc.imread(filename)
 
 def rgb2gray(image):    
-    grayimg = np.mean(image,2)
-    if len(grayimg.shape) == 2:
-        grayimg = np.reshape(grayimg, grayimg.shape + [1])
+    """
+    Calculate gray image from RGB image.
+    Args:
+        image: a [N*]H*W[*C] tensor, if N is provided, then C must provide.
+    """
+    if len(image.shape) == 4:
+        grayimg = np.mean(image, axis=3, keepdims=True)
+    if len(image.shape) == 3:
+        grayimg = np.mean(image, axis=2)
+    if len(image.shape) == 2:
+        grayimg = np.copy(image)
     return grayimg
 
 def down_sample(img, down_sample_factor = 2):
