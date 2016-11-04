@@ -17,6 +17,8 @@ def image_type(tensor):
         return 'gray1'
     if len(tensor.shape) == 3:
         return 'Ngray'
+    if len(tensor.shape) == 4 and tensor.shape[3] == 1 and tensor.shape[0] == 1:
+        return '1gray1'    
     if len(tensor.shape) == 4 and tensor.shape[3] == 1:
         return 'Ngray1'
     if len(tensor.shape) == 4 and tensor.shape[3] == 3:
@@ -39,7 +41,7 @@ def unpack_tensor_ndlist(tensor_list):
             result.extend(unpack_tensor_ndlist(tensor_maybe))
     return result
 
-def merge_tensor_list(tensor_list):
+def merge_tensor_list(tensor_list, squeeze=False):
     """Merge a list of tensors into a large tensor
     supports tensor up to 5 dimension
     Args: tensor list
@@ -66,6 +68,10 @@ def merge_tensor_list(tensor_list):
             tensor_o[i, :, :] = tensor_list[i]
         if len(tensor_shape) == 1:
             tensor_o[i, :] = tensor_list[i]
+    output_shape = list(tensor_o.shape)
+    while 1 in output_shape:
+        output_shape.remove(1)
+    tensor_o = np.reshape(tensor_o, output_shape)
     return tensor_o
 
 def merge_patch_list(patch_list):
@@ -220,12 +226,25 @@ def patch_generator_tensor(tensor, patch_shape, stride_step, n_patches=None, use
         patch = tensor[:, y_offset: y_offset+patch_shape[0], x_offset: x_offset+patch_shape[1], :]
         yield patch
 
-def patches_recon_tensor(patch_list, tensor_shape, patch_shape, stride_step, valid_shape, valid_offset):
+def patches_recon_tensor(patch_list,
+                         tensor_shape, patch_shape, stride_step,
+                         valid_shape, valid_offset):
     """
     Iterpolator: later
     """
-    image_shape = [tensor_shape[1], tensor_shape[2]]
-    x_offset, y_offset=offset_generator(image_shape, patch_shape, stride_step)
+    if len(tensor_shape) != 4:
+        raise TypeError('tensor_shape needs to be 4D, get %dD.'%len(tensor_shape))
+    if len(patch_shape) != 2:
+        raise TypeError('tensor_shape needs to be 2D, get %dD.'%len(patch_shape))
+    if len(stride_step) != 2:
+        raise TypeError('tensor_shape needs to be 2D, get %dD.'%len(stride_step))
+    if len(valid_shape) != 2:
+        raise TypeError('tensor_shape needs to be 2D, get %dD.'%len(valid_shape))
+    if len(valid_offset) != 2:
+        raise TypeError('tensor_shape needs to be 2D, get %dD.'%len(valid_offset))
+
+    image_shape = [tensor_shape[1], tensor_shape[2]]    
+    x_offset, y_offset=offset_generator(image_shape, patch_shape, stride_step)    
     tensor=np.zeros(tensor_shape)
     cid = 0
     for patch in patch_list:

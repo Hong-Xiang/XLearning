@@ -241,6 +241,7 @@ class NPYReader(Pipe):
         self._cid = 0
         self._id_shuffle = []
         self._new_epoch()
+        self._shape = None
 
     def _new_epoch(self):
         self._epoch += 1
@@ -256,6 +257,7 @@ class NPYReader(Pipe):
                                                           self._suffix)
         fullname = os.path.join(self._path, filename)
         data = np.array(np.load(filename))
+        self._shape = data.shape
         self._cid += 1
         if self._cid == self._nfiles:
             self._new_epoch()
@@ -264,6 +266,10 @@ class NPYReader(Pipe):
     @property
     def n_files(self):
         return self._nfiles
+
+    @property
+    def last_shape(self):
+        return self._shape
 
 class ImageFormater(SingleInput):
     """
@@ -282,10 +288,13 @@ class ImageFormater(SingleInput):
         if not isinstance(img_maybe, np.ndarray):
             raise TypeError('ImageFormater only accepts {0}, given {1}'.format(np.ndarray, type(img_maybe)))
         img_type = xlearn.utils.tensor.image_type(img_maybe)
+        output = img_maybe
         if img_type is 'gray' or img_type is 'RGB':
             output = img_maybe
         if img_type is 'gray1':
             output = img_maybe[:, :, 0]
+        if img_type is '1gray1':
+            output = img_maybe[0, :, :, 0]
         if img_type is 'Ngray':
             if img_maybe.shape[0] == 1:
                 output = img_maybe[0, :, :]
@@ -322,26 +331,33 @@ class ImageGrayer(SingleInput):
 
 
 class TensorFormater(SingleInput):
-    def __init__(self, input_, newshape=None, auto_shape=False, name='TensorFormater', is_seal=False):
+    def __init__(self, input_, squeeze=True, newshape=None, auto_shape=False, name='TensorFormater', is_seal=False):
         super(TensorFormater, self).__init__(input_, name=name, is_seal=is_seal)
         self._shape = newshape        
         self._auto_shape = auto_shape
+        self._squeeze = squeeze
 
-                           
     def _process(self):
-        tensor = self._gather()
-        if tensor is None:
-            return None
-        tensor = tensor[0]
+        tensor_list = self._gather()
+        tensor_list = tensor_list[0]               
+        if tensor_list is None:
+            return None        
+        output = xlearn.utils.tensor.merge_tensor_list(tensor_list, squeeze=self._squeeze)
+        preshape = output.shape             
         if self._shape is not None:
             newshape = self._shape
-        elif self._auto_shape:
-            preshape = tensor.shape
-            newshape = [1, 1, 1, 1]
-            newshape[-len(preshape):]=preshape
+        elif self._auto_shape:                        
+            if len(preshape) == 3:
+                newshape = [1, 1, 1, 1]
+                newshape[-len(preshape):]=preshape
+            elif len(preshape) == 2:
+                newshape = [1, 1, 1, 1]
+                newshape[1:3] = preshape
+            else:
+                newshape = preshape
         else:
-            newshape = preshape
-        output = np.reshape(tensor, newshape)
+            newshape = preshape        
+        output = np.reshape(output, newshape)
         return output
 
 class PatchGenerator(SingleInput):
@@ -376,8 +392,8 @@ class PatchMerger(SingleInput):
                  tensor_shape, patch_shape, strides,
                  valid_shape, valid_offset,
                  name="PatchMerger", is_end=None, is_seal=False):
-        super(PatchMerger, self).__init__(input_, is_end=is_end, is_seal=is_seal)
-        self._tensor_shape = tensor_shape
+        super(PatchMerger, self).__init__(input_, is_seal=is_seal)
+        self._tensor_shape = tensor_shape        
         self._patch_shape = patch_shape
         self._strides = strides
         self._valid_shape = valid_shape
@@ -387,7 +403,7 @@ class PatchMerger(SingleInput):
         input_ = self._gather()
         if input_ is None:
             return None
-        input_ = input_[0]        
+        input_ = input_[0]
         output_ = xlearn.utils.tensor.patches_recon_tensor(input_,
                                                            self._tensor_shape,
                                                            self._patch_shape,
