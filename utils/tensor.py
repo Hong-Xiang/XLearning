@@ -9,19 +9,21 @@ import scipy
 import h5py
 
 def image_type(tensor):    
-    if len(tensor.shape) == 2
+    if len(tensor.shape) == 2:
         return 'gray'
     if len(tensor.shape) == 3 and tensor.shape[2] == 3:
         return 'RGB'        
-    if len(tensor.shape) == 3 
+    if len(tensor.shape) == 3 and tensor.shape[2] == 1:
+        return 'gray1'
+    if len(tensor.shape) == 3:
         return 'Ngray'
     if len(tensor.shape) == 4 and tensor.shape[3] == 1:
         return 'Ngray1'
     if len(tensor.shape) == 4 and tensor.shape[3] == 3:
         return 'NRGB'
-    if len(tensor.shape) == 4
+    if len(tensor.shape) == 4:
         return 'NHWC'
-    if len(tensor.shape) == 5
+    if len(tensor.shape) == 5:
         return 'NHWDC'
     return 'unknown'
     
@@ -227,13 +229,15 @@ def patches_recon_tensor(patch_list, tensor_shape, patch_shape, stride_step, val
     tensor=np.zeros(tensor_shape)
     cid = 0
     for patch in patch_list:
-        ty0 = y_offset[cid] + valid_offset[0] + 12
-        tx0 = x_offset[cid] + valid_offset[1] + 12
+        # ty0 = y_offset[cid] + valid_offset[0] + 12        
+        # tx0 = x_offset[cid] + valid_offset[1] + 12
+        ty0 = y_offset[cid] + valid_offset[0]
+        tx0 = x_offset[cid] + valid_offset[1]
         py0 = valid_offset[0]
         px0 = valid_offset[1]
         dy = valid_shape[0]
         dx = valid_shape[1]
         tensor[:, ty0: ty0+dy, tx0: tx0+dx, :] = patch[:, py0: py0+dy, px0: px0+dx, :]
-        tensor[:, ty0: ty0+25, tx0: tx0+25, :] = patch[:, py0: py0+25, px0: px0+25, :]        
+        # tensor[:, ty0: ty0+25, tx0: tx0+25, :] = patch[:, py0: py0+25, px0: px0+25, :]        
         cid += 1
     return tensor
