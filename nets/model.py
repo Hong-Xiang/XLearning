@@ -13,6 +13,72 @@ import xlearn.nets.layers as layer
 
 FLAGS = tf.app.flags.FLAGS
 
+class MNIST(object):
+    def __init__(self, n_hidden, varscope=tf.get_variable_scope()):        
+        height = 28
+        width = 28
+        self._pixels = height*width
+        self._input = layer.inputs([None, height, width])
+        self._label = layer.labels([None, 10])
+        self._n_hidden = n_hidden        
+        self._net_definition(varscope)
+        # with tf.variable_scope('net') as scope:
+        #     self._global_step = tf.get_variable()
+        # self._variables = tf.get
+        
+
+    def _net_definition(self, varscope):
+        flaten = tf.reshape(self._input,
+                            [-1, 28*28],
+                            name='flatten')
+
+        hidden = layer.full_connect(flaten,
+                                    [self._pixels, self._n_hidden],
+                                    name='hidden',
+                                    varscope=varscope)
+        
+        
+        hidden2 = layer.full_connect(hidden,
+                                    [self._n_hidden, self._n_hidden],
+                                    name='hidden',
+                                    varscope=varscope)
+
+        self._infer = layer.matmul_bias(hidden2,
+                                  [self._n_hidden, 10],
+                                  name='infer',
+                                  varscope=varscope)
+        
+        # self._infer = layer.matmul_bias(self._input,
+        #                           [self._pixels, 10],
+        #                           name='infer',
+        #                           varscope=varscope)
+
+        # self._loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(self._infer, self._label), name='loss')
+        self._loss = layer.predict_loss(self._infer, self._label)
+        # correct_prediction = tf.equal(tf.argmax(self._infer,1), tf.argmax(self._label,1))
+        # self._accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
+        self._accuracy = layer.predict_accuracy(self._infer, self._label)
+    
+    @property
+    def infer(self):
+        return self._infer
+
+    @property
+    def loss(self):
+        return self._loss
+    
+    @property
+    def inputs(self):
+        return self._input
+    
+    @property
+    def label(self):
+        return self._label
+    
+    @property
+    def accuracy(self):
+        return self._accuracy
+        
 class SuperNet(object):
     """Super resolution net
     """

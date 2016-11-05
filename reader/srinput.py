@@ -14,6 +14,12 @@ import xlearn.utils.xpipes as xpipe
 import xlearn.utils.dataset as xdata
 
 class DataSet(object):
+    """
+    A general super resolution net.
+
+    next_batch() provides 
+            (low_resolution_patch_tensor, high_resolution_patch_tensor)
+    """
     def __init__(self, path, prefix,
                  patch_shape, strides, 
                  batch_size, 
