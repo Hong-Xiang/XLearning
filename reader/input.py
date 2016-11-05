@@ -21,7 +21,8 @@ class DataSet(object):
                  down_sample_ratio=1,
                  ids=None,
                  padding=False,
-                 dataset_type='test'):
+                 dataset_type='test',
+                 down_sample_method='fixed'):
         self._path = os.path.abspath(path)
         self._patch_shape = patch_shape
         self._batch_size = batch_size
@@ -55,7 +56,7 @@ class DataSet(object):
         self._copyer = xpipe.Copyer(self._buffer, copy_number=2)
         self._hr_patch_gen = xpipe.TensorFormater(self._copyer, auto_shape=True)
         self._hr_patch_gen = xpipe.TensorFormater(self._copyer, auto_shape=True)
-        self._down_sample = xpipe.DownSampler(self._copyer, self._ratio, method='fixed')
+        self._down_sample = xpipe.DownSampler(self._copyer, self._ratio, method=down_sample_method)
         self._lr_patch_gen = xpipe.TensorFormater(self._down_sample, auto_shape=True)
         
     def next_batch(self):

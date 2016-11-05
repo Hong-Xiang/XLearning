@@ -187,6 +187,9 @@ class Counter(Pipe):
 
 
 class ConstPumper(Buffer):
+    """
+    General input of pipe system.    
+    """
     def __init__(self, const_item, name='ConstPumper', is_seal=False):
         super(ConstPumper, self).__init__(name=name, is_start=True, is_seal=is_seal)         
         self._const = copy.deepcopy(const_item)        
@@ -194,6 +197,9 @@ class ConstPumper(Buffer):
     def _pump(self):        
         return self._const
     
+    def set(const_item):
+        self._const = const_item
+        
     @property
     def const_item(self):
         return self._const
@@ -268,7 +274,7 @@ class NPYReader(Pipe):
     def _pump(self):
         filename = self._file_names[self._id_shuffle[self._cid]]        
         fullname = os.path.join(self._path, filename)
-        data = np.array(np.load(filename))
+        data = np.array(np.load(fullname))
         self._shape = data.shape
         self._cid += 1
         if self._cid == self._nfiles:

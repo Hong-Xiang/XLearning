@@ -1,18 +1,22 @@
 """
-net definition
+Definition of subnets.
+
+Subnets must have following methods:
+output = infer(input[s])
+output = loss(input[s], lable[s])
+variable_list = variables([flags])
 """
 from __future__ import absolute_import, division, print_function
 
 import tensorflow as tf
-import supernet.layers as layer
+import xlearn.nets.layers as layer
 
-import supernet_old.supernet_input
 FLAGS = tf.app.flags.FLAGS
 
 class SuperNet(object):
     """Super resolution net
     """
-    def __init__(self):
+    def __init__(self):        
         self._global_step = tf.Variable(0, trainable=False, name='global_step')
 
         self._low_res_images = layer.input_layer([FLAGS.batch_size,
