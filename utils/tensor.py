@@ -7,6 +7,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import scipy
 import h5py
+import random
 
 def image_type(tensor):    
     if len(tensor.shape) == 2:
