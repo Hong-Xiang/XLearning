@@ -20,9 +20,9 @@ class MNIST(TFNet):
         self._input = layer.inputs([None, height, width, 1])
         self._label = layer.labels([None, 10])
         self._n_hidden = n_hidden
-        self._net_definition(self._var_scope)        
+        self._net_definition()        
         
-    def _net_definition(self, varscope):
+    def _net_definition(self):
         flaten = tf.reshape(self._input,
                             [-1, 28*28],
                             name='flatten')
@@ -30,18 +30,18 @@ class MNIST(TFNet):
         hidden = layer.full_connect(flaten,
                                     [self._pixels, self._n_hidden],
                                     name='hidden',
-                                    varscope=varscope)
+                                    varscope=self._var_scope)
         
         
         hidden2 = layer.full_connect(hidden,
                                     [self._n_hidden, self._n_hidden],
                                     name='hidden',
-                                    varscope=varscope)
+                                    varscope=self._var_scope)
 
         self._infer = layer.matmul_bias(hidden2,
                                   [self._n_hidden, 10],
                                   name='infer',
-                                  varscope=varscope)
+                                  varscope=self._var_scope)
                         
         self._loss = layer.predict_loss(self._infer, self._label)        
         self._accuracy = layer.predict_accuracy(self._infer, self._label)

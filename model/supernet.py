@@ -11,22 +11,49 @@ import tensorflow as tf
 import xlearn.nets.layers as layer
 from xlearn.nets.model import TFNet 
 
+class SuperNetBasic(TFNet):
+    """
+    Most naive implementation, based on https://arxiv.org/pdf/1501.00092.pdf
+    """
+    def __init__(self):
+        self._input = layer.input_layer([None,
+                                        FLAGS.height,
+                                        FLAGS.width,
+                                        1],
+                                       "input_low_res")
+
+        self._label = layer.label_layer([None,
+                                         FLAGS.height,
+                                         FLAGS.width,
+                                        1],
+                                        "input_high_res")
+        
+        self._net_definition()
+        tf.image_summary('input_low', self._low_res_cropped)
+        tf.image_summary('label_high', self._high_res_cropped)
+        tf.image_summary('residual_reference', self._residual_cropped)
+        tf.image_summary('residual_inference', self._residual_inference)
+        tf.image_summary('inference', self._inference_image)
+
+    def _net_definition(self):
+
+
 class SuperNet(TFNet):
     """Super resolution net
     """
-    def __init__(self):
-        self._low_res_images = layer.input_layer([FLAGS.batch_size,
+    def __init__(self):                
+        self._low_res_images = layer.input_layer([None,
                                                   FLAGS.height,
                                                   FLAGS.width,
                                                   1],
                                                  "input_low_res")
 
-        self._residual_full = layer.label_layer([FLAGS.batch_size,
-                                                 FLAGS.height,
-                                                 FLAGS.width,
-                                                 1],
-                                                "residual_reference")
-
+        self._high_res_images = layer.label_layer([None,
+                                                  FLAGS.height,
+                                                  FLAGS.width,
+                                                  1],
+                                                  "input_high_res")
+        
         self._residual_cropped = layer.crop_layer(self._residual_full,
                                                   [FLAGS.valid_h,
                                                    FLAGS.valid_w],
