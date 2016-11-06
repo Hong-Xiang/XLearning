@@ -14,7 +14,9 @@ import random
 import os
 import copy
 from six.moves import xrange
-import xlearn.utils
+import xlearn.utils.tensor
+import xlearn.utils.image
+import xlearn.utils.general
 import numpy as np
 import scipy.misc
 import re
