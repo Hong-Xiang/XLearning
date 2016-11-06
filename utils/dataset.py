@@ -14,8 +14,8 @@ from __future__ import absolute_import, division, print_function
 import os, sys, re, random, argparse, time, struct
 import scipy.misc
 import numpy as np
-import Image
-#from PIL import BmpImagePlugin
+
+
 from six.moves import xrange
 
 IMAGE_SUFFIX = ['bmp','png','jpg']

@@ -18,8 +18,7 @@ def _weight_variable(name, shape, ncolumn, scope=tf.get_variable_scope()):
     """
     dtype = tf.float32
     #set optimal stdandard deviation for relu units.
-    stddev = np.sqrt(2.0/ncolumn)
-    stddev = 1e-6    
+    stddev = np.sqrt(2.0/ncolumn)    
     initer = tf.truncated_normal_initializer(stddev=stddev, dtype=dtype)    
     with tf.variable_scope(scope):
         var = tf.get_variable(name, shape=shape, initializer=initer, dtype=dtype)    
