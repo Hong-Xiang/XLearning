@@ -4,18 +4,7 @@ import numpy as np
 
 FLAGS = tf.app.flags.FLAGS
 
-def _activation_summary(x):
-    """Helper to create summaries for activations.
-    Creates a summary that provides a histogram of activations.
-    Creates a summary that measure the sparsity of activations.
-    Args:
-      x: Tensor
-    Returns:
-      nothing
-    """    
-    tensor_name = x.op.name
-    tf.histogram_summary(tensor_name + '/activations', x)
-    tf.scalar_summary(tensor_name + '/sparsity', tf.nn.zero_fraction(x))
+
 
 def _weight_variable(name, shape, ncolumn, scope=tf.get_variable_scope()):
     """Helper to create a Variable
@@ -29,7 +18,8 @@ def _weight_variable(name, shape, ncolumn, scope=tf.get_variable_scope()):
     """
     dtype = tf.float32
     #set optimal stdandard deviation for relu units.
-    stddev = np.sqrt(2.0/ncolumn) 
+    stddev = np.sqrt(2.0/ncolumn)
+    stddev = 1e-6    
     initer = tf.truncated_normal_initializer(stddev=stddev, dtype=dtype)    
     with tf.variable_scope(scope):
         var = tf.get_variable(name, shape=shape, initializer=initer, dtype=dtype)    
@@ -56,7 +46,7 @@ def _weight_variable_with_decay(name, shape, ncolumn, wd=0.0, scope=tf.get_varia
 
 def _bias_variable(name, shape, scope=tf.get_variable_scope()):
     dtype = tf.float32
-    initer = tf.constant_initializer(0.1)
+    initer = tf.constant_initializer(0.0)
     with tf.variable_scope(scope):    
         var = tf.get_variable(name, shape, initializer=initer, dtype=dtype)
     return var
@@ -85,7 +75,7 @@ def lrelu(tensor_input, name='LReLU'):
 def activation(tensor_input, activation_function=tf.nn.relu, varscope=tf.get_variable_scope(), name='activation'):
     if activation_function is None:
         raise TypeError('No activation function!')
-    if activation_function is tf.nn.relu:
+    if activation_function is tf.nn.relu:        
         tensor = tf.nn.relu(tensor_input, name)
     if activation_function is lrelu:
         tensor = lrelu(tensor_input, name)
@@ -132,8 +122,7 @@ def convolution(tensor_input,
                 strides = [1, 1, 1, 1],
                 padding = "VALID",
                 name='convolution',
-                varscope=tf.get_variable_scope(),
-                ): 
+                varscope=tf.get_variable_scope()): 
     """
     Args:
         tensor_input:
@@ -145,20 +134,36 @@ def convolution(tensor_input,
     Return:
         tensor
     """
-    with tf.name_scope(name) as scope:
+    with tf.name_scope(name) as scope:        
         n_input = filter_shape[0]*filter_shape[1]*filter_shape[2]*filter_shape[3]
         weights = _weight_variable_with_decay(scope+'weights', filter_shape,
                                               ncolumn=n_input, scope=varscope)
         conv_tensor = tf.nn.conv2d(tensor_input, weights, strides, padding,
-                                   name=scope+"conv")
+                                   name="conv")
         biases = _bias_variable(scope+'biases', filter_shape[3], scope=varscope)
         tensor = tf.nn.bias_add(conv_tensor, biases, name='add_bias')                            
     return tensor
 
+def conv_activate(input_,
+                  filter_shape,
+                  strides=[1, 1, 1, 1],
+                  padding='VALID',
+                  name='conv_active',
+                  activation_function=tf.nn.relu,
+                  varscope=tf.get_variable_scope()):
+    with tf.name_scope(name) as scope:        
+        conv = convolution(input_, filter_shape=filter_shape,
+                           strides=strides, padding=padding,
+                           name='convolution', varscope=varscope)
+        output = activation(conv, activation_function=activation_function,
+                            varscope=varscope, name='activation')
+    return output
+
+
 def feature(tensor_input,
             filter_shape, strides_conv=[1,1,1,1], padding_conv = "SAME",
             activation_function=None,
-            pooling_ksize=[1, 4, 4, 1], strides_pool=[1,4,4,1], padding_pool = "VALID",
+            pooling_ksize=[1, 4, 4, 1], strides_pool=[1,4,4,1], padding_pool = "SAME",
             varscope=tf.get_variable_scope(),          
             name='feature'):
     with tf.name_scope(name) as scope:
@@ -209,18 +214,20 @@ def residual_add(original_tensor, residual_tensor, name="add_residual"):
         tensor = tf.add(residual_tensor, original_tensor, name = scope + 'add')
     return tensor
 
-def l2_loss(inference_image, high_res_image, name = "loss_layer"):
+def l2_loss(inference_image, reference_image, name = "loss_layer"):
     with tf.name_scope(name) as scope:
-        l2 = tf.square(inference_image - high_res_image)
-        loss = tf.sqrt(tf.reduce_sum(l2))
+        # l2 = tf.square(inference_image - high_res_image)
+        # loss = tf.sqrt(tf.reduce_sum(l2))
+        loss = tf.nn.l2_loss(inference_image-reference_image, name=scope+name)
         tf.add_to_collection('losses', loss)
     return loss
 
 def psnr_loss(inference_tensor, reference_tensor, name = "loss_layer"):
     with tf.name_scope(name) as scope:
-        l2 = tf.square(inference_tensor - reference_tensor, name='l2_difference')
-        MSE = tf.reduce_sum(l2, name='MSE')
-        loss = tf.neg(tf.log(tf.inv(tf.sqrt(MSE))), name='psnr')
+        # l2 = tf.square(inference_tensor - reference_tensor, name='l2_difference')
+        # MSE = tf.reduce_sum(l2, name='MSE')
+        MSE = tf.nn.l2_loss(inference_tensor - reference_tensor, name='MSE')
+        loss = tf.neg(tf.log(tf.inv(tf.sqrt(MSE+FLAGS.eps))), name='psnr')
         tf.add_to_collection('losses', loss)        
     return loss
 
@@ -268,4 +275,11 @@ def predict_accuracy(inference, reference, name='predic_accuracy'):
 def dropout(input_, keep_prob, name='dropout'):
     with tf.name_scope(name) as scope:
         output = tf.nn.dropout(input_, keep_prob)
+    return output
+
+def trainstep(loss, learn_rate, global_step, name='train_step'):
+    with tf.name_scope(name) as scope:
+        output = tf.train.GradientDescentOptimizer(learn_rate).minimize(loss,
+                                                                        global_step,
+                                                                        name=scope+name)
     return output

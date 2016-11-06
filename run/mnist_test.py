@@ -58,7 +58,7 @@ def test(argv):
         if i%500 == 0:
             [accuracy_train] = manager.run([net.accuracy], feed_dict={net.inputs:data, net.label:label, net.keep_prob:1.0})
             # data_test, label_test = mnist.test.next_batch(FLAGS.batch_size)
-            data_test, label_test = train_set.next_batch()
+            data_test, label_test = test_set.next_batch()
             [accuracy_test] = manager.run([net.accuracy], feed_dict={net.inputs:data_test, net.label:label_test, net.keep_prob:1.0})
             print('setp={0}, train accuracy = {1}, test accuracy = {2}.'.format(i, accuracy_train, accuracy_test))
 

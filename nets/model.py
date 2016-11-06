@@ -21,6 +21,23 @@ def before_net_definition():
                                       initializer=zeroinit,
                                       dtype=tf.float32)
 
+def scalar_summary(x):
+    tensor_name = x.op.name
+    tf.scalar_summary(tensor_name, x)
+
+def activation_summary(x):
+    """Helper to create summaries for activations.
+    Creates a summary that provides a histogram of activations.
+    Creates a summary that measure the sparsity of activations.
+    Args:
+      x: Tensor
+    Returns:
+      nothing
+    """    
+    tensor_name = x.op.name
+    tf.histogram_summary(tensor_name + '/activations', x)
+    tf.scalar_summary(tensor_name + '/sparsity', tf.nn.zero_fraction(x))
+
 class NetManager(object):
     def __init__(self, net, varnames=None):
         self._net = net
@@ -38,8 +55,8 @@ class NetManager(object):
         return self._sess.run(tensor_list, feed_dict)
 
     def write_summary(self, feed_dict):
-        summaries = self._sess.eval(self._summary, feed_dict=feed_dict)
-        step = self._net.global_setp(self._sess)        
+        summaries = self._sess.run(self._summary, feed_dict=feed_dict)
+        step = self._net.global_step(self._sess)
         self._summary_writer.add_summary(summaries, step)
     
     def save(self, step=None):
@@ -65,20 +82,20 @@ class TFNet(object):
 
         with tf.variable_scope('net_global') as scope:
             scope.reuse_variables()
-            self._global_step = tf.get_variable('global_step')
-            self._learn_rate = tf.train.exponential_decay(FLAGS.learning_rate_init,
-                                                    self._global_step,
-                                                    FLAGS.decay_steps,
-                                                    FLAGS.learning_rate_decay_factor,
-                                                    staircase=True,
-                                                    name='learning_rate')
-            tf.scalar_summary("learn_rate", self._learn_rate)
+            self._global_step = tf.get_variable('global_step', trainable=False)
+        self._learn_rate = tf.train.exponential_decay(FLAGS.learning_rate_init,
+                                            self._global_step,
+                                            FLAGS.decay_steps,
+                                            FLAGS.learning_rate_decay_factor,
+                                            staircase=True,
+                                            name='learning_rate')
+        tf.scalar_summary("learn_rate", self._learn_rate)
         
     def _net_definition(self):
         pass
 
     def global_step(self, sess):
-        return sess.eval(self._global_step)
+        return sess.run(self._global_step)
     
     @property
     def infer(self):
@@ -103,3 +120,7 @@ class TFNet(object):
     @property
     def summary_writer(self):
         return self._summary_writer
+    
+    @property
+    def learn_rate(self):
+        return self._learn_rate
