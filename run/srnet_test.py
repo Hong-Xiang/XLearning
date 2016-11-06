@@ -5,7 +5,7 @@ import numpy as np
 import tensorflow as tf
 import matplotlib.pyplot as plt
 import xlearn.nets.layers
-
+import argparse
 
 from xlearn.reader.srinput import DataSet
 from xlearn.model.supernet import SuperNet0
@@ -13,13 +13,14 @@ from xlearn.nets.model import NetManager
 
 FLAGS = tf.app.flags.FLAGS
 
-def define_flags(argv):    
+def define_flags(argv):
+
     flag = tf.app.flags
     flag.DEFINE_float("weight_decay", 0.1, "Weight decay coefficient.")
     flag.DEFINE_float("eps", 1e-5, "Weight decay coefficient.")    
     flag.DEFINE_integer("train_batch_size", 512, "Batch size.")
     flag.DEFINE_integer("test_batch_size", 512, "Batch size.")    
-    flag.DEFINE_float("learning_rate_init", 1e-6, "Initial learning rate.")
+    flag.DEFINE_float("learning_rate_init", float(argv[1]), "Initial learning rate.")
     flag.DEFINE_string("save_dir",'.',"saving path.")
     flag.DEFINE_string("summary_dir",'.',"summary path.")
     flag.DEFINE_integer("decay_steps",100000,"decay steps.")
