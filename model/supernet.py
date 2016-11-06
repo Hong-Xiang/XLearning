@@ -31,7 +31,7 @@ class SuperNet0(TFNet):
                                     FLAGS.width*self._ratio,
                                     1],
                                    "input_high_res")
-        
+
         self._net_definition()
         self._add_summary()
         

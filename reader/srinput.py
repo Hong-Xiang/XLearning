@@ -29,8 +29,8 @@ class DataSet(object):
                  padding=False,
                  dataset_type='test',
                  down_sample_method='fixed',
-                 mean=128,
-                 std=1):
+                 mean=1,
+                 std=128):
         self._path = os.path.abspath(path)
         self._patch_shape = patch_shape
         self._batch_size = batch_size
@@ -72,6 +72,7 @@ class DataSet(object):
     def next_batch(self):
 
         high_shape = [self._batch_size, self._patch_shape[0], self._patch_shape[1], 1]
+        
         if self._padding:
             low_height = int(np.ceil(self._patch_shape[0]/self._ratio))
             low_width = int(np.ceil(self._patch_shape[1]/self._ratio))
@@ -87,10 +88,12 @@ class DataSet(object):
             patch_low = self._lr_patch_gen.out.next()
             high_tensor[i, :, :, :] = patch_high
             low_tensor[i, :, :, :] = patch_low
+        
         low_tensor /= self._std
         low_tensor -= self._mean
         high_tensor /= self._std
         high_tensor -= self._mean
+        
         return low_tensor, high_tensor
 
     @property
