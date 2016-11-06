@@ -10,6 +10,7 @@ import os
 
 from xlearn.reader.srinput import DataSet
 from xlearn.model.supernet import SuperNet0
+from xlearn.model.supernet import SuperNet1
 from xlearn.nets.model import NetManager
 
 FLAGS = tf.app.flags.FLAGS
@@ -29,11 +30,11 @@ def define_flags(argv):
     flag.DEFINE_integer("height", 33, "patch_height")
     flag.DEFINE_integer("width", 33, "patch_width")
     flag.DEFINE_float("down_ratio",3,"down_sample_ratio")
-    flag.DEFINE_integer("patch_per_file", 4, "patches per file.")    
+    flag.DEFINE_integer("patch_per_file", 8, "patches per file.")    
     flag.DEFINE_string("train_path", None, "train data path.")
     flag.DEFINE_string("test_path", None, "train data path.")
     flag.DEFINE_string("prefix",None,"prefix of data files.")
-
+    flag.DEFINE_float("leak_ratio_constant", None, "lrelu constant.")
 def check_dataset(dataset):
     data, label= dataset.next_batch()
     n_show = 4
@@ -71,7 +72,7 @@ def test(argv):
     # check_dataset(train_set)
     # check_dataset(test_set)
     
-    net = SuperNet0()
+    net = SuperNet1()
     manager = NetManager(net)    
 
     n_step = 1001

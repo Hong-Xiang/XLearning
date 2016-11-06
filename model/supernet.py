@@ -70,7 +70,82 @@ class SuperNet0(TFNet):
         tf.image_summary('inference', self._infer)
         tf.image_summary('interp_result',self._interp)
 
+class SuperNet1(TFNet):
+    """
+    Implementation based on https://arxiv.org/pdf/1511.04587.pdf
+    """
+    def __init__(self, varscope=tf.get_variable_scope()):
+        super(SuperNet1, self).__init__(varscope=varscope)
+        self._input = layer.inputs([None,
+                                    FLAGS.height,
+                                    FLAGS.width,
+                                    1],
+                                   "input_low_res")
+        self._ratio = FLAGS.down_ratio
+        self._label = layer.labels([None,
+                                    FLAGS.height*self._ratio,
+                                    FLAGS.width*self._ratio,
+                                    1],
+                                   "input_high_res")
 
+        self._net_definition()
+        self._add_summary()
+        
+
+    def _net_definition(self):
+        with tf.name_scope('interpolation'):
+            self._interp = tf.image.resize_images(self._input,
+                                                  FLAGS.height * self._ratio,
+                                                  FLAGS.width * self._ratio)
+        with tf.name_scope('residual_reference') as scope:
+            self._residual_reference = tf.sub(self._label, self._interp,
+                                              name=scope+'sub')
+        self._midop = []
+        conv0 = layer.conv_activate(self._interp, [3, 3, 1, 32],
+                                    padding='SAME', name='conv0',
+                                    activation_function=layer.lrelu)
+        self._midop.append(conv0)
+        conv1 = layer.conv_activate(conv0, [3, 3, 32, 64],
+                                    padding='SAME', name='conv1',
+                                    activation_function=layer.lrelu)
+        self._midop.append(conv1)
+        conv2 = layer.conv_activate(conv1, [3, 3, 64, 128],
+                                    padding='SAME', name='conv2',
+                                    activation_function=layer.lrelu)
+        self._midop.append(conv2)
+        conv3 = layer.conv_activate(conv2, [3, 3, 128, 128],
+                                    padding='SAME', name='conv3',
+                                    activation_function=layer.lrelu)                
+        self._midop.append(conv3)
+        fullc = layer.conv_activate(conv3, [1, 1, 128, 128],
+                                    padding='SAME', name='fc',
+                                    activation_function=layer.lrelu)
+        self._midop.append(fullc)
+        reco3 = layer.conv_activate(fullc, [3, 3, 128, 32],
+                                    padding='SAME', name='reco3',
+                                    activation_function=layer.lrelu)        
+        self._midop.append(reco3)
+        self._residual_inference = layer.convolution(reco3, [3, 3, 32, 1],
+                                                        padding='SAME', name='residual_inference')
+        
+        # self._psnr = layer.psnr_loss(self._residual_inference, self._residual_reference, name='psnr_loss')
+        self._l2_loss = layer.l2_loss(self._residual_inference, self._residual_reference, name='l2_loss')
+        self._loss = layer.loss_summation()            
+        self._infer = tf.add(self._interp, self._residual_inference, name='infer')
+        
+        self._train = layer.trainstep(self._loss, self._learn_rate, self._global_step)
+    
+    def _add_summary(self):
+        for op in self._midop:
+            model.activation_summary(op)
+        model.scalar_summary(self._loss)        
+        tf.image_summary('input_low', self._input)
+        tf.image_summary('label_high', self._label)
+        tf.image_summary('residual_inference', self._residual_inference)
+        tf.image_summary('residual_reference', self._residual_reference)        
+        tf.image_summary('inference', self._infer)
+        tf.image_summary('interp_result',self._interp)
+    
 # class SuperNet(TFNet):
 #     """Super resolution net
 #     """

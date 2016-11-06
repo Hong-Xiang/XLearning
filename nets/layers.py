@@ -61,14 +61,14 @@ def _placeholder(name, shape):
 def rrelu(tensor_input, name):
     with tf.name_scope(name) as scope:
         scalar = tf.random_uniform([], minval=FLAGS.rrelu_min_a, maxval=FLAGS.rrelu_max_a, dtype=tf.float32, name='random_ratio')
-        leaked = tf.scalar_mul(scalar, tensor_input, name=scope+'multiply')
-        tensor = tf.maximum(tensor_input, leaked, name=scope+'maximum')
+        leaked = tf.scalar_mul(scalar, tensor_input, name='multiply')
+        tensor = tf.maximum(tensor_input, leaked, name='maximum')
     return tensor
 
 def lrelu(tensor_input, name='LReLU'):
     with tf.name_scope(name) as scope:
-        leaked = tf.scalar_mul(FLAGS.leak_ratio_constant, tensor_input, name=scope+'multiply')
-        tensor = tf.maximum(tensor_input, leaked, name=scope+'maximum')
+        leaked = tf.scalar_mul(FLAGS.leak_ratio_constant, tensor_input)
+        tensor = tf.maximum(tensor_input, leaked, name='maximum')
     return tensor
 
 def activation(tensor_input, activation_function=tf.nn.relu, varscope=tf.get_variable_scope(), name='activation'):
