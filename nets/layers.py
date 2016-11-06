@@ -145,11 +145,13 @@ def convolution(tensor_input,
     Return:
         tensor
     """
-    with tf.name_scope(name) as scope:        
-        weights = _weight_variable_with_decay('weights', filter_shape, scope=varscope)
+    with tf.name_scope(name) as scope:
+        n_input = filter_shape[0]*filter_shape[1]*filter_shape[2]*filter_shape[3]
+        weights = _weight_variable_with_decay(scope+'weights', filter_shape,
+                                              ncolumn=n_input, scope=varscope)
         conv_tensor = tf.nn.conv2d(tensor_input, weights, strides, padding,
                                    name=scope+"conv")
-        biases = _bias_variable('biases', shape[3], scope=varscope)
+        biases = _bias_variable(scope+'biases', filter_shape[3], scope=varscope)
         tensor = tf.nn.bias_add(conv_tensor, biases, name='add_bias')                            
     return tensor
 
@@ -261,4 +263,9 @@ def predict_accuracy(inference, reference, name='predic_accuracy'):
     with tf.name_scope(name) as scope:
         correct_prediction = tf.equal(tf.argmax(inference,1), tf.argmax(reference,1), name=scope+'correct_predictions')
         output = tf.reduce_mean(tf.cast(correct_prediction, tf.float32), name = scope+'accuracy')
+    return output
+
+def dropout(input_, keep_prob, name='dropout'):
+    with tf.name_scope(name) as scope:
+        output = tf.nn.dropout(input_, keep_prob)
     return output

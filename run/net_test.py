@@ -6,7 +6,7 @@ import tensorflow as tf
 import matplotlib.pyplot as plt
 import xlearn.nets.layers
 from xlearn.reader.mnist import DataSet
-from xlearn.nets.model import MNIST
+from xlearn.model.mnist import MNISTConv
 from tensorflow.examples.tutorials.mnist import input_data
 FLAGS = tf.app.flags.FLAGS
 
@@ -15,8 +15,8 @@ def define_flags(argv):
     flag.DEFINE_float("weight_decay", 0.0, "Weight decay coefficient.")
     flag.DEFINE_float("eps", 1e-5, "Weight decay coefficient.")    
     flag.DEFINE_integer("train_batch_size", 100, "Batch size.")
-    flag.DEFINE_integer("test_batch_size", 10000, "Batch size.")
-    flag.DEFINE_integer("hidden_units", 50, "Batch size.")
+    flag.DEFINE_integer("test_batch_size", 1000, "Batch size.")
+    flag.DEFINE_integer("hidden_units", 1024, "Batch size.")
 
 def check_dataset(dataset):
     data, label= dataset.next_batch()        
@@ -42,26 +42,26 @@ def test(argv):
     # check_dataset(test_set)
     # mnist = input_data.read_data_sets('MNIST_data', one_hot=True)
 
-    net = MNIST(FLAGS.hidden_units)
     sess = tf.Session()
+    net = MNISTConv(FLAGS.hidden_units)    
     summary_writer = tf.train.SummaryWriter('.', sess.graph)
     init = tf.initialize_all_variables()
     sess.run(init)
     
-    train_step = tf.train.GradientDescentOptimizer(0.5).minimize(net.loss)
+    
 
-    n_step = 3001
+    n_step = 20001
     for i in range(n_step):
         data, label = train_set.next_batch()
         # data, label = mnist.train.next_batch(FLAGS.batch_size)
-        [loss_v, _] = sess.run([net.loss, train_step], feed_dict={net.inputs:data, net.label:label})
+        [loss_v, _] = sess.run([net.loss, net.train], feed_dict={net.inputs:data, net.label:label, net.keep_prob:0.5})
         if i%100 == 0:
             print('setp={0}, loss={1}.'.format(i, loss_v))
         if i%500 == 0:
-            [accuracy_train] = sess.run([net.accuracy], feed_dict={net.inputs:data, net.label:label})
+            [accuracy_train] = sess.run([net.accuracy], feed_dict={net.inputs:data, net.label:label, net.keep_prob:1.0})
             # data_test, label_test = mnist.test.next_batch(FLAGS.batch_size)
             data_test, label_test = train_set.next_batch()
-            [accuracy_test] = sess.run([net.accuracy], feed_dict={net.inputs:data_test, net.label:label_test})
+            [accuracy_test] = sess.run([net.accuracy], feed_dict={net.inputs:data_test, net.label:label_test, net.keep_prob:1.0})
             print('setp={0}, train accuracy = {1}, test accuracy = {2}.'.format(i, accuracy_train, accuracy_test))
 
     
@@ -70,4 +70,5 @@ def main(argv):
 
 if __name__=='__main__':
     define_flags(sys.argv)
+    xlearn.nets.model.before_net_definition()
     tf.app.run()

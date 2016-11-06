@@ -39,7 +39,7 @@ class DataSet(object):
         if sz > self._num_example:
             raise ValueError('Batch size {0} is larger than dataset size {1}.'.format(sz, self._num_example))
 
-        data = np.zeros([sz, self._height, self._width])
+        data = np.zeros([sz, self._height, self._width, 1])
         label = np.zeros([sz, 10])
         if self._cid + sz >= self._num_example:
             self._cid = 0
@@ -48,7 +48,7 @@ class DataSet(object):
             self._epoch += 1
         for i in xrange(sz):
             ids = self._ids[self._cid]
-            data[i, :, :] = self._data[ids, :, :]
+            data[i, :, :, 0] = self._data[ids, :, :]
             label[i, :] = self._label[ids, :]
             self._cid += 1
         return data, label
