@@ -17,9 +17,9 @@ FLAGS = tf.app.flags.FLAGS
 
 def define_flags(argv):
     flag = tf.app.flags
-    flag.DEFINE_float("weight_decay", 0.01, "Weight decay coefficient.")
+    flag.DEFINE_float("weight_decay", 0.0001, "Weight decay coefficient.")
     flag.DEFINE_float("eps", 1e-5, "Weight decay coefficient.")    
-    flag.DEFINE_integer("train_batch_size", 64, "Batch size.")
+    flag.DEFINE_integer("train_batch_size", 128, "Batch size.")
     flag.DEFINE_integer("test_batch_size", 10, "Batch size.")    
     flag.DEFINE_integer("hidden_units", 1024, "# of hidden units.")
     flag.DEFINE_float("learning_rate_init", None, "Initial learning rate.")
@@ -27,8 +27,8 @@ def define_flags(argv):
     flag.DEFINE_string("summary_dir",'.',"summary path.")
     flag.DEFINE_integer("decay_steps",100000,"decay steps.")
     flag.DEFINE_float("learning_rate_decay_factor",0.1,"learing rate decay factor.")
-    flag.DEFINE_integer("height", 33, "patch_height")
-    flag.DEFINE_integer("width", 33, "patch_width")
+    flag.DEFINE_integer("height", 23, "patch_height")
+    flag.DEFINE_integer("width", 23, "patch_width")
     flag.DEFINE_float("down_ratio",3,"down_sample_ratio")
     flag.DEFINE_integer("patch_per_file", 8, "patches per file.")    
     flag.DEFINE_string("train_path", None, "train data path.")
@@ -75,13 +75,13 @@ def test(argv):
     net = SuperNet1()
     manager = NetManager(net)    
 
-    n_step = 1001
+    n_step = 3001
     for i in range(n_step):
         data, label = train_set.next_batch()                        
         [loss_train, _, lr] = manager.run([net.loss, net.train, net.learn_rate], feed_dict={net.inputs:data, net.label:label})
-        if i%1 == 0:
-            print('step={0:5d},\tlr={2:.3E},\t loss={1:.3E}.'.format(i, loss_train, lr))
         if i%10 == 0:
+            print('step={0:5d},\tlr={2:.3E},\t loss={1:.3E}.'.format(i, loss_train, lr))
+        if i%20 == 0:
             manager.write_summary(feed_dict={net.inputs:data, net.label:label})                    
         if i%50 == 0:
             data_test, label_test = test_set.next_batch()            

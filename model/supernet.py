@@ -101,29 +101,29 @@ class SuperNet1(TFNet):
             self._residual_reference = tf.sub(self._label, self._interp,
                                               name=scope+'sub')
         self._midop = []
-        conv0 = layer.conv_activate(self._interp, [3, 3, 1, 32],
-                                    padding='SAME', name='conv0',
-                                    activation_function=layer.lrelu)
+        conv0 = layer.conv_activate(self._interp, [5, 5, 1, 128],
+                                    padding='SAME', name='conv0')
+                                    # activation_function=layer.lrelu)
         self._midop.append(conv0)
-        conv1 = layer.conv_activate(conv0, [3, 3, 32, 64],
-                                    padding='SAME', name='conv1',
-                                    activation_function=layer.lrelu)
+        conv1 = layer.conv_activate(conv0, [3, 3, 128, 128],
+                                    padding='SAME', name='conv1')
+                                    # activation_function=layer.lrelu)
         self._midop.append(conv1)
-        conv2 = layer.conv_activate(conv1, [3, 3, 64, 128],
-                                    padding='SAME', name='conv2',
-                                    activation_function=layer.lrelu)
+        conv2 = layer.conv_activate(conv1, [3, 3, 128, 128],
+                                    padding='SAME', name='conv2')
+                                    # activation_function=layer.lrelu)
         self._midop.append(conv2)
         conv3 = layer.conv_activate(conv2, [3, 3, 128, 128],
-                                    padding='SAME', name='conv3',
-                                    activation_function=layer.lrelu)                
+                                    padding='SAME', name='conv3')
+                                    # activation_function=layer.lrelu)                
         self._midop.append(conv3)
         fullc = layer.conv_activate(conv3, [1, 1, 128, 128],
-                                    padding='SAME', name='fc',
-                                    activation_function=layer.lrelu)
+                                    padding='SAME', name='fc')
+                                    # activation_function=layer.lrelu)
         self._midop.append(fullc)
         reco3 = layer.conv_activate(fullc, [3, 3, 128, 32],
-                                    padding='SAME', name='reco3',
-                                    activation_function=layer.lrelu)        
+                                    padding='SAME', name='reco3')
+                                    # activation_function=layer.lrelu)        
         self._midop.append(reco3)
         self._residual_inference = layer.convolution(reco3, [3, 3, 32, 1],
                                                         padding='SAME', name='residual_inference')

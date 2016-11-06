@@ -18,7 +18,8 @@ def _weight_variable(name, shape, ncolumn, scope=tf.get_variable_scope()):
     """
     dtype = tf.float32
     #set optimal stdandard deviation for relu units.
-    stddev = np.sqrt(2.0/ncolumn)    
+    stddev = np.sqrt(2.0/ncolumn)
+    stddev = 2e-2
     initer = tf.truncated_normal_initializer(stddev=stddev, dtype=dtype)    
     with tf.variable_scope(scope):
         var = tf.get_variable(name, shape=shape, initializer=initer, dtype=dtype)    
@@ -158,6 +159,31 @@ def conv_activate(input_,
                             varscope=varscope, name='activation')
     return output
 
+def batch_norm(input_, name='batch_norm', varscope=tf.get_variable_scope()):
+    with tf.name_scope(name) as scope:
+        offset = _bias_variable(scope+'offset', [1], scope=varcope)
+
+        #TODO: clean implementation
+        scale = tf.Variable(1.0)
+        mean, variance = tf.nn.moments(x, [0, 1, 2])
+        output = tf.nn.batch_normalization(input_, mean, variance, offset, scale, FLAGS.eps, name='batch_norm')
+    return output
+
+def conv_bn_activ(input_,
+                  filter_shape,
+                  strides=[1, 1, 1, 1],
+                  padding='VALID',
+                  name='conv_active',
+                  activation_function=tf.nn.relu,
+                  varscope=tf.get_variable_scope()):
+    with tf.name_scope(name) as scope:        
+        conv = convolution(input_, filter_shape=filter_shape,
+                           strides=strides, padding=padding,
+                           name='convolution', varscope=varscope)
+        bn = batch_norm(conv, varscope=varscope)
+        output = activation(bn, activation_function=activation_function,
+                            varscope=varscope, name='activation')
+    return output
 
 def feature(tensor_input,
             filter_shape, strides_conv=[1,1,1,1], padding_conv = "SAME",
@@ -230,7 +256,7 @@ def psnr_loss(inference_tensor, reference_tensor, name = "loss_layer"):
         tf.add_to_collection('losses', loss)        
     return loss
 
-def loss_summation(name = "total_loss"):
+def loss_summation(name = "total_loss", norm_batch=True):
     with tf.name_scope(name) as scope:
         loss_list = tf.get_collection('losses')
         loss = tf.add_n(loss_list, name=scope+'summation')
@@ -278,7 +304,7 @@ def dropout(input_, keep_prob, name='dropout'):
 
 def trainstep(loss, learn_rate, global_step, name='train_step'):
     with tf.name_scope(name) as scope:
-        output = tf.train.GradientDescentOptimizer(learn_rate).minimize(loss,
-                                                                        global_step,
-                                                                        name=scope+name)
+        output = tf.train.AdamOptimizer(learn_rate).minimize(loss,
+                                                             global_step,
+                                                             name=scope+name)
     return output
