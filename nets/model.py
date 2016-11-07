@@ -12,6 +12,30 @@ import tensorflow as tf
 import xlearn.nets.layers as layer
 
 FLAGS = tf.app.flags.FLAGS
+
+
+def define_flags(argv):
+    flag = tf.app.flags
+    flag.DEFINE_float(  "weight_decay",     0.0001,     "Weight decay coefficient.")
+    flag.DEFINE_float(  "eps",              1e-5,       "Weight decay coefficient.")
+    flag.DEFINE_integer("train_batch_size", 128,        "Batch size.")
+    flag.DEFINE_integer("test_batch_size",  10,         "Batch size.")
+    flag.DEFINE_integer("hidden_units",     1024,       "# of hidden units.")
+    flag.DEFINE_float(  "lr_init",          None,       "Initial learning rate.")
+    flag.DEFINE_string( "save_dir",         '.',        "saving path.")
+    flag.DEFINE_string( "summary_dir",      '.',        "summary path.")
+    flag.DEFINE_integer("lr_decay_steps",   100000,     "decay steps.")
+    flag.DEFINE_float(  "lr_decay_factor",  0.1,        "learing rate decay factor.")
+    flag.DEFINE_integer("height",           23,         "patch_height")
+    flag.DEFINE_integer("width",            23,         "patch_width")
+    flag.DEFINE_float(  "down_ratio",       3,          "down_sample_ratio")
+    flag.DEFINE_integer("patch_per_file",   8,          "patches per file.")
+    flag.DEFINE_string( "train_path",       None,       "train data path.")
+    flag.DEFINE_string( "test_path",        None,       "train data path.")
+    flag.DEFINE_string( "prefix",           None,       "prefix of data files.")
+    flag.DEFINE_float(  "leak_ratio",       None,       "lrelu constant.")
+
+
 def before_net_definition():
     zeroinit = tf.constant_initializer(0.0)
     with tf.variable_scope('net_global') as scope:
@@ -21,9 +45,15 @@ def before_net_definition():
                                       initializer=zeroinit,
                                       dtype=tf.float32)
 
+
 def scalar_summary(x):
+    """Helper to create scalar summaries.
+    :param x:
+    :return: nothing
+    """
     tensor_name = x.op.name
     tf.scalar_summary(tensor_name, x)
+
 
 def activation_summary(x):
     """Helper to create summaries for activations.
@@ -38,7 +68,10 @@ def activation_summary(x):
     tf.histogram_summary(tensor_name + '/activations', x)
     tf.scalar_summary(tensor_name + '/sparsity', tf.nn.zero_fraction(x))
 
+
 class NetManager(object):
+    """Handling interaction with nets.
+    """
     def __init__(self, net, varnames=None):
         self._net = net
         self._summary = tf.merge_all_summaries()
@@ -47,7 +80,7 @@ class NetManager(object):
         if varnames is None:
             self._saver = tf.train.Saver(tf.all_variables())
         else:
-            pass
+            self._saver = tf.train.Saver(varnames)
         self._summary_writer = tf.train.SummaryWriter(FLAGS.summary_dir, self._sess.graph)
         self._sess.run(init_op)
     
@@ -62,14 +95,15 @@ class NetManager(object):
     def save(self, step=None):
         if step is None:
             step = self._net.global_setp(self._sess)
-        saver.save(self._sess, FLAGS.save_dir, step)
+        self._saver.save(self._sess, FLAGS.save_dir, step)
     
     def restore(self):
-        saver.restore(self._sess, FLAGS.save_dir)
+        self._saver.restore(self._sess, FLAGS.save_dir)
 
     @property
     def sess(self):
-        return self._sess        
+        return self._sess
+
 
 class TFNet(object):
     def __init__(self, varscope=tf.get_variable_scope()):
@@ -77,18 +111,19 @@ class TFNet(object):
         self._summary_writer = None
         self._input = None
         self._label = None
+        self._infer = None
         self._loss = None
-        self._train = None        
+        self._train = None
 
         with tf.variable_scope('net_global') as scope:
             scope.reuse_variables()
             self._global_step = tf.get_variable('global_step', trainable=False)
-        self._learn_rate = tf.train.exponential_decay(FLAGS.learning_rate_init,
-                                            self._global_step,
-                                            FLAGS.decay_steps,
-                                            FLAGS.learning_rate_decay_factor,
-                                            staircase=True,
-                                            name='learning_rate')
+        self._learn_rate = tf.train.exponential_decay(FLAGS.lr_init,
+                                                      self._global_step,
+                                                      FLAGS.lr_decay_steps,
+                                                      FLAGS.lr_decay_factor,
+                                                      staircase=True,
+                                                      name='learning_rate')
         tf.scalar_summary("learn_rate", self._learn_rate)
         
     def _net_definition(self):

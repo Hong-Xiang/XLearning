@@ -9,12 +9,12 @@ FLAGS = tf.app.flags.FLAGS
 def _weight_variable(name, shape, ncolumn, scope=tf.get_variable_scope()):
     """Helper to create a Variable
     Args:
-      name: name of the variable
-      shape: list of ints
-      ncolumn: number of outputs to be summarized.
-      scope: variable scope
+        name: name of the variable
+        shape: list of ints
+        ncolumn: number of outputs to be summarized.
+        scope: variable scope
     Returns:
-      tessor: a variable tensor
+        tessor: a variable tensor
     """
     dtype = tf.float32
     #set optimal stdandard deviation for relu units.
@@ -56,19 +56,16 @@ def _placeholder(name, shape):
     var = tf.placeholder(dtype, shape=shape, name=name)
     return var
 
-
-
-
 def rrelu(tensor_input, name):
     with tf.name_scope(name) as scope:
-        scalar = tf.random_uniform([], minval=FLAGS.rrelu_min_a, maxval=FLAGS.rrelu_max_a, dtype=tf.float32, name='random_ratio')
+        scalar = tf.random_uniform([], minval=FLAGS.rrelu_min, maxval=FLAGS.rrelu_max, dtype=tf.float32, name='random_ratio')
         leaked = tf.scalar_mul(scalar, tensor_input, name='multiply')
         tensor = tf.maximum(tensor_input, leaked, name='maximum')
     return tensor
 
 def lrelu(tensor_input, name='LReLU'):
     with tf.name_scope(name) as scope:
-        leaked = tf.scalar_mul(FLAGS.leak_ratio_constant, tensor_input)
+        leaked = tf.scalar_mul(FLAGS.leak_ratio, tensor_input)
         tensor = tf.maximum(tensor_input, leaked, name='maximum')
     return tensor
 
@@ -306,5 +303,15 @@ def trainstep(loss, learn_rate, global_step, name='train_step'):
     with tf.name_scope(name) as scope:
         output = tf.train.AdamOptimizer(learn_rate).minimize(loss,
                                                              global_step,
-                                                             name=scope+name)
+                                                             name=name)
     return output
+
+def trainstep_clip(loss, learn_rate, global_step, name='trainstep_clip'):
+    with tf.name_scope(name) as scope:
+        opt = tf.train.AdamOptimizer(learn_rate)
+        grads_and_vars = opt.compute_gradients(loss)
+        clipped_grad_vars = [(tf.clip_by_value(gv[0], -FLAGS.grad_clip, FLAGS.grad_clip),
+                              gv[1]) for gv in grads_and_vars]
+        opt.apply_gradients(clipped_grad_vars)
+        train_op = opt.minimize(loss, global_step, name=name)
+    return train_op

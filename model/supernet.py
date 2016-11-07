@@ -115,7 +115,7 @@ class SuperNet1(TFNet):
         self._midop.append(conv2)
         conv3 = layer.conv_activate(conv2, [3, 3, 128, 128],
                                     padding='SAME', name='conv3')
-                                    # activation_function=layer.lrelu)                
+                                    # activation_function=layer.lrelu)
         self._midop.append(conv3)
         fullc = layer.conv_activate(conv3, [1, 1, 128, 128],
                                     padding='SAME', name='fc')
