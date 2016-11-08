@@ -18,22 +18,23 @@ def define_flags(argv):
     flag = tf.app.flags
     flag.DEFINE_float(  "weight_decay",     0.0001,     "Weight decay coefficient.")
     flag.DEFINE_float(  "eps",              1e-5,       "Weight decay coefficient.")
-    flag.DEFINE_integer("train_batch_size", 128,        "Batch size.")
+    flag.DEFINE_integer("train_batch_size", 64,        "Batch size.")
     flag.DEFINE_integer("test_batch_size",  10,         "Batch size.")
-    flag.DEFINE_integer("hidden_units",     1024,       "# of hidden units.")
+    flag.DEFINE_integer("hidden_units",     64,       "# of hidden units.")
     flag.DEFINE_float(  "lr_init",          None,       "Initial learning rate.")
     flag.DEFINE_string( "save_dir",         '.',        "saving path.")
     flag.DEFINE_string( "summary_dir",      '.',        "summary path.")
     flag.DEFINE_integer("lr_decay_steps",   100000,     "decay steps.")
     flag.DEFINE_float(  "lr_decay_factor",  0.1,        "learing rate decay factor.")
-    flag.DEFINE_integer("height",           23,         "patch_height")
-    flag.DEFINE_integer("width",            23,         "patch_width")
+    flag.DEFINE_integer("height",           11,         "patch_height")
+    flag.DEFINE_integer("width",            11,         "patch_width")
     flag.DEFINE_float(  "down_ratio",       3,          "down_sample_ratio")
     flag.DEFINE_integer("patch_per_file",   8,          "patches per file.")
     flag.DEFINE_string( "train_path",       None,       "train data path.")
     flag.DEFINE_string( "test_path",        None,       "train data path.")
     flag.DEFINE_string( "prefix",           None,       "prefix of data files.")
     flag.DEFINE_float(  "leak_ratio",       None,       "lrelu constant.")
+    flag.DEFINE_integer("hidden_layer",     20,         "hidden layers")
 
 
 def before_net_definition():

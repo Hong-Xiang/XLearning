@@ -10,16 +10,21 @@ Processing pipeline models.
 """
 from __future__ import absolute_import, division, print_function
 __author__ = 'Hong Xiang'
+
+
 import random
 import os
 import copy
+import re
+import collections
+
 from six.moves import xrange
+import numpy as np
+import scipy.misc
+
 import xlearn.utils.tensor
 import xlearn.utils.image
 import xlearn.utils.general
-import numpy as np
-import scipy.misc
-import re
 
 
 class Pipe(object):
@@ -122,6 +127,7 @@ class Pipe(object):
     def branches(self):
         return self._branches
 
+
 class SingleInput(Pipe):
     """
     Base class of pipes with only one input.
@@ -138,7 +144,8 @@ class SingleInput(Pipe):
     @property
     def _father(self):
         return self._branches[0]
-    
+
+
 class Buffer(Pipe):
     """
     Buffer type pipe. can buffer a result.
@@ -172,14 +179,16 @@ class Buffer(Pipe):
         self._state += 1
         return output
 
+
 class Counter(Pipe):
     def __init__(self, name='Counter', is_seal=False):
         super(Counter, self).__init__(input_=None, name=name, is_start=True, is_seal=is_seal)        
-        self._state = 0        
+        self._state = 0
         
     def _pump(self):
+        output = self._state
         self._state += 1
-        return self._state
+        return output
 
     def reset(self):
         self._state = 0
@@ -206,6 +215,7 @@ class ConstPumper(Buffer):
     def const_item(self):
         return self._const
 
+
 class Repeater(SingleInput):
     def __init__(self, input_, repeat_time=1, name='Repeater', is_seal=False):
         super(Repeater, self).__init__(input_, name=name, is_seal=is_seal)        
@@ -219,8 +229,40 @@ class Repeater(SingleInput):
                 return None
             else:
                 return [input_]
-        
+
+class Inputer(Buffer):
+    def __init__(self, name='Inputer'):
+        super(Inputer, self).__init__(name=name, is_start=True)
+        self._buffer = collections.deque()
     
+    def insert(self, item):
+        self._buffer.append(item)
+
+    def _process(self):
+        return self._buffer.popleft()
+
+
+class Freezer(Buffer):
+    def __init__(self, input_, name='Freezer'):
+        super(Freezer, self).__init__(input_, name=name)
+        self._buffer = None
+        self._is_freeze = False        
+
+    def _process(self):
+        if self._buffer is None:
+            self._new_buffer()        
+        if self._state == self._max_state:
+            self._new_buffer()
+        output = self._buffer
+        if not self._is_freeze:
+            self._state += 1
+        return output
+    
+    def freeze(self):
+        self._is_freeze = True        
+    
+    def thaw(self):
+        self._is_freeze = False
 
 class NPYReader(Pipe):
     """
@@ -275,7 +317,7 @@ class NPYReader(Pipe):
 
     def _pump(self):
         filename = self._file_names[self._id_shuffle[self._cid]]        
-        fullname = os.path.join(self._path, filename)
+        fullname = os.path.join(self._path, filename)        
         data = np.array(np.load(fullname))
         self._shape = data.shape
         self._cid += 1
@@ -348,16 +390,16 @@ class ImageGrayer(SingleInput):
         if image is None:
             return None
         image = image[0]      
-        gray = xlearn.utils.image.rgb2gray(image)
+        gray = xlearn.utils.image.rgb2gray(image)        
         return gray 
        
 
 
 
 class TensorFormater(SingleInput):
-    def __init__(self, input_, squeeze=True, newshape=None, auto_shape=False, name='TensorFormater', is_seal=False):
+    def __init__(self, input_, squeeze=True, new_shape=None, auto_shape=True, name='TensorFormater', is_seal=False):
         super(TensorFormater, self).__init__(input_, name=name, is_seal=is_seal)
-        self._shape = newshape        
+        self._shape = new_shape        
         self._auto_shape = auto_shape
         self._squeeze = squeeze
 
@@ -367,11 +409,15 @@ class TensorFormater(SingleInput):
         if tensor_list is None:
             return None        
         output = xlearn.utils.tensor.merge_tensor_list(tensor_list, squeeze=self._squeeze)
+        
         preshape = output.shape             
         if self._shape is not None:
             newshape = self._shape
-        elif self._auto_shape:                        
-            if len(preshape) == 3:
+        elif self._auto_shape:    
+            if len(preshape) == 3 and tensor_list[0].shape[0] == 1:
+                newshape = [1, 1, 1, 1]
+                newshape[:-1]=preshape                    
+            elif len(preshape) == 3:
                 newshape = [1, 1, 1, 1]
                 newshape[-len(preshape):]=preshape
             elif len(preshape) == 2:
@@ -559,6 +605,92 @@ class DownSampler(SingleInput):
                                 picked = input_[ii, idy, idx, ic]
                             output[ii, iy, ix, ic] = picked 
         return output
+
+class TensorSlicer(SingleInput):
+    """
+    Slice a 4D NHW1 tensor into a list of HW tensor.    
+    """    
+    #TODO: add support for NHW1
+    #TODO: add support for slice dim
+    #May mimic the tensorflow.slice method: 
+    #   https://www.tensorflow.org/versions/r0.11/api_docs/python/array_ops.html#slice
+    def __init__(self, input_, name='TensorSlicer'):
+        #TODO: Refine this.
+        super(TensorSlicer, self).__init__(input_, name)
+
+    def _process(self):
+        output = []
+        input_ = self._gather()
+        input_ = input_[0]        
+        for i in xrange(input_.shape[0]):                        
+            output.append(input_[i, :, :, 0])
+        return output
+
+class PeriodicalPadding(SingleInput):
+    """
+    Padding for 2D image.
+
+    Zero padding for y.
+    Periodical padding for x.
+
+    padding method see     
+    """
+    def __init__(self, input_, new_shape, x_offset, y_offset, period):
+        super(PeriodicalPadding, self).__init__(input_)
+        self._shape = new_shape
+        self._x_off = x_offset
+        self._y_off = y_offset        
+        self._period = period
+
+    def _process(self):
+        input_ = self._gather()
+        input_ = input_[0]
+        if (input_.shape[1] < self._period):
+            raise ValueError('Input too small, width {0} smaller than period {1}.'.format(input_.shape[1], self._period))
+        output = np.zeros(self._shape)
+        height_new, width_new = self._shape[0], self._shape[1]
+        height_old, width_old = input_.shape[0], input_.shape[1]
+        for iy in xrange(height_new):
+            for ix in xrange(width_new):
+                idy = iy - self._y_off
+                idx = ix - self._x_off
+                while idx < 0:
+                    idx += self._period
+                while idx >= width_old:
+                    idx -= self._period
+                if idy < 0 or idy >= height_old:
+                    output[iy, ix] = 0.0
+                else:                        
+                    output[iy, ix] = input_[idy, idx]
+        return output
+
+class NPYWriter(Pipe):
+    def __init__(self, path, prefix, data, count, name='NPYWriter'):
+        super(NPYWriter, self).__init__()
+        self._branches.append(data)
+        self._branches.append(count)
+        self._count_pipe.reset()
+        self._prefix = prefix
+        self._path = os.path.abspath(path)
+        
+    def _process(self):
+        input_ = self._gather()
+        data = input_[0]
+        count = input_[1]
+        filename = xlearn.utils.dataset.form_file_name(self._prefix,
+                                                       count,
+                                                       'npy')
+        fullname = os.path.join(self._path, filename)        
+        np.save(fullname, data)
+
+    @property
+    def _data_pipe(self):
+        return self._branches[0]
+    
+    @property
+    def _count_pipe(self):
+        return self._branches[1]
+
         
 
         

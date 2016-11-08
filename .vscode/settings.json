@@ -1,0 +1,4 @@
+// Place your settings in this file to overwrite default and user settings.
+{
+    "python.autoComplete.extraPaths": ["\\192.168.1.132/dist-packages"]
+}

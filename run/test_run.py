@@ -11,6 +11,7 @@ import os
 from xlearn.reader.srinput import DataSet
 from xlearn.model.supernet import SuperNet0
 from xlearn.model.supernet import SuperNet1
+from xlearn.model.supernet import SuperNet2
 from xlearn.nets.model import NetManager
 
 FLAGS = tf.app.flags.FLAGS
@@ -55,7 +56,7 @@ def testSR(argv):
     # check_dataset(train_set)
     # check_dataset(test_set)
     
-    net = SuperNet1()
+    net = SuperNet2()
     manager = NetManager(net)    
 
     n_step = 3001

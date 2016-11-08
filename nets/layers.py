@@ -4,8 +4,6 @@ import numpy as np
 
 FLAGS = tf.app.flags.FLAGS
 
-
-
 def _weight_variable(name, shape, ncolumn, scope=tf.get_variable_scope()):
     """Helper to create a Variable
     Args:
@@ -18,11 +16,11 @@ def _weight_variable(name, shape, ncolumn, scope=tf.get_variable_scope()):
     """
     dtype = tf.float32
     #set optimal stdandard deviation for relu units.
-    stddev = np.sqrt(2.0/ncolumn)
-    stddev = 2e-2
+    stddev = np.sqrt(2.0/ncolumn)    
     initer = tf.truncated_normal_initializer(stddev=stddev, dtype=dtype)    
     with tf.variable_scope(scope):
-        var = tf.get_variable(name, shape=shape, initializer=initer, dtype=dtype)    
+        var = tf.get_variable(name, shape=shape, initializer=initer, dtype=dtype)
+     
     return var
 
 def _weight_variable_with_decay(name, shape, ncolumn, wd=0.0, scope=tf.get_variable_scope()):
@@ -315,3 +313,5 @@ def trainstep_clip(loss, learn_rate, global_step, name='trainstep_clip'):
         opt.apply_gradients(clipped_grad_vars)
         train_op = opt.minimize(loss, global_step, name=name)
     return train_op
+
+
