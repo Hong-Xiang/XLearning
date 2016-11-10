@@ -12,6 +12,7 @@ import numpy as np
 from six.moves import xrange
 import xlearn.utils.xpipes as xpipe
 import xlearn.utils.dataset as xdata
+import xlearn.utils.tensor
 
 class DataSet(object):
     """
@@ -62,8 +63,7 @@ class DataSet(object):
                                                          strides=strides)        
         self._buffer = xpipe.Buffer(self._batch_generator)
         self._copyer = xpipe.Copyer(self._buffer, copy_number=2)
-        self._hr_patch_gen = xpipe.TensorFormater(self._copyer, auto_shape=True)
-        self._hr_patch_gen = xpipe.TensorFormater(self._copyer, auto_shape=True)
+        self._hr_patch_gen = xpipe.TensorFormater(self._copyer, auto_shape=True)        
         self._down_sample = xpipe.DownSampler(self._copyer, self._ratio, method=down_sample_method)
         self._lr_patch_gen = xpipe.TensorFormater(self._down_sample, auto_shape=True)
         self._std = std
@@ -111,4 +111,70 @@ class DataSet(object):
     @property
     def epoch(self):
         """current epoch"""
-        return self._npyreader.epoch    
+        return self._npyreader.epoch
+
+class TestImageHolder(object):
+    def __init__(self,
+                 tensor,
+                 patch_shape, strides,
+                 valid_shape, valid_offset,
+                 down_sample_ratio,
+                 batch_size,
+                 mean=1,
+                 std=128):
+        super(ImageTester, self).__init__()        
+        self._patch_shape = patch_shape
+        self._strides = strides
+        self._valid_shape = valid_shape
+        self._valid_offset = valid_offset    
+        self._ratio = down_sample_ratio    
+        self._tensor = tensor
+        self._patches = xlearn.utils.tensor.patch_generator_tensor(self._tensor,
+                                                                   self._patch_shape,
+                                                                   self._strides)
+        self._n_patch = len(self._patches)
+        self._infer = []        
+        self._oid = 0
+        self._iid = 0
+
+    def next_batch(self, batch_size):        
+        low_shape = [batch_size, self._patch_shape[0], self._patch_shape[1], 1]                                                    
+        low_tensor = np.zeros(low_shape) 
+        for i in xrange(batch_size):
+            if self._oid < self._n_patch:                        
+                low_tensor[i, :, :, :] = self._patches[self._oid]
+            else:
+                low_tensor[i, :, :, :] = np.zeros([self._patch_shape[0],
+                                                   self._patch_shape[1], 1])
+            self._oid += 1                    
+        low_tensor /= self._std
+        low_tensor -= self._mean
+        return low_tensor
+    
+    def append_infer(self, infer_list):
+        for infer in infer_list:
+            infer += self._mean
+            infer *= self._std
+            self._infer.append(infer)
+        if len(self._infer) > self._n_patch:
+            self._infer = self._infer[:self._n_patch]
+
+    def low_image(self):
+        return self._tensor[0, :, :, 0]
+
+    def recon(self):
+        tensor_shape = [1, self._tensor.shape[0]*self._ratio, self._tensor.shape[1]*self._ratio, 1]
+        h_patch_shape = [self._patch_shape[0]*self._ratio, self._patch_shape*self._ratio]
+        h_strides = [h_patch_shape[0]-self._patch_shape[0]+self._strides[0],
+                     h_patch_shape[1]-self._patch_shape[1]+self._strides[1]]
+        self._recon_tensor = xlearn.utils.tensor.patches_recon_tensor(self._infer,
+                                                                      tensor_shape,
+                                                                      h_patch_shape,
+                                                                      h_strides,
+                                                                      self._valid_shape,
+                                                                      self._valid_offset)
+        return self._recon_tensor                                                                 
+
+    @property
+    def n_patch(self):
+        return self._n_patch

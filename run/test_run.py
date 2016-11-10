@@ -9,17 +9,14 @@ import argparse
 import os
 
 from xlearn.reader.srinput import DataSet
-from xlearn.model.supernet import SuperNet0
-from xlearn.model.supernet import SuperNet1
-from xlearn.model.supernet import SuperNet2
+from xlearn.model.supernet import *
 from xlearn.nets.model import NetManager
 
 FLAGS = tf.app.flags.FLAGS
 
 
-
 def check_dataset(dataset):
-    data, label= dataset.next_batch()
+    data, label = dataset.next_batch()
     n_show = 4
     for i in range(n_show):
         plt.figure()
@@ -32,13 +29,15 @@ def check_dataset(dataset):
         plt.gray()
         plt.show()
 
+
 def testSR(argv):
-    patch_shape = [FLAGS.height*FLAGS.down_ratio, FLAGS.width*FLAGS.down_ratio]
+    patch_shape = [FLAGS.height * FLAGS.down_ratio,
+                   FLAGS.width * FLAGS.down_ratio]
     strides = [5, 5]
     train_set = DataSet(path=FLAGS.train_path,
                         prefix=FLAGS.prefix,
                         patch_shape=patch_shape, strides=strides,
-                        batch_size=FLAGS.train_batch_size,
+                        batch_size=FLAGS.batch_size,
                         n_patch_per_file=FLAGS.patch_per_file,
                         down_sample_ratio=FLAGS.down_ratio,
                         dataset_type='train',
@@ -47,7 +46,7 @@ def testSR(argv):
     test_set = DataSet(path=FLAGS.test_path,
                        prefix=FLAGS.prefix,
                        patch_shape=patch_shape, strides=strides,
-                       batch_size=FLAGS.train_batch_size,
+                       batch_size=FLAGS.batch_size,
                        n_patch_per_file=FLAGS.patch_per_file,
                        down_sample_ratio=FLAGS.down_ratio,
                        dataset_type='test',
@@ -55,23 +54,39 @@ def testSR(argv):
 
     # check_dataset(train_set)
     # check_dataset(test_set)
-    
-    net = SuperNet2()
-    manager = NetManager(net)    
 
-    n_step = 3001
+    if FLAGS.task == "SuperNetCrop":
+        net = xlearn.model.supernet.SuperNetCrop()
+    if FLAGS.task == "SuperNet0":
+        net = xlearn.model.supernet.SuperNet0()
+    if FLAGS.task == "SuperNet1":
+        net = xlearn.model.supernet.SuperNet1()
+    if FLAGS.task == "SuperNet2":
+        net = xlearn.model.supernet.SuperNet1()
+    manager = NetManager(net)
+
+    n_step = FLAGS.steps
     for i in range(n_step):
-        data, label = train_set.next_batch()                        
-        [loss_train, _, lr] = manager.run([net.loss, net.train, net.learn_rate], feed_dict={net.inputs: data, net.label: label})
-        if i%10 == 0:
-            print('step={0:5d},\tlr={2:.3E},\t loss={1:.3E}.'.format(i, loss_train, lr))
-        if i%20 == 0:
-            manager.write_summary(feed_dict={net.inputs: data, net.label: label})
-        if i%50 == 0:
-            data_test, label_test = test_set.next_batch()            
-            [loss_test] = manager.run([net.loss], feed_dict={net.inputs: data_test, net.label: label_test})
+        data, label = train_set.next_batch()
+        [loss_train, _, lr] = manager.run([net.loss, net.train, net.learn_rate],
+                                          feed_dict={net.inputs: data, net.label: label})
+        if i % 10 == 0:
+            print('step={0:5d},\tlr={2:.3E},\t loss={1:.3E}.'.format(
+                i, loss_train, lr))
+        if i % 20 == 0:
+            manager.write_summary(
+                feed_dict={net.inputs: data, net.label: label})
+        if i % 50 == 0:
+            data_test, label_test = test_set.next_batch()
+            [loss_test] = manager.run([net.loss],
+                                      feed_dict={net.inputs: data_test,
+                                                 net.label: label_test})
             print('step={0:5d},\t test loss={1:.3E}.'.format(i, loss_test))
-    manager.save()           
+    # manager.save()
+
+    saver = tf.train.Saver(tf.all_variables())
+    path = saver.save(manager.sess, FLAGS.save_path, FLAGS.steps)
+    print(path)
 
 
 def main(argv):
