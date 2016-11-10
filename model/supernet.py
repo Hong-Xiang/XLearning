@@ -24,6 +24,7 @@ class SuperNet0(TFNet):
 
     def __init__(self, varscope=tf.get_variable_scope()):
         super(SuperNet0, self).__init__(varscope=varscope)
+        print('===Constrcuting SuperNet0===')
         self._input = layer.inputs([None,
                                     FLAGS.height,
                                     FLAGS.width,
@@ -85,6 +86,7 @@ class SuperNet1(TFNet):
 
     def __init__(self, varscope=tf.get_variable_scope()):
         super(SuperNet1, self).__init__(varscope=varscope)
+        print('===Constrcuting SuperNet1===')
         self._input = layer.inputs([None,
                                     FLAGS.height,
                                     FLAGS.width,
@@ -166,6 +168,7 @@ class SuperNet2(TFNet):
 
     def __init__(self, varscope=tf.get_variable_scope()):
         super(SuperNet2, self).__init__(varscope=varscope)
+        print('===Constrcuting SuperNet2===')        
         self._input = layer.inputs([None,
                                     FLAGS.height,
                                     FLAGS.width,
@@ -234,6 +237,7 @@ class SuperNetCrop(TFNet):
 
     def __init__(self, varscope=tf.get_variable_scope()):
         super(SuperNetCrop, self).__init__(varscope=varscope)
+        print('===Constrcuting SuperNetCrop===')
         self._input = layer.inputs([FLAGS.batch_size,
                                     FLAGS.height,
                                     FLAGS.width,
