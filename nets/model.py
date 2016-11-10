@@ -26,8 +26,8 @@ def define_flags(argv):
     flag.DEFINE_string("save_dir", '.', "saving path.")
     flag.DEFINE_string("save_path", 'netsave', "saving path.")
     flag.DEFINE_string("summary_dir", '.', "summary path.")
-    flag.DEFINE_integer("lr_decay_steps", 100000, "decay steps.")
-    flag.DEFINE_float("lr_decay_factor", 0.1,
+    flag.DEFINE_integer("lr_decay_steps", 1000, "decay steps.")
+    flag.DEFINE_float("lr_decay_factor", 0.6,
                       "learing rate decay factor.")
     flag.DEFINE_integer("height", 11, "patch_height")
     flag.DEFINE_integer("width", 11, "patch_width")
@@ -108,16 +108,16 @@ class NetManager(object):
 
     def save(self, step=None):
         if step is None:
-            self._saver.save(self._sess, FLAGS.save_dir)
+            self._saver.save(self._sess, FLAGS.save_dir+'-'+FLAGS.task)
         else:
-            self._saver.save(self._sess, FLAGS.save_dir, step)
+            self._saver.save(self._sess, FLAGS.save_dir+'-'+FLAGS.task, step)
 
     def restore(self):
         ckfile = os.path.join(FLAGS.save_dir, 'checkpoint')
         with open(ckfile) as ckpf:
             for line in ckpf:
                 (key, value) = line.split()
-                if key == 'all_model_checkpoint_paths:':                                     
+                if key == 'all_model_checkpoint_paths:':
                     save_path = value
                     break
         save_path = save_path[1:-1]

@@ -65,7 +65,7 @@ class SuperNet0(TFNet):
         self._infer = tf.add(
             self._interp, self._residual_inference, name='infer')
 
-        self._train = layer.trainstep(
+        self._train = layer.trainstep_clip(
             self._loss, self._learn_rate, self._global_step)
 
     def _add_summary(self):
