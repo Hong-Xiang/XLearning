@@ -33,7 +33,7 @@ def check_dataset(dataset):
 def testSR(argv):
     patch_shape = [FLAGS.height * FLAGS.down_ratio,
                    FLAGS.width * FLAGS.down_ratio]
-    strides = [5, 5]
+    strides = [1, 1]
     train_set = DataSet(path=FLAGS.train_path,
                         prefix=FLAGS.prefix,
                         patch_shape=patch_shape, strides=strides,
@@ -71,7 +71,7 @@ def testSR(argv):
         [loss_train, _, lr] = manager.run([net.loss, net.train, net.learn_rate],
                                           feed_dict={net.inputs: data, net.label: label})
         if i % 10 == 0:
-            print('step={0:5d},\tlr={2:.3E},\t loss={1:.3E}.'.format(
+            print('step={0:5d},\tlr={2:.3E},\t loss={1:0.3f}.'.format(
                 i, loss_train, lr))
         if i % 20 == 0:
             manager.write_summary(
@@ -81,7 +81,7 @@ def testSR(argv):
             [loss_test] = manager.run([net.loss],
                                       feed_dict={net.inputs: data_test,
                                                  net.label: label_test})
-            print('step={0:5d},\t test loss={1:.3E}.'.format(i, loss_test))
+            print('step={0:5d},\t test loss={1:0.3f}.'.format(i, loss_test))
     # manager.save()
 
     saver = tf.train.Saver(tf.all_variables())

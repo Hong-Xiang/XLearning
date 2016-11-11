@@ -282,9 +282,9 @@ def l2_loss(inference_image, reference_image, name="loss_layer"):
 
 def psnr_loss(inference_tensor, reference_tensor, name="loss_layer"):
     with tf.name_scope(name) as scope:
-        # l2 = tf.square(inference_tensor - reference_tensor, name='l2_difference')
-        # MSE = tf.reduce_sum(l2, name='MSE')
-        MSE = tf.nn.l2_loss(inference_tensor - reference_tensor, name='MSE')
+        l2 = tf.square(inference_tensor - reference_tensor, name='l2_difference')
+        MSE = tf.reduce_mean(l2, name='MSE')
+        # MSE = tf.nn.l2_loss(inference_tensor - reference_tensor, name='MSE')
         loss = tf.neg(tf.log(tf.inv(tf.sqrt(MSE + FLAGS.eps))), name='psnr')
         tf.add_to_collection('losses', loss)
     return loss

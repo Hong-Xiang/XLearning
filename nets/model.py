@@ -31,7 +31,7 @@ def define_flags(argv):
                       "learing rate decay factor.")
     flag.DEFINE_integer("height", 11, "patch_height")
     flag.DEFINE_integer("width", 11, "patch_width")
-    flag.DEFINE_float("down_ratio", 3, "down_sample_ratio")
+    flag.DEFINE_integer("down_ratio", 3, "down_sample_ratio")
     flag.DEFINE_integer("patch_per_file", 8, "patches per file.")
     flag.DEFINE_string("train_path", None, "train data path.")
     flag.DEFINE_string("test_path", None, "test data path.")
@@ -42,7 +42,7 @@ def define_flags(argv):
     flag.DEFINE_string("grad_clip", 100, "maximum gradient value.")
     flag.DEFINE_boolean("restore", False, "restore variables.")
     flag.DEFINE_integer("steps", 1000, "train steps.")
-
+    
 
 def before_net_definition():
     zeroinit = tf.constant_initializer(0.0)

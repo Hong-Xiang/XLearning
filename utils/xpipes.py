@@ -88,7 +88,7 @@ class Pipe(object):
     def _pump(self):
         return None
 
-    def _gather(self):
+    def _gather(self):        
         if self.is_start:
             return self._pump()
         else:    
@@ -175,7 +175,8 @@ class Buffer(Pipe):
             self._new_buffer()
         if self._state == self._max_state:
             self._new_buffer()
-        output = self._buffer[self._state] 
+        output = self._buffer[self._state]
+         
         self._state += 1
         return output
 
@@ -310,7 +311,7 @@ class NPYReader(Pipe):
 
     def _new_epoch(self):
         self._epoch += 1
-        self._cid = 0        
+        self._cid = 0
         self._id_shuffle = list(xrange(self._nfiles))
         if self._is_random:
             random.shuffle(self._id_shuffle)
@@ -383,50 +384,53 @@ class ImageFormater(SingleInput):
 
 class ImageGrayer(SingleInput):
     def __init__(self, input_, name='ImageGrayer', is_seal=False):       
-        super(ImageGrayer, self).__init__(input_, name=name, is_seal=is_seal)        
+        super(ImageGrayer, self).__init__(input_, name=name, is_seal=is_seal)
 
     def _process(self):
         image = self._gather()
         if image is None:
             return None
-        image = image[0]      
-        gray = xlearn.utils.image.rgb2gray(image)        
-        return gray 
+        image = image[0]
+        gray = xlearn.utils.image.rgb2gray(image)
+
+        
+        return gray
        
 
 
 
 class TensorFormater(SingleInput):
-    def __init__(self, input_, squeeze=True, new_shape=None, auto_shape=True, name='TensorFormater', is_seal=False):
+    def __init__(self, input_, squeeze=True, new_shape=None, auto_shape=True,
+                 name='TensorFormater', is_seal=False):
         super(TensorFormater, self).__init__(input_, name=name, is_seal=is_seal)
-        self._shape = new_shape        
+        self._shape = new_shape
         self._auto_shape = auto_shape
         self._squeeze = squeeze
 
     def _process(self):
         tensor_list = self._gather()
-        tensor_list = tensor_list[0]               
+        tensor_list = tensor_list[0]
         if tensor_list is None:
-            return None        
+            return None
         output = xlearn.utils.tensor.merge_tensor_list(tensor_list, squeeze=self._squeeze)
-        
-        preshape = output.shape             
+
+        preshape = output.shape
         if self._shape is not None:
             newshape = self._shape
-        elif self._auto_shape:    
+        elif self._auto_shape:
             if len(preshape) == 3 and tensor_list[0].shape[0] == 1:
                 newshape = [1, 1, 1, 1]
-                newshape[:-1]=preshape                    
+                newshape[:-1] = preshape
             elif len(preshape) == 3:
                 newshape = [1, 1, 1, 1]
-                newshape[-len(preshape):]=preshape
+                newshape[-len(preshape):] = preshape
             elif len(preshape) == 2:
                 newshape = [1, 1, 1, 1]
                 newshape[1:3] = preshape
             else:
                 newshape = preshape
         else:
-            newshape = preshape        
+            newshape = preshape
         output = np.reshape(output, newshape)
         return output
 
@@ -438,8 +442,8 @@ class PatchGenerator(SingleInput):
         self._shape = shape
         self._strides = strides
         self._random = random_gen
-        self._n_patches = n_patches        
-    
+        self._n_patches = n_patches
+
     def _gather_with_check(self):
         tensor = self._gather()
         if tensor is None:
@@ -451,10 +455,11 @@ class PatchGenerator(SingleInput):
             return self._gather_with_check()
         else:
             return tensor
-                
+
     def _process(self):
-        tensor = self._gather_with_check()                                            
+        tensor = self._gather_with_check()
         output = []
+
         patch_gen = xlearn.utils.tensor.patch_generator_tensor(tensor,
                                                                self._shape,
                                                                self._strides,

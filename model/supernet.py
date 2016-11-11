@@ -16,6 +16,42 @@ from xlearn.nets.model import TFNet
 FLAGS = tf.app.flags.FLAGS
 ACTIVITION_FUNCTION = tf.nn.relu
 
+class SuperNetBase(TFNet):
+    def __init__(self,
+                 ratio,
+                 name='SuperNetBase',
+                 varscope=tf.get_variable_scope()):
+        super(SuperNetBase, self).__init__(varscope=varscope)
+        self._input = layer.inputs([None,
+                                    FLAGS.height,
+                                    FLAGS.width,
+                                    1],
+                                   "input_low_res")
+        self._ratio = FLAGS.down_ratio
+        self._label = layer.labels([None,
+                                    FLAGS.height * self._ratio,
+                                    FLAGS.width * self._ratio,
+                                    1],
+                                   "input_high_res")
+        self._net_definition()
+        self._infer = self._interp
+        
+        self._add_summary()
+
+    def _net_definition(self):
+        with tf.name_scope('interpolation') as scope:
+            self._interp = tf.image.resize_images(self._input,
+                                                  FLAGS.height * self._ratio,
+                                                  FLAGS.width * self._ratio)
+
+    def _add_summary(self):
+        model.scalar_summary(self._loss)
+        tf.image_summary('input_low', self._input)
+        tf.image_summary('label_high', self._label)
+        tf.image_summary('residual_inference', self._residual_inference)
+        tf.image_summary('residual_reference', self._residual_reference)
+        tf.image_summary('inference', self._infer)
+        tf.image_summary('interp_result', self._interp)
 
 class SuperNet0(TFNet):
     """
@@ -60,7 +96,7 @@ class SuperNet0(TFNet):
                                                      padding='SAME', name='residual_inference')
 
         # self._psnr = layer.psnr_loss(self._residual_inference, self._residual_reference, name='psnr_loss')
-        self._l2_loss = layer.l2_loss(
+        self._l2_loss = layer.psnr_loss(
             self._residual_inference, self._residual_reference, name='l2_loss')
         self._loss = layer.loss_summation()
         self._infer = tf.add(
