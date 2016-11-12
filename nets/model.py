@@ -14,7 +14,7 @@ import xlearn.nets.layers as layer
 FLAGS = tf.app.flags.FLAGS
 
 
-def define_flags(argv):
+def define_flags():
     flag = tf.app.flags
     flag.DEFINE_float("weight_decay", 0.0001,
                       "Weight decay coefficient.")
@@ -42,7 +42,7 @@ def define_flags(argv):
     flag.DEFINE_string("grad_clip", 100, "maximum gradient value.")
     flag.DEFINE_boolean("restore", False, "restore variables.")
     flag.DEFINE_integer("steps", 1000, "train steps.")
-    
+    flag.DEFINE_boolean("is_train", True, "flag of is training.")
 
 def before_net_definition():
     zeroinit = tf.constant_initializer(0.0)

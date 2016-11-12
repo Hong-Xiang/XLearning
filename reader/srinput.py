@@ -7,6 +7,7 @@ Created on 2016-11-03 10:20:52
 
 General image inputer
 """
+from __future__ import absolute_import, division, print_function
 import os
 import numpy as np
 from six.moves import xrange

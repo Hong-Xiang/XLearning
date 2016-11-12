@@ -1,4 +1,5 @@
 from __future__ import absolute_import, division, print_function
+from six.moves import xrange
 import tensorflow as tf
 import numpy as np
 
@@ -46,12 +47,20 @@ def _weight_variable_with_decay(name, shape, ncolumn, wd=0.0, scope=tf.get_varia
         tf.add_to_collection('losses', weight_decay)
     return var
 
-
-def _bias_variable(name, shape, scope=tf.get_variable_scope()):
+def _moving_average_variable(name, shape, scope=tf.get_variable_scope()):
     dtype = tf.float32
     initer = tf.constant_initializer(0.0)
     with tf.variable_scope(scope):
-        var = tf.get_variable(name, shape, initializer=initer, dtype=dtype)
+        var = tf.get_variable(name, shape, initializer=initer, dtype=dtype, trainable=False)
+    ema = tf.train.ExponentialMovingAverage(decay=FLAGS.bn_decay)
+    average_op = ema.apply([var])
+    return var, average_op
+
+def _bias_variable(name, shape, scope=tf.get_variable_scope(), trainable=True):
+    dtype = tf.float32
+    initer = tf.constant_initializer(0.0)
+    with tf.variable_scope(scope):
+        var = tf.get_variable(name, shape, initializer=initer, dtype=dtype, trainable=trainable)
     return var
 
 
@@ -177,13 +186,26 @@ def conv_activate(input_,
 
 def batch_norm(input_, name='batch_norm', varscope=tf.get_variable_scope()):
     with tf.name_scope(name) as scope:
-        offset = _bias_variable(scope + 'offset', [1], scope=varcope)
-
+        input_shape = input_.get_shape()
+        n_param = input_shape[-1:]
+        axis = list(xrange(len(input_shape)-1))
+        beta = _bias_variable(scope + 'beta', [n_param], scope=varscope)
+        gamma = _bias_variable(scope + 'gamma', [n_param], scope=varscope)
+        moving_mean = _bias_variable(scope + 'moving_mean', [n_param], scope=varscope, trainable=False)
+        moving_variance = _bias_variable(scope + 'moving_variance', [n_param], scope=varscope, trainable=False)        
         # TODO: clean implementation
         scale = tf.Variable(1.0)
-        mean, variance = tf.nn.moments(x, [0, 1, 2])
-        output = tf.nn.batch_normalization(
-            input_, mean, variance, offset, scale, FLAGS.eps, name='batch_norm')
+        mean, variance = tf.nn.moments(x, axis)
+        update_moving_mean = moving_averages.assign_moving_average(moving_mean,
+                                                                   mean, FLAGS.bn_decay)
+        update_moving_variance = moving_averages.assign_moving_average(moving_variance,
+                                                                       variance, FLAGS.bn_decay)
+        tf.add_to_collection('MOVING_AVERAGE_VARIABLES', update_moving_mean)
+        tf.add_to_collection('MOVING_AVERAGE_VARIABLES', update_moving_variance)
+        mean, variance = control_flow_ops.cond(FLAGS.is_train,
+                                               lambda: (mean, variance),
+                                               lambda: (moving_mean, moving_variance))
+        output = tf.nn.batch_normalization(input_, mean, variance, beta, gamma, FLAGS.eps, name='batch_norm')
     return output
 
 
@@ -298,9 +320,9 @@ def loss_summation(name="total_loss", norm_batch=True, noramlization=1):
     return loss
 
 
-def crop(input_, shape, offset, name="cropping"):
+def crop(input_, shape, offset, num=None, name="cropping"):
     with tf.name_scope(name) as scope:
-        tensor_list = tf.unpack(input_, name='unpack')
+        tensor_list = tf.unpack(input_, num, name='unpack')
         tensor_crop_list = []
         for t in tensor_list:
             tc = tf.image.crop_to_bounding_box(

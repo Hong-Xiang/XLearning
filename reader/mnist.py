@@ -7,6 +7,7 @@ Created on 2016-11-03 10:20:52
 
 MNIST inputer
 """
+from __future__ import absolute_import, division, print_function
 import os
 import numpy as np
 from six.moves import xrange
@@ -22,10 +23,10 @@ class DataSet(object):
         self._height = self._data.shape[1]
         self._width = self._data.shape[2]
         self._num_example = self._data.shape[0]
-        self._ids = list(xrange(self._num_example))        
+        self._ids = list(xrange(self._num_example))
         self._cid = 0
         self._is_shuffle = is_shuffle
-        self._epoch = 0        
+        self._epoch = 0
         if self._is_shuffle:
             random.shuffle(self._ids)
 

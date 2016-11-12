@@ -11,6 +11,7 @@ import os
 from xlearn.reader.srinput import DataSet
 from xlearn.model.supernet import *
 from xlearn.nets.model import NetManager
+from xlearn.reader.oneoverx import DataSetOneOverX
 
 FLAGS = tf.app.flags.FLAGS
 
@@ -28,6 +29,33 @@ def check_dataset(dataset):
         plt.imshow(label[i, :, :, 0])
         plt.gray()
         plt.show()
+
+def test_one_over_x(argv):
+    data_set = DataSetOneOverX(batch_size=FLAGS.batch_size)
+    net = xlearn.model.oneoverx.NetOneOverX(batch_size=FLAGS.batch_size)
+    manager = NetManager(net)
+    n_step = FLAGS.steps
+    for i in range(n_step):
+        x, y = data_set.next_batch()
+        [loss_train, _, lr] = manager.run([net.loss, net.train, net.learn_rate],
+                                          feed_dict={net.inputs: x, net.label: y})
+        if i % 10 == 0:
+            print('step={0:5d},\tlr={2:.3E},\t loss={1:4E}.'.format(
+                i, loss_train, lr))
+        if i % 20 == 0:
+            manager.write_summary(
+                feed_dict={net.inputs: x, net.label: y})
+        if i % 50 == 0:
+            x, y = data_set.next_batch()
+            [loss_test] = manager.run([net.loss],
+                                      feed_dict={net.inputs: x,
+                                                 net.label: y})
+            print('step={0:5d},\t test loss={1:4E}.'.format(i, loss_test))
+    
+    x = np.linspace(0.1, 1.1, num=FLAGS.batch_size)
+    x = np.reshape(x, [FLAGS.batch_size, 1])
+    y_ = manager.run([net.infer], feed_dict={net.inputs: x})
+    np.save('oneoverx.npy', y_)
 
 
 def testSR(argv):
@@ -91,9 +119,9 @@ def testSR(argv):
 
 def main(argv):
     testSR(argv)
-
+    #test_one_over_x(argv)
 
 if __name__ == '__main__':
-    xlearn.nets.model.define_flags(sys.argv)
+    xlearn.nets.model.define_flags()
     xlearn.nets.model.before_net_definition()
     tf.app.run()

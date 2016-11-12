@@ -46,7 +46,7 @@ def check_dataset(dataset):
 
 def test(argv):
     patch_shape = [FLAGS.height*FLAGS.down_ratio, FLAGS.width*FLAGS.down_ratio]
-    strides = [17, 17]
+    strides = [1, 1]
     train_set = DataSet(path='/home/hongxwing/Workspace/Datas/nature_image',
                         prefix='img',
                         patch_shape=patch_shape, strides=strides,
@@ -66,25 +66,25 @@ def test(argv):
 
     # check_dataset(train_set)
     # check_dataset(test_set)
-    
+
     net = SuperNet0()
-    manager = NetManager(net)    
+    manager = NetManager(net)
 
     n_step = 1001
     for i in range(n_step):
-        data, label = train_set.next_batch()                        
+        data, label = train_set.next_batch()
         [loss_train, _, lr] = manager.run([net.loss, net.train, net.learn_rate], feed_dict={net.inputs:data, net.label:label})
         if i%1 == 0:
             print('step={0:5d},\tlr={2:f},\t loss={1:f}.'.format(i, loss_train, lr))
         if i%10 == 0:
-            manager.write_summary(feed_dict={net.inputs:data, net.label:label})                    
+            manager.write_summary(feed_dict={net.inputs:data, net.label:label})
         if i%50 == 0:
-            data_test, label_test = test_set.next_batch()            
+            data_test, label_test = test_set.next_batch()
             [loss_test] = manager.run([net.loss], feed_dict={net.inputs:data_test, net.label:label_test})
             print('step={0:5d},\t test loss={1:f}.'.format(i, loss_test))
-    manager.save()           
-    
-def main(argv):    
+    manager.save()
+
+def main(argv):
     test(argv)
 
 if __name__=='__main__':

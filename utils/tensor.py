@@ -72,7 +72,7 @@ def merge_tensor_list(tensor_list, squeeze=False):
     output_shape = list(tensor_o.shape)
     while 1 in output_shape:
         output_shape.remove(1)
-    tensor_o = np.reshape(tensor_o, output_shape)
+    tensor_o = np.reshape(tensor_o, output_shape)    
     return tensor_o
 
 def merge_patch_list(patch_list):
