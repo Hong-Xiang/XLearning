@@ -86,7 +86,7 @@ def testSino(argv):
     if FLAGS.task == "SuperNet1":
         net = xlearn.model.supernet.SuperNet1()
     if FLAGS.task == "SuperNet2":
-        net = xlearn.model.supernet.SuperNet1()
+        net = xlearn.model.supernet.SuperNet2()
     manager = NetManager(net)
 
     n_step = FLAGS.steps
@@ -144,7 +144,7 @@ def testSR(argv):
     if FLAGS.task == "SuperNet1":
         net = xlearn.model.supernet.SuperNet1()
     if FLAGS.task == "SuperNet2":
-        net = xlearn.model.supernet.SuperNet1()
+        net = xlearn.model.supernet.SuperNet2()
     manager = NetManager(net)
 
     n_step = FLAGS.steps

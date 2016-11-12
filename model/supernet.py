@@ -18,7 +18,7 @@ ACTIVITION_FUNCTION = tf.nn.relu
 
 class SuperNetBase(TFNet):
     def __init__(self,
-                 name='SuperNetBase',                 
+                 name='SuperNetBase',
                  varscope=tf.get_variable_scope()):
         super(SuperNetBase, self).__init__(varscope=varscope)
         self._name = name
@@ -49,7 +49,7 @@ class SuperNetBase(TFNet):
         self._residual_inference = None
         self._infer = None
         self._midops = []
-        self._net_definition()                
+        self._net_definition()
         self._loss = layer.loss_summation()
         self._train = layer.trainstep_clip(self._loss, self._learn_rate, self._global_step)
         self._add_summary()
@@ -92,10 +92,9 @@ class SuperNet0(SuperNetBase):
     Most naive implementation, based on https://arxiv.org/pdf/1501.00092.pdf
     """
     def __init__(self,
-                 name='SuperNet0',                 
+                 name='SuperNet0',
                  varscope=tf.get_variable_scope()):
-        super(SuperNet0, self).__init__(name=name,
-                                        only_down_width=only_down_width,
+        super(SuperNet0, self).__init__(name=name,                                        
                                         varscope=varscope)
 
     def _net_definition(self):
@@ -175,9 +174,9 @@ class SuperNet2(SuperNetBase):
     """
 
     def __init__(self,
-                 name='SuperNet2',                 
+                 name='SuperNet2',
                  varscope=tf.get_variable_scope()):
-        super(SuperNet2, self).__init__(varscope=varscope)
+        super(SuperNet2, self).__init__(name=name, varscope=varscope)
 
     def _net_definition(self):
         filter_shape = [3, 3, FLAGS.hidden_units, FLAGS.hidden_units]
@@ -191,13 +190,14 @@ class SuperNet2(SuperNetBase):
                                        padding='SAME', name='conv%d' % (i + 1),
                                        activation_function=ACTIVITION_FUNCTION)
             self._midops.append(conv)
-
-        self._residual_inference = layer.convolution(conv, [3, 3, FLAGS.hidden_units, 1],
-                                                     padding='SAME', name='residual_inference')
+        with tf.name_scope('residual_inference'):
+            self._residual_inference = layer.convolution(conv, [3, 3, FLAGS.hidden_units, 1],
+                                                         padding='SAME', name='residual_inference')
 
         # self._psnr = layer.psnr_loss(self._residual_inference, self._residual_reference, name='psnr_loss')
         self._l2_loss = layer.l2_loss(self._residual_inference,
                                       self._residual_reference, name='l2_loss')
+
         with tf.name_scope('inference'):
             self._infer = tf.add(self._interp,
                                  self._residual_inference, name='add')
