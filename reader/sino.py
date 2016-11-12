@@ -16,7 +16,8 @@ import xlearn.utils.dataset as xdata
 import xlearn.utils.tensor
 
 
-class DataSet(object):
+
+class DataSetSinogram(object):
     """
     A general super resolution net.
 
@@ -34,7 +35,7 @@ class DataSet(object):
                  dataset_type='test',
                  down_sample_method='fixed',
                  mean=1,
-                 std=128):
+                 std=1e12):
         self._path = os.path.abspath(path)
         self._patch_shape = patch_shape
         self._batch_size = batch_size
@@ -59,13 +60,15 @@ class DataSet(object):
             self._batch_generator = xpipe.PatchGenerator(self._tensor_image,
                                                          shape=self._patch_shape,
                                                          n_patches=self._n_patch,
-                                                         strides=strides)
+                                                         strides=strides,
+                                                         threshold=0.1)
         if self._dataset_type == 'train':
             self._batch_generator = xpipe.PatchGenerator(self._tensor_image,
                                                          shape=self._patch_shape,
                                                          random_gen=True,
                                                          n_patches=self._n_patch,
-                                                         strides=strides)
+                                                         strides=strides,
+                                                         threshold=0.1)
         self._buffer = xpipe.Buffer(self._batch_generator)
         self._copyer = xpipe.Copyer(self._buffer, copy_number=2)
         self._hr_patch_gen = xpipe.TensorFormater(
@@ -92,16 +95,21 @@ class DataSet(object):
         low_shape = [self._batch_size, low_height, low_width, 1]
         high_tensor = np.zeros(high_shape)
         low_tensor = np.zeros(low_shape)
-        for i in xrange(self._batch_size):
+        added = 0
+        while added < self._batch_size:        
             patch_high = self._hr_patch_gen.out.next()
             patch_low = self._lr_patch_gen.out.next()
-            high_tensor[i, :, :, :] = patch_high
-            low_tensor[i, :, :, :] = patch_low
-
-        low_tensor /= self._std
-        low_tensor -= self._mean
-        high_tensor /= self._std
-        high_tensor -= self._mean
+            if np.max(patch_high) < 1:
+                continue
+            pstd = np.std(patch_high)
+            patch_high /= pstd
+            patch_low /= pstd
+            pmean = np.mean(patch_high)
+            patch_high -= pmean
+            patch_low -= pmean
+            high_tensor[added, :, :, :] = patch_high
+            low_tensor[added, :, :, :] = patch_low
+            added += 1
 
         return low_tensor, high_tensor
 

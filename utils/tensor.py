@@ -207,7 +207,7 @@ def offset_generator(image_shape, patch_shape, stride_step):
             y_offset_list.append(y_offset)
     return x_offset_list, y_offset_list
 
-def patch_generator_tensor(tensor, patch_shape, stride_step, n_patches=None, use_random_shuffle=False):
+def patch_generator_tensor(tensor, patch_shape, stride_step, n_patches=None, use_random_shuffle=False, threshold=None):
     """Full functional patch generator
     Args:
     tensor: a N*W*H*C shape tensor
@@ -220,12 +220,19 @@ def patch_generator_tensor(tensor, patch_shape, stride_step, n_patches=None, use
         random.shuffle(ids)
     if n_patches == None:
         n_patches = len(ids)
-    ids = ids[:n_patches]
+    outputed = 0
     for i in ids:
         x_offset = x_offset_list[i]
         y_offset = y_offset_list[i]
         patch = tensor[:, y_offset: y_offset+patch_shape[0], x_offset: x_offset+patch_shape[1], :]
+        if threshold is not None:
+            nnz = np.float(np.count_nonzero(patch))/patch.size
+            if nnz < threshold:
+                continue
         yield patch
+        outputed += 1
+        if outputed > n_patches:
+            break
 
 def patches_recon_tensor(patch_list,
                          tensor_shape, patch_shape, stride_step,

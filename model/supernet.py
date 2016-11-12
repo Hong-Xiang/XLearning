@@ -18,8 +18,7 @@ ACTIVITION_FUNCTION = tf.nn.relu
 
 class SuperNetBase(TFNet):
     def __init__(self,
-                 name='SuperNetBase',
-                 only_down_width=False,
+                 name='SuperNetBase',                 
                  varscope=tf.get_variable_scope()):
         super(SuperNetBase, self).__init__(varscope=varscope)
         self._name = name
@@ -30,7 +29,7 @@ class SuperNetBase(TFNet):
                                     FLAGS.width,
                                     1],
                                    "input_low_res")
-        self._width_only = only_down_width
+        self._width_only = FLAGS.only_down_width
         self._ratio = FLAGS.down_ratio
         high_shape = self._high_shape()
         self._label = layer.labels([None,
@@ -93,8 +92,7 @@ class SuperNet0(SuperNetBase):
     Most naive implementation, based on https://arxiv.org/pdf/1501.00092.pdf
     """
     def __init__(self,
-                 name='SuperNet0',
-                 only_down_width=False,
+                 name='SuperNet0',                 
                  varscope=tf.get_variable_scope()):
         super(SuperNet0, self).__init__(name=name,
                                         only_down_width=only_down_width,
@@ -127,8 +125,7 @@ class SuperNet1(SuperNetBase):
     """
 
     def __init__(self,
-                 name='SuperNet1',
-                 only_down_width=False,
+                 name='SuperNet1',                 
                  varscope=tf.get_variable_scope()):
         super(SuperNet1, self).__init__(varscope=varscope)
 
@@ -178,8 +175,7 @@ class SuperNet2(SuperNetBase):
     """
 
     def __init__(self,
-                 name='SuperNet2',
-                 only_down_width=False,
+                 name='SuperNet2',                 
                  varscope=tf.get_variable_scope()):
         super(SuperNet2, self).__init__(varscope=varscope)
 
@@ -214,15 +210,15 @@ class SuperNetCrop(SuperNetBase):
     """
 
     def __init__(self,
-                 name='SuperNetCrop',
-                 only_down_width=False,
+                 name='SuperNetCrop',                 
                  varscope=tf.get_variable_scope()):
         super(SuperNetCrop, self).__init__(varscope=varscope)
 
-    def _net_definition(self):
-        preshape = [FLAGS.height * self._ratio, FLAGS.width * self._ratio]
+    def _net_definition(self):        
+        preshape = self._high_shape()
         postshape = [preshape[0] - FLAGS.hidden_layer *
                      2, preshape[1] - FLAGS.hidden_layer * 2]
+        
         offset = [FLAGS.hidden_layer, FLAGS.hidden_layer]
         self._residual_crop = layer.crop(self._residual_reference,
                                          postshape, offset, num=FLAGS.batch_size)

@@ -461,7 +461,7 @@ class TensorFormater(SingleInput):
 class PatchGenerator(SingleInput):
 
     def __init__(self, input_,
-                 shape, strides, random_gen=False, n_patches=None,
+                 shape, strides, random_gen=False, n_patches=None, threshold=None,
                  name='PatchGenerator', is_seal=False):
         super(PatchGenerator, self).__init__(
             input_, name=name, is_seal=is_seal)
@@ -469,7 +469,7 @@ class PatchGenerator(SingleInput):
         self._strides = strides
         self._random = random_gen
         self._n_patches = n_patches
-
+        self._threshold = threshold
     def _gather_with_check(self):
         tensor = self._gather()
         if tensor is None:
@@ -486,14 +486,24 @@ class PatchGenerator(SingleInput):
     def _process(self):
         tensor = self._gather_with_check()
         output = []
-
         patch_gen = xlearn.utils.tensor.patch_generator_tensor(tensor,
                                                                self._shape,
                                                                self._strides,
                                                                self._n_patches,
-                                                               self._random)
+                                                               self._random,
+                                                               threshold=self._threshold)
         for patches in patch_gen:
             output.append(patches)
+        while len(output) == 0:
+            tensor = self._gather_with_check()
+            patch_gen = xlearn.utils.tensor.patch_generator_tensor(tensor,
+                                                        self._shape,
+                                                        self._strides,
+                                                        self._n_patches,
+                                                        self._random,
+                                                        threshold=self._threshold)
+            for patches in patch_gen:
+                output.append(patches)
         return output
 
 

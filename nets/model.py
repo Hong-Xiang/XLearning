@@ -43,7 +43,8 @@ def define_flags():
     flag.DEFINE_boolean("restore", False, "restore variables.")
     flag.DEFINE_integer("steps", 1000, "train steps.")
     flag.DEFINE_boolean("is_train", True, "flag of is training.")
-
+    flag.DEFINE_boolean("only_down_width", False, "flag of only downsample width")
+    
 def before_net_definition():
     zeroinit = tf.constant_initializer(0.0)
     with tf.variable_scope('net_global') as scope:
