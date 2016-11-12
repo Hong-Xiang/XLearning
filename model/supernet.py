@@ -218,10 +218,12 @@ class SuperNetCrop(SuperNetBase):
         preshape = self._high_shape()
         postshape = [preshape[0] - FLAGS.hidden_layer *
                      2, preshape[1] - FLAGS.hidden_layer * 2]
-        
+
         offset = [FLAGS.hidden_layer, FLAGS.hidden_layer]
         self._residual_crop = layer.crop(self._residual_reference,
                                          postshape, offset, num=FLAGS.batch_size)
+        self._high_crop = layer.crop(self._label, postshape, offset, num=FLAGS.batch_size)
+
         self._midop = []
         filter_shape = [3, 3, FLAGS.hidden_units, FLAGS.hidden_units]
         conv = layer.conv_activate(self._interp, [5, 5, 1, FLAGS.hidden_units],
@@ -248,6 +250,18 @@ class SuperNetCrop(SuperNetBase):
 
         self._infer = tf.add(self._interp_crop,
                              self._residual_inference, name='infer')
+                            
+    def _add_summary(self):
+        model.scalar_summary(self._loss)
+        for opt in self._midops:
+            model.activation_summary(opt)
+        tf.image_summary('input_low', self._input)
+        tf.image_summary('label_high', self._label)        
+        tf.image_summary('residual_inference', self._residual_inference)
+        tf.image_summary('residual_reference', self._residual_crop)        
+        tf.image_summary('inference', self._infer)
+        tf.image_summary('interp_crop', self._interp_crop)
+        tf.image_summary('high_crop', self._high_crop)
 
 
 # class SuperNet(TFNet):

@@ -32,7 +32,7 @@ def define_flags():
     flag.DEFINE_integer("height", 11, "patch_height")
     flag.DEFINE_integer("width", 11, "patch_width")
     flag.DEFINE_integer("down_ratio", 3, "down_sample_ratio")
-    flag.DEFINE_integer("patch_per_file", 8, "patches per file.")
+    flag.DEFINE_integer("patch_per_file", 32, "patches per file.")
     flag.DEFINE_string("train_path", None, "train data path.")
     flag.DEFINE_string("test_path", None, "test data path.")
     flag.DEFINE_string("prefix", None, "prefix of data files.")
@@ -44,7 +44,7 @@ def define_flags():
     flag.DEFINE_integer("steps", 1000, "train steps.")
     flag.DEFINE_boolean("is_train", True, "flag of is training.")
     flag.DEFINE_boolean("only_down_width", False, "flag of only downsample width")
-    
+
 def before_net_definition():
     zeroinit = tf.constant_initializer(0.0)
     with tf.variable_scope('net_global') as scope:
