@@ -5,6 +5,7 @@ import numpy as np
 import tensorflow as tf
 import matplotlib.pyplot as plt
 import xlearn.nets.layers
+import xlearn.utils.xpipes as xp
 import argparse
 import os
 
@@ -58,6 +59,74 @@ def test_one_over_x(argv):
     y_ = manager.run([net.infer], feed_dict={net.inputs: x})
     np.save('oneoverx.npy', y_)
 
+def inferSino(argv):
+    patch_shape = [FLAGS.height,
+                   FLAGS.width * FLAGS.down_ratio]
+    strides = [5, 5]
+
+    fullname = os.path.join(FLAGS.infer_path, FLAGS.infer_file)
+    input_ = np.load(fullname)    
+    pipe_input = xp.Inputer()
+    pipe_input.insert(input_)
+    pipe_patch = xp.PatchGenerator(pipe_input, patch_shape, strides)
+    pipe_patch_tensor = xp.TensorFormater(pipe_patch)
+    pipe_down_sample = xp.DownSamplerSingle(pipe_patch_tensor, axis=2, ratio=FLAGS.down_ratio, method='fixed')
+    pipe_sliced = xp.TensorSlicer(pipe_down_sample)
+    input_list = pipe_sliced.out.next()
+    
+    len_list = len(input_list)
+    n_batch = int(np.ceil( float(len_list)/FLAGS.batch_size ))
+
+
+    if FLAGS.task == "SuperNetCrop":
+        net = xlearn.model.supernet.SuperNetCrop()
+    if FLAGS.task == "SuperNet0":
+        net = xlearn.model.supernet.SuperNet0()
+    if FLAGS.task == "SuperNet1":
+        net = xlearn.model.supernet.SuperNet1()
+    if FLAGS.task == "SuperNet2":
+        net = xlearn.model.supernet.SuperNet2()
+    manager = NetManager(net)
+    patch_shape_down = input_list[0].shape
+    patch_result = []
+    valid_offset = [FLAGS.hidden_layer, FLAGS.hidden_layer]
+    
+    mean_std = 0
+    for i in xrange(len_list):
+        mean_std += np.std(input_list[i])
+    mean_std /= len_list
+    mean_mean = 0
+    for i in xrange(len_list):
+        input_list[i] /= mean_std
+        mean_mean += np.mean(input_list[i])
+    mean_mean /= len_list
+    for i in xrange(len_list):
+        input_list[i] -= mean_mean
+    cid = 0
+    for i in xrange(n_batch):
+        tensor_input = np.zeros([FLAGS.batch_size, patch_shape_down[0], patch_shape_down[1], 1])
+        for j in xrange(FLAGS.batch_size):
+            if cid < len_list:
+                temp = input_list[cid]
+            else:
+                temp = np.zeros(patch_shape_down)
+            cid += 1
+            tensor_input[j, :, :, 0] = temp
+        tensor_output = manager.run(net.infer, feed_dict={net.inputs: tensor_input})        
+        for j in xrange(FLAGS.batch_size):
+            result = tensor_output[j, :, :, 0]
+            result += mean_mean
+            result *= mean_std
+            result_pad = np.zeros([1]+patch_shape+[1])
+            result_pad[0, valid_offset[0]:-valid_offset[0], valid_offset[1]:-valid_offset[1], 0] = result            
+            patch_result.append(result_pad)
+    patch_result = patch_result[:len_list]
+    output = xlearn.utils.tensor.patches_recon_tensor(patch_result, input_.shape, patch_shape, strides, [23, 89], valid_offset)
+    np.save(FLAGS.infer_file,output)
+
+    # print(tensor.shape)
+
+
 def testSino(argv):
     patch_shape = [FLAGS.height,
                    FLAGS.width * FLAGS.down_ratio]
@@ -88,7 +157,7 @@ def testSino(argv):
     if FLAGS.task == "SuperNet2":
         net = xlearn.model.supernet.SuperNet2()
     manager = NetManager(net)
-
+    test_loss = []
     n_step = FLAGS.steps
     for i in range(n_step):
         data, label = train_set.next_batch()
@@ -106,8 +175,9 @@ def testSino(argv):
                                       feed_dict={net.inputs: data_test,
                                                  net.label: label_test})
             print('step={0:5d},\t test loss={1:0.3f}.'.format(i, loss_test))
+            test_loss.append(loss_test)
     # manager.save()
-
+    np.save('test_loss.npy',np.array(test_loss))
     saver = tf.train.Saver(tf.all_variables())
     path = saver.save(manager.sess, FLAGS.save_path, FLAGS.steps)
     print("net variables saved to: " + path + '.')
@@ -175,6 +245,7 @@ def main(argv):
     # testSR(argv)
     #test_one_over_x(argv)
     testSino(argv)
+    # inferSino(argv)
 
 if __name__ == '__main__':
     xlearn.nets.model.define_flags()

@@ -10,6 +10,9 @@ from __future__ import absolute_import, division, print_function
 import os
 import tensorflow as tf
 import xlearn.nets.layers as layer
+import xlearn.utils.tensor as ut
+import numpy as np
+from six.moves import xrange
 
 FLAGS = tf.app.flags.FLAGS
 
@@ -35,6 +38,8 @@ def define_flags():
     flag.DEFINE_integer("patch_per_file", 32, "patches per file.")
     flag.DEFINE_string("train_path", None, "train data path.")
     flag.DEFINE_string("test_path", None, "test data path.")
+    flag.DEFINE_string("infer_path", '.', "infer data path.")
+    flag.DEFINE_string("infer_file", None, "infer file name.")
     flag.DEFINE_string("prefix", None, "prefix of data files.")
     flag.DEFINE_float("leak_ratio", None, "lrelu constant.")
     flag.DEFINE_integer("hidden_layer", 10, "hidden layers")
@@ -45,6 +50,7 @@ def define_flags():
     flag.DEFINE_boolean("is_train", True, "flag of is training.")
     flag.DEFINE_boolean("only_down_width", False, "flag of only downsample width")
 
+    
 def before_net_definition():
     zeroinit = tf.constant_initializer(0.0)
     with tf.variable_scope('net_global') as scope:
@@ -128,6 +134,69 @@ class NetManager(object):
     @property
     def sess(self):
         return self._sess
+
+    def infer(self, tensor, new_shape):
+        """
+        infer high resolution image using net.
+        net needs to be initalized.
+        """
+        patch_list = []
+        #TODO: Change to new implementation of patch_generator
+        for patch in ut.patch_generator_tensor(tensor,
+                                               [FLAGS.height, FLAGS.width],
+                                               [FLAGS.stride_v, FLAGS.stride_h],
+                                               None,
+                                               False):
+            patch_list.append(patch)
+
+        high_resolution_list = []
+
+
+        idt = FLAGS.batch_size
+        while idt < len(patch_list):
+            tensor = ut.merge_patch_list(patch_list[idt-FLAGS.batch_size:idt])
+            tensor_res = np.zeros(tensor.shape)
+            high_resolution_image = self._sess.run(self._net.infer,
+                                                   feed_dict={self._net.inputs: tensor})
+
+
+            for i in xrange(high_resolution_image.shape[0]):
+                patch = high_resolution_image[i, :, :, 0]
+                patch = np.reshape(patch, [1, FLAGS.valid_h, FLAGS.valid_w, 1])
+                high_resolution_list.append(patch)
+            idt += FLAGS.batch_size
+
+        if idt > len(patch_list):
+            idt -= FLAGS.batch_size
+            tensor_raw = ut.merge_patch_list(patch_list[idt:])
+            tensor = np.zeros([FLAGS.batch_size, tensor_raw.shape[1], tensor_raw.shape[2], 1])
+            for i in xrange(tensor_raw.shape[0]):
+                tensor[i, :, :, 0] = tensor_raw[i, :, :, 0]
+            tensor_res = np.zeros(tensor.shape)
+            high_resolution_image = self._sess.run(self._net.infer,
+                                                   feed_dict={self._net.inputs: tensor})
+
+            for i in xrange(tensor_raw.shape[0]):
+                patch = high_resolution_image[i, :, :, 0]
+                patch = np.reshape(patch, [1, FLAGS.valid_h, FLAGS.valid_w, 1])
+                high_resolution_list.append(patch)
+
+        high_resolution_list_correct = []
+        for patch in high_resolution_list:
+            patch_padding = np.zeros([1, FLAGS.height, FLAGS.width, 1])
+            patch_padding[0,
+                          FLAGS.valid_h:FLAGS.valid_h+FLAGS.valid_y,
+                          FLAGS.valid_w:FLAGS.valid_w+FLAGS.valid_x,
+                          0] = patch[0, FLAGS.valid_y, FLAGS.valid_x, 0]
+            high_resolution_list_correct.append(patch_padding)
+
+        image_h = ut.patches_recon_tensor(high_resolution_list,
+                                          new_shape,
+                                          [FLAGS.height, FLAGS.width],
+                                          [FLAGS.stride_v, FLAGS.stride_h],
+                                          [FLAGS.valid_h, FLAGS.valid_w],
+                                          [0, 0])
+        return image_h
 
 
 class TFNet(object):

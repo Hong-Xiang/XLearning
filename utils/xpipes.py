@@ -497,11 +497,11 @@ class PatchGenerator(SingleInput):
         while len(output) == 0:
             tensor = self._gather_with_check()
             patch_gen = xlearn.utils.tensor.patch_generator_tensor(tensor,
-                                                        self._shape,
-                                                        self._strides,
-                                                        self._n_patches,
-                                                        self._random,
-                                                        threshold=self._threshold)
+                                                                   self._shape,
+                                                                   self._strides,
+                                                                   self._n_patches,
+                                                                   self._random,
+                                                                   threshold=self._threshold)
             for patches in patch_gen:
                 output.append(patches)
         return output
