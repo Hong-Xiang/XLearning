@@ -17,9 +17,9 @@ import os
 import copy
 import re
 import collections
-
-from six.moves import xrange
+import time
 import numpy as np
+from six.moves import xrange
 import scipy.misc
 
 import xlearn.utils.tensor
@@ -30,84 +30,86 @@ import xlearn.utils.general
 class Pipe(object):
     """
     Base class of all pipes.
-    It can also work as a merge pipe for multiple inputs. Returning a list.
-    
+    It can also work as a merge pipe for multiple inputs, in this case, it will return a list.
+
     Attributions
     ___
-    positions
-        - start
-        - mid
-        - end
-    pump 
-        - *NO* implemention.
+    pump
+
     input
         - None
         - Pipe
-        - list of Pipes 
+        - list of Pipes
     output
-        - list
-    
-    List of Pipes
-    ---
-    .. [1] Not implemented    
+        - None
+        - list of objects
     """
 
     def __init__(self, input_=None, name='Pipe', is_start=None, is_seal=False):
         self._name = name
-        self._branches = []
         if input_ is None:
-            pass
-        elif hasattr(input_, '__iter__'):
-            for input_pipe in input_:
-                if not isinstance(input_pipe, Pipe):
-                    raise TypeError('Required {0} given {1}.'.format(
-                        Pipe, type(input_pipe)))
-                self._branches.append(input_pipe)
-        else:
-            if not isinstance(input_, Pipe):
-                    raise TypeError(
-                        'Required {0} given {1}.'.format(Pipe, type(input_)))
-            self._branches.append(input_)
-        self._is_start = is_start
-        self._is_seal = is_seal
+            input_ = []
+        if not hasattr(input_, '__iter__'):
+            input_ = [input_]
+        self._n_inputs = len(input_)
+        if is_start is False and self.n_inputs == 0:
+            raise TypeError("None start pipe without input pipe.")
+        self._is_start = len(input_) == 0
+        self._branches = []
+        for pipe in input_:
+            self._attach(pipe)        
+        self._check_input_type()
 
-    def close():
+        self._is_seal = is_seal
+        self._output_type = (object, list)
+
+    def _check_input_type(self):
+        for id_pipe in xrange(self.n_inputs):
+            if self._branches[id_pipe].output_type != object:
+                raise TypeError("Output Type mismatch of %d-th input."%id_pipe)
+
+    def close(self):
         self._is_seal = True
 
-    def open():
+    def open(self):
         self._is_seal = False
 
     def _pump(self):
-        raise RuntimeWarning('Pump of Pipe called, but no implementation yet.')
         return None
 
-    def attach(self, pipe):
+    def _attach(self, pipe):
         if self.is_start:
             raise TypeError("Can't attach to an start pipe.")
+        if not isinstance(pipe, Pipe):
+            raise TypeError('Required {0} given {1}.'.format(Pipe,
+                                                             type(pipe)))
         self._branches.append(pipe)
         self._is_start = False
 
-    def _pump(self):
-        return None
-
     def _gather(self):
         if self.is_start:
-            return self._pump()
+            output = self._pump()
+            return output
         else:
             results = []
             for pipe in self._branches:
-                    results.append(pipe.out.next())
+                results.append(pipe.out.next())
             return results
 
     def _process(self):
         return self._gather()
 
     @property
+    def output_type(self):
+        return self._output_type
+
+    @property
     def out(self):
-        if self.is_seal:
-            yield None
-        else:
-            yield self._process()
+        while True:
+            if self.is_seal:
+                yield None
+            else:
+                yield self._process()
 
     @property
     def name(self):
@@ -118,10 +120,6 @@ class Pipe(object):
         return self._is_start
 
     @property
-    def is_end(self):
-        return self._is_end
-
-    @property
     def is_seal(self):
         return self._is_seal
 
@@ -129,176 +127,189 @@ class Pipe(object):
     def branches(self):
         return self._branches
 
+    @property
+    def n_inputs(self):
+        return self._n_inputs
+
 
 class SingleInput(Pipe):
     """
     Base class of pipes with only one input.
     """
-
     def __init__(self, input_, name='SingleInput', is_seal=False):
+        if not isinstance(input_, Pipe):
+            raise TypeError('Required {0} given {1}.'.format(Pipe,
+                                                             type(input_)))
         super(SingleInput, self).__init__(input_,
                                           name=name,
                                           is_start=False,
                                           is_seal=is_seal)
 
-    def attach(self, input_):
-        raise TypeError('Attach to {0} is not allowed.'.format(SingleInput))
-
     @property
     def _father(self):
         return self._branches[0]
 
-
-class Buffer(Pipe):
-    """
-    Buffer type pipe. can buffer a result.
-    
-    Basically if it was linked to to a pipe which generates output with list,
-    Buffer will store its result and output one element of the list per time.
-    """
-
-    def __init__(self, input_=None, name='Buffer', is_start=None, is_seal=False):
-        super(Buffer, self).__init__(input_, name=name,
-                                     is_start=is_start, is_seal=is_seal)
-        self._buffer = None
-        self._state = 0
-        self._max_state = None
-
-    def _new_buffer(self):
-        if self._is_start:
-            self._buffer = [self._pump()]
-        else:
-            self._buffer = self._gather()
-        self._buffer = xlearn.utils.general.unpack_list(self._buffer)
-        if not hasattr(self._buffer, '__iter__'):
-                raise TypeError(
-                    'Buffer requires inputs/pumps with __iter__ attr.')
-        self._max_state = len(self._buffer)
-        self._state = 0
-
-    def _process(self):
-        if self._buffer is None:
-            self._new_buffer()
-        if self._state == self._max_state:
-            self._new_buffer()
-        output = self._buffer[self._state]
-
-        self._state += 1
-        return output
-
-
 class Counter(Pipe):
-
-    def __init__(self, name='Counter', is_seal=False):
+    def __init__(self, max_state=None, is_frozen=False, name='Counter', is_seal=False):
         super(Counter, self).__init__(input_=None,
                                       name=name, is_start=True, is_seal=is_seal)
         self._state = 0
+        self._max_state = max_state
+        self._is_frozen = is_frozen
 
     def _pump(self):
+        if not self.is_frozen:
+            if self._state == self._max_state or self._max_state == 0:
+                raise StopIteration()
         output = self._state
-        self._state += 1
+        if not self.is_frozen:
+            self._state += 1
         return output
 
     def reset(self):
         self._state = 0
 
-    def count(self):
+    @property
+    def state(self):
         return self._state
+        
+    @property
+    def max_state(self):
+        return self._max_state
 
-
-class ConstPumper(Buffer):
-    """
-    General input of pipe system.    
-    """
-
-    def __init__(self, const_item, name='ConstPumper', is_seal=False):
-        super(ConstPumper, self).__init__(
-            name=name, is_start=True, is_seal=is_seal)
-        self._const = copy.deepcopy(const_item)
-
-    def _pump(self):
-        return self._const
-
-    def set(const_item):
-        self._const = const_item
+    @max_state.setter
+    def max_state(self, value):
+        self._max_state = value
 
     @property
-    def const_item(self):
-        return self._const
+    def is_frozen(self):
+        return self._is_frozen
 
+    def is_end(self):
+        if self._max_state is None:
+            return False
+        if self._state < self._max_state:
+            return False
+        return True
 
-class Repeater(SingleInput):
+class Buffer(Pipe):
+    """
+    Buffer type pipe. can buffer a result list.
 
-    def __init__(self, input_, repeat_time=1, name='Repeater', is_seal=False):
-        super(Repeater, self).__init__(input_, name=name, is_seal=is_seal)
-        self._buffer = []
-        self._repeat_time = repeat_time
-
-    def _process(self):
-        for i in xrange(self._repeat_time):
-            input_ = self._gather()
-            if input_ is None:
-                return None
-            else:
-                return [input_]
-
-
-class Inputer(Buffer):
-
-    def __init__(self, name='Inputer'):
-        super(Inputer, self).__init__(name=name, is_start=True)
-        self._buffer = collections.deque()
-
-    def insert(self, item):
-        self._buffer.append(item)
-
-    def _process(self):
-        return self._buffer.popleft()
-
-
-class Freezer(Buffer):
-
-    def __init__(self, input_, name='Freezer'):
-        super(Freezer, self).__init__(input_, name=name)
+    If Buffer pipe was linked to a pipe which generates output with list, Buffer
+    pipe will store its result and output one element of the list per time.
+    """
+    def __init__(self, input_=None, fixed_max_state=False,
+                 name='Buffer', is_start=None, is_seal=False):
+        super(Buffer, self).__init__(input_, name=name,
+                                     is_start=is_start, is_seal=is_seal)
         self._buffer = None
-        self._is_freeze = False
+        self._counter = Counter()
+        self._is_fixed_max_state = fixed_max_state
+
+    def _new_buffer(self):
+        self._buffer = self._gather()
+        if not self._is_fixed_max_state:
+            self._counter.max_state = len(self._buffer)
+        self._counter.reset()
 
     def _process(self):
         if self._buffer is None:
             self._new_buffer()
-        if self._state == self._max_state:
+        if self._counter.is_end():
             self._new_buffer()
-        output = self._buffer
-        if not self._is_freeze:
-            self._state += 1
+        output = self._buffer[next(self._counter.out)]
         return output
 
-    def freeze(self):
-        self._is_freeze = True
+    @property
+    def counter(self):
+        return self._counter
 
-    def thaw(self):
-        self._is_freeze = False
+class Inputer(Buffer):
+    def __init__(self, item=None, const_output=False, name='Inputer'):
+        super(Inputer, self).__init__(fixed_max_state=True, name=name, is_start=True)
+        self._buffer = collections.deque()
+        if const_output:
+            self._counter.max_state = None
+        else:
+            self._counter.max_state = 1
+        if item is not None:
+            self.insert(item)
 
+    def insert(self, item):
+        if not hasattr(item, "__iter__"):
+            item = [item]
+        self._buffer.extend(item)
+
+    def _process(self):
+        if len(self._buffer) == 0:
+            raise StopIteration()
+        next(self._counter.out)
+        if self._counter.is_end():
+            output = self._buffer.popleft()
+            self._counter.reset()
+        else:
+            output = self._buffer[0]
+        return output
+
+class Copyer(Buffer):
+    """
+    Copy and buffer result from input pipe.
+    Can used to broadcast results.
+    """
+    def __init__(self, input_, copy_number=1, name="Copyer", is_start=None, is_seal=False):
+        super(Copyer, self).__init__(
+            input_, fixed_max_state=True, name=name, is_start=False, is_seal=is_seal)
+        self._counter.max_state = copy_number
+
+    @property
+    def copy_number(self):
+        return self._counter.max_state
+
+    @copy_number.setter
+    def copy_number(self, value):
+        self._counter.max_state = value
+
+    def _process(self):
+        if self._buffer is None:
+            self._new_buffer()
+        if self._counter.is_end():
+            self._new_buffer()
+        next(self._counter.out)
+        output = self._buffer[0]
+        return output
+
+class RandomPrefix(Pipe):
+    def __init__(self, prefix=None, name='RandomPrefix', is_seal=False):
+        super(RandomPrefix, self).__init__(is_start=True, name=name, is_seal=is_seal)
+        if prefix is None:
+            self._prefix = "TMPRAND"
+        else:
+            self._prefix = prefix
+        time_str_list = list(str(time.time()))
+        time_str_list.remove('.')
+        self._prefix += ''.join(time_str_list)
+        self._counter = Counter()
+
+    def _pump(self):
+        output = self._prefix + "%09d"%(next(self._counter.out),)
+        return output
 
 class NPYReader(Pipe):
-    """
-    .npy file reader.
-    
-    [start]
+    """Load all *.npy file with which matches with file name like 'prefix\d9.npy' under given folder.
+    <input> None
     <output> tensor from .npy file.
     """
-
     def __init__(self, folder,
                  prefix,
                  ids=None,
                  random_shuffle=False,
                  name='NPYReader',
-
                  is_seal=False):
         super(NPYReader, self).__init__(is_start=True,
                                         name=name,
-
                                         is_seal=is_seal)
+        self._output_type = np.ndarray
         self._path = os.path.abspath(folder)
         self._prefix = prefix
         self._suffix = 'npy'
@@ -306,9 +317,9 @@ class NPYReader(Pipe):
         list_all.sort()
         self._file_names = []
         if ids is None:
-            p = re.compile(self._prefix + '\d+' + '.' + self._suffix)
+            pre = re.compile(self._prefix + r'\d9' + '.' + self._suffix)
             for file in list_all:
-                if p.match(file):
+                if pre.match(file):
                     self._file_names.append(file)
         else:
             for id_ in ids:
@@ -317,34 +328,32 @@ class NPYReader(Pipe):
                                                                self._suffix)
                 if filename in list_all:
                     self._file_names.append(filename)
-        self._nfiles = len(self._file_names)
+        self._epoch_counter = Counter()
+        self._fid_counter = Counter()
+        self._fid_counter.max_state = len(self._file_names)
         self._is_random = random_shuffle
-        self._epoch = 0
-        self._cid = 0
-        self._id_shuffle = []
         self._new_epoch()
         self._shape = None
 
     def _new_epoch(self):
-        self._epoch += 1
-        self._cid = 0
-        self._id_shuffle = list(xrange(self._nfiles))
+        # TODO: Add a StopIteration raised by hitting maximum epoch number.
+        next(self._epoch_counter.out)
+        self._fid_counter.reset()
         if self._is_random:
-            random.shuffle(self._id_shuffle)
+            random.shuffle(self._file_names)
 
     def _pump(self):
-        filename = self._file_names[self._id_shuffle[self._cid]]
+        filename = self._file_names[next(self._fid_counter.out)]
         fullname = os.path.join(self._path, filename)
         data = np.array(np.load(fullname))
         self._shape = data.shape
-        self._cid += 1
-        if self._cid == self._nfiles:
+        if self._fid_counter.is_end():
             self._new_epoch()
         return data
 
     @property
     def n_files(self):
-        return self._nfiles
+        return self._fid_counter.max_state
 
     @property
     def last_shape(self):
@@ -352,16 +361,35 @@ class NPYReader(Pipe):
 
     @property
     def epoch(self):
-        return self._epoch
+        return self._epoch_counter.state
 
+class NPYWriter(Pipe):
+    """Write a series of numpy.ndarray to npy files.
+    """
+    def __init__(self, path, prefix, data, count, name='NPYWriter'):
+        super(NPYWriter, self).__init__()
+        self._branches.append(data)
+        self._branches.append(count)
+        self._branches[1].reset()
+        self._prefix = prefix
+        self._path = os.path.abspath(path)
+
+    def _process(self):
+        input_ = self._gather()
+        data = input_[0]
+        count = input_[1]
+        filename = xlearn.utils.dataset.form_file_name(self._prefix,
+                                                       count,
+                                                       'npy')
+        fullname = os.path.join(self._path, filename)
+        np.save(fullname, data)
 
 class ImageFormater(SingleInput):
     """
     Convert tensor input format which is plotable.
     """
-
     def __init__(self, input_, is_uint8=False, offset=3, name='ImageFormater', is_seal=False):
-        super(ImageFormater, self).__init__(input_, name=name, is_seal=is_seal)
+        super(ImageFormater, self).__init__(input_, name=name, is_start=False, is_seal=is_seal)
         self._is_uint8 = is_uint8
         self._offset = offset
 
@@ -405,7 +433,6 @@ class ImageFormater(SingleInput):
 
 
 class ImageGrayer(SingleInput):
-
     def __init__(self, input_, name='ImageGrayer', is_seal=False):
         super(ImageGrayer, self).__init__(input_, name=name, is_seal=is_seal)
 
@@ -413,9 +440,10 @@ class ImageGrayer(SingleInput):
         image = self._gather()
         if image is None:
             return None
-        image = image[0]
+        if len(image) > 1:
+            raise TypeError("Wrong input length.")
+        image = image[0]        
         gray = xlearn.utils.image.rgb2gray(image)
-
         return gray
 
 
@@ -470,6 +498,9 @@ class PatchGenerator(SingleInput):
         self._random = random_gen
         self._n_patches = n_patches
         self._threshold = threshold
+    
+    def _check_input_type(self, id):
+
     def _gather_with_check(self):
         tensor = self._gather()
         if tensor is None:
@@ -534,33 +565,6 @@ class PatchMerger(SingleInput):
         return output_
 
 
-class Copyer(Buffer):
-    """
-    Copy and buffer result from input pipe.
-
-    *Mid*
-
-    Can used to broadcast results.
-    """
-
-    def __init__(self, input_, copy_number=1, name="Copyer", is_start=None, is_seal=False):
-        super(Copyer, self).__init__(
-            input_, name=name, is_start=False, is_seal=is_seal)
-        self._copy_number = copy_number
-        if self._copy_number == 0:
-            raise ValueError("Maximum copy number can't be zero.'")
-        self._max_state = self._copy_number
-
-    def _process(self):
-        if self._buffer is None:
-            self._new_buffer()
-            self._max_state = self._copy_number
-        if self._state == self._max_state:
-            self._new_buffer()
-            self._max_state = self._copy_number
-        output = self._buffer[0]
-        self._state += 1
-        return output
 
 
 class Proj2Sino(Buffer):
@@ -734,21 +738,17 @@ class DownSampler(SingleInput):
 
 class TensorSlicer(SingleInput):
     """
-    Slice a 4D NHW1 tensor into a list of HW tensor.    
+    Slice a 4D NHW1 tensor into a list of HW tensor.
     """
-    #TODO: add support for NHW1
-    #TODO: add support for slice dim
-    #May mimic the tensorflow.slice method:
-    #   https://www.tensorflow.org/versions/r0.11/api_docs/python/array_ops.html#slice
 
     def __init__(self, input_, name='TensorSlicer'):
-        #TODO: Refine this.
         super(TensorSlicer, self).__init__(input_, name)
 
     def _process(self):
-        output = []
         input_ = self._gather()
         input_ = input_[0]
+        output = xlearn.utils.tensor.crop_tensor()
+        
         for i in xrange(input_.shape[0]):
             output.append(input_[i, :, :, 0])
         return output
@@ -756,24 +756,22 @@ class TensorSlicer(SingleInput):
 
 class PeriodicalPadding(SingleInput):
     """
-    Padding for 2D image.
+    Padding for sinograms.
 
     Zero padding for y.
     Periodical padding for x.
 
-    padding method see     
+    padding method see
     """
 
-    def __init__(self, input_, new_shape, x_offset, y_offset, period):
+    def __init__(self, input_, x_padding, y_padding, period):
         super(PeriodicalPadding, self).__init__(input_)
-        self._shape = new_shape
-        self._x_off = x_offset
-        self._y_off = y_offset
-        self._period = period
+        self._x_padding = x_padding
+        self._y_padding = y_padding
 
     def _process(self):
-        input_ = self._gather()
-        input_ = input_[0]        
+        input_ = self._gather()        
+        input_ = input_[0]
         if input_.shape[1] < self._period:
             raise ValueError('Input too small, width {0} smaller than period {1}.'.format(
                 input_.shape[1], self._period))
@@ -793,32 +791,3 @@ class PeriodicalPadding(SingleInput):
                 else:
                     output[iy, ix] = input_[idy, idx]
         return output
-
-
-class NPYWriter(Pipe):
-
-    def __init__(self, path, prefix, data, count, name='NPYWriter'):
-        super(NPYWriter, self).__init__()
-        self._branches.append(data)
-        self._branches.append(count)
-        self._count_pipe.reset()
-        self._prefix = prefix
-        self._path = os.path.abspath(path)
-
-    def _process(self):
-        input_ = self._gather()
-        data = input_[0]
-        count = input_[1]
-        filename = xlearn.utils.dataset.form_file_name(self._prefix,
-                                                       count,
-                                                       'npy')
-        fullname = os.path.join(self._path, filename)
-        np.save(fullname, data)
-
-    @property
-    def _data_pipe(self):
-        return self._branches[0]
-
-    @property
-    def _count_pipe(self):
-        return self._branches[1]

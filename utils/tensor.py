@@ -3,23 +3,24 @@
 from __future__ import absolute_import, division, print_function
 from six.moves import xrange
 
-import matplotlib.pyplot as plt
 import numpy as np
 import scipy
 import h5py
 import random
+import copy
 
-def image_type(tensor):    
+
+def image_type(tensor):
     if len(tensor.shape) == 2:
         return 'gray'
     if len(tensor.shape) == 3 and tensor.shape[2] == 3:
-        return 'RGB'        
+        return 'RGB'
     if len(tensor.shape) == 3 and tensor.shape[2] == 1:
         return 'gray1'
     if len(tensor.shape) == 3:
         return 'Ngray'
     if len(tensor.shape) == 4 and tensor.shape[3] == 1 and tensor.shape[0] == 1:
-        return '1gray1'    
+        return '1gray1'
     if len(tensor.shape) == 4 and tensor.shape[3] == 1:
         return 'Ngray1'
     if len(tensor.shape) == 4 and tensor.shape[3] == 3:
@@ -29,7 +30,7 @@ def image_type(tensor):
     if len(tensor.shape) == 5:
         return 'NHWDC'
     return 'unknown'
-    
+
 
 def unpack_tensor_ndlist(tensor_list):
     result = []
@@ -43,6 +44,7 @@ def unpack_tensor_ndlist(tensor_list):
     return result
 
 def merge_tensor_list(tensor_list, squeeze=False):
+    raise DeprecationWarning()
     """Merge a list of tensors into a large tensor
     supports tensor up to 5 dimension
     Args: tensor list
@@ -76,6 +78,7 @@ def merge_tensor_list(tensor_list, squeeze=False):
     return tensor_o
 
 def merge_patch_list(patch_list):
+    raise DeprecationWarning()
     """Merge a list of tensors into a large tensor
     Args: tensor list
     Return: large tensor
@@ -97,7 +100,7 @@ def merge_patch_list(patch_list):
         tensor_shape += patch_shape
     tensor = np.zeros(tensor_shape)
     with_channel = len(tensor_shape) == 4
-    for id_patch in xrange(n_patch):        
+    for id_patch in xrange(n_patch):
         if with_channel:
             tensor[id_patch*n_single_patch:(id_patch+1)*n_single_patch, :, :, :] = patch_list[id_patch]
         else:
@@ -105,6 +108,7 @@ def merge_patch_list(patch_list):
     return tensor
 
 def multi_image2large_image(multi_img_tensor, id_list=None, offset=1, n_image_row=None):
+    raise DeprecationWarning()
     """Change a tensor into a large image
     Args:
         multi_img_tensor: a tensor in N*H*W*[3,4] form.
@@ -117,7 +121,7 @@ def multi_image2large_image(multi_img_tensor, id_list=None, offset=1, n_image_ro
     n_img = len(id_list)
     height = shape[1]
     width = shape[2]
-    
+
     if len(shape) == 3:
         n_channel = 1
     else:
@@ -142,6 +146,7 @@ def multi_image2large_image(multi_img_tensor, id_list=None, offset=1, n_image_ro
     return img_large
 
 def split_channel(tensor_multi_channel, id_N_list = None, id_C_list = None):
+    raise DeprecationWarning()
     """Reshape a tensor of dim N and dim channel.
     Args:
         multi_img_tensor: a tensor in 1*H*W*C form.
@@ -173,14 +178,198 @@ def split_channel(tensor_multi_channel, id_N_list = None, id_C_list = None):
             img_large[i_img, y_offset:y_offset+height, x_offset:x_offset+width] = multi_channel_form[i_img, :, :, i_channel]
     return img_large
 
+def offset_1d(length, patch_size, stride=1, offset0=0, offset1=0, check_all=False):
+    """Slicing offset generator for 1-D array.
+    Args:
+        length :: Int
+    Return:
+        None
+    """
+    offset = offset0
+    while offset + patch_size - 1 < length - offset1:
+        yield offset
+        offset += stride
+    if check_all:
+        offset -= stride
+        if offset + patch_size - 1 < length - offset1 - 1:
+            offset = length - offset1 - patch_size
+            yield offset
+
+def offset_nd(tensor_shape, patch_shape, strides=None, offsets0=None, offsets1=None, check_all=False):
+    """Slicing offset generator for n-D array.
+    Args:
+        length :: Int
+    Return:
+        None
+    """
+    dim = len(tensor_shape)
+    if dim == 0:
+        yield []
+    else:
+        if strides is None:
+            strides = [1]*dim
+        if offsets0 is None:
+            offsets0 = [0]*dim
+        if offsets1 is None:
+            offsets1 = [0]*dim
+        crop = lambda x: (x[0], x[1:])
+        tensor_shape0, tensor_shape_next = crop(tensor_shape)
+        patch_shape0, patch_shape_next = crop(patch_shape)
+        strides0, strides_next = crop(strides)
+        offset00, offsets0_next = crop(offsets0)
+        offset10, offsets1_next = crop(offsets1)
+        for offset in offset_1d(length=tensor_shape0,
+                                patch_size=patch_shape0,
+                                stride=strides0,
+                                offset0=offset00,
+                                offset1=offset10,
+                                check_all=check_all):
+            for offset_list in offset_nd(tensor_shape_next,
+                                         patch_shape_next,
+                                         strides_next,
+                                         offsets0_next,
+                                         offsets1_next,
+                                         check_all=check_all):
+                yield [offset]+offset_list
+
+def shape_dim_fix(shape_input, shape_to_embbed, dim0=0, dim1=0):
+    dim_input = len(shape_input)
+    dim_embbed = len(shape_to_embbed)
+    dimstart = dim_embbed - dim1 - dim_input
+    if dimstart < dim0:
+        check_pass = False
+    while dimstart >= dim0:
+        check_pass = True
+        for j in xrange(dim_input):
+            if shape_input[j] > shape_to_embbed[dimstart+j]:
+                check_pass = False
+                break
+        if check_pass:
+            break
+        dimstart -= 1
+    if not check_pass:
+        raise ValueError("Wrong dimension. Input:{0}, Embed:{1}, dim0:{2}, dim1:{3}.".format(
+            shape_input, shape_to_embbed, dim0, dim1))
+    output = [1] * dim_embbed
+    output[dimstart:dimstart+dim_input] = shape_input
+    return output
+
+def multidim_slicer(index_start, index_range, strides=None):
+    """
+    Caution: true end is index_start + index_range
+    """
+    output = []
+    dim = len(index_start)
+    if strides is None:
+        strides = [1]*dim
+    if dim != len(index_range):
+        raise ValueError("Wrong dimension.")
+    for i in xrange(dim):
+        output.append(slice(index_start[i], index_start[i]+index_range[i], strides[i]))
+    output = tuple(output)
+    return output
+
+
+def crop_tensor(tensor, patch_shape, strides=None, margin0=None, margin1=None, check_all=False):
+    output = []
+    for offset in offset_nd(tensor.shape,
+                            patch_shape,
+                            strides=strides,
+                            offsets0=margin0,
+                            offsets1=margin1,
+                            check_all=check_all):
+        sli = multidim_slicer(offset, patch_shape)
+        output.append(tensor[sli])
+    return output
+
+def combine_tensor_list(tensor_list, shape, strides=None, margin0=None, margin1=None, dim0=0, dim1=0, check_all=False):
+    """combine tensor list into a larger tensor
+    Try to put those tensors into tensor, in C order.
+    """
+    dim = len(shape)
+    output = np.zeros(shape)
+    if len(tensor_list) == 0:
+        return output
+    if not isinstance(tensor_list, list):
+        raise TypeError("Input must be a {0}, got {1}.".format(list, type(tensor_list)))
+    if not isinstance(tensor_list[0], np.ndarray):
+        raise TypeError("Element must be a {0}, got {1}.".format(np.ndarray, type(tensor_list[0])))
+    element_shape = tensor_list[0].shape
+    fixed_shape = shape_dim_fix(element_shape, shape, dim0, dim1)
+    if strides is None:
+        strides = [0]*dim
+    if margin0 is None:
+        margin0 = [0]*dim
+    if margin1 is None:
+        margin1 = [0]*dim
+    strides = copy.copy(fixed_shape)
+    for i in xrange(dim):
+        strides[i] += strides[i]
+    cid = 0
+    for strides in offset_nd(shape, fixed_shape, strides, margin0, margin1, check_all):
+        sli = multidim_slicer(strides, fixed_shape)
+        output[sli] = np.reshape(tensor_list[cid], fixed_shape)
+        cid += 1
+        if cid == len(tensor_list):
+            break
+    return output
+
+def down_sample_1d(input_, axis, ratio, offset=0, method='mean'):
+    """Down sample a tensor on given axis with ratio.
+    """
+    input_shape = input_.shape
+    dim = len(input_shape)
+    output_shape = list(input_shape)
+    output_shape[axis] //= ratio
+    if method == 'fixed':
+        index_start = [0]*dim
+        index_range = list(input_shape)
+        strides = [1]*dim
+        index_start[axis] = offset+ratio//2
+        index_range[axis] = output_shape[axis]*ratio
+        strides[axis] = ratio
+        sli = multidim_slicer(index_start, index_range, strides)
+        output = np.zeros(output_shape)
+        output[:] = input_[sli]
+    if method == 'mean':
+        index_start = [0]*dim
+        index_range = list(input_shape)
+        strides = [1]*dim
+        strides[axis] = ratio
+        output = np.zeros(output_shape)
+        for step in xrange(ratio):
+            index_start[axis] = offset + step
+            index_range[axis] = output_shape[axis]*ratio
+            sli = multidim_slicer(index_start, index_range, strides)
+            output = output + input_[sli]
+        output /= ratio
+    return output
+
+def down_sample_nd(input_, ratio, offset=None, method='mean'):
+    dim = len(input_.shape)
+    if offset is None:
+        offset = [0]*dim
+    # Check dimensions
+    # TODO: implement dimension checks.
+
+    output = np.zeros(input_.shape)
+    output[:] = input_
+
+    for axis in xrange(dim):
+        output = down_sample_1d(output, axis=axis, ratio=ratio[axis], offset=offset[axis], method=method)
+    return output
+
 
 def offset_generator(image_shape, patch_shape, stride_step):
+    """
+    """
+    raise DeprecationWarning()
     image_height = image_shape[0]
     image_width = image_shape[1]
     patch_height = patch_shape[0]
     patch_width = patch_shape[1]
     stride_v = stride_step[0]
-    stride_h = stride_step[1]                    
+    stride_h = stride_step[1]
     x_offset_list = []
     y_offset_list = []
     x_offset = 0
@@ -208,11 +397,12 @@ def offset_generator(image_shape, patch_shape, stride_step):
     return x_offset_list, y_offset_list
 
 def patch_generator_tensor(tensor, patch_shape, stride_step, n_patches=None, use_random_shuffle=False, threshold=None):
+    raise DeprecationWarning()
     """Full functional patch generator
     Args:
     tensor: a N*W*H*C shape tensor
     """    
-    assert(len(tensor.shape)==4)    
+    assert(len(tensor.shape)==4)
     image_shape = [tensor.shape[1], tensor.shape[2]]
     x_offset_list, y_offset_list = offset_generator(image_shape, patch_shape, stride_step)    
     ids = list(xrange(len(x_offset_list)))
@@ -238,8 +428,10 @@ def patches_recon_tensor(patch_list,
                          tensor_shape, patch_shape, stride_step,
                          valid_shape, valid_offset):
     """
+    
     Iterpolator: later
     """
+    raise DeprecationWarning()
     if len(tensor_shape) != 4:
         raise TypeError('tensor_shape needs to be 4D, get %dD.'%len(tensor_shape))
     if len(patch_shape) != 2:
@@ -252,7 +444,7 @@ def patches_recon_tensor(patch_list,
         raise TypeError('tensor_shape needs to be 2D, get %dD.'%len(valid_offset))
 
     image_shape = [tensor_shape[1], tensor_shape[2]]    
-    x_offset, y_offset=offset_generator(image_shape, patch_shape, stride_step)    
+    x_offset, y_offset=offset_generator(image_shape, patch_shape, stride_step)
     tensor=np.zeros(tensor_shape)
     cid = 0
     for patch in patch_list:

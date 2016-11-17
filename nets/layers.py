@@ -23,7 +23,6 @@ def _weight_variable(name, shape, ncolumn, scope=tf.get_variable_scope()):
     with tf.variable_scope(scope):
         var = tf.get_variable(
             name, shape=shape, initializer=initer, dtype=dtype)
-
     return var
 
 
