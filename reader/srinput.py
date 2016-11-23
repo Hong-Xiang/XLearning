@@ -9,32 +9,66 @@ General image inputer
 """
 from __future__ import absolute_import, division, print_function
 import os
+import json
 import numpy as np
 from six.moves import xrange
-import xlearn.utils.xpipes as xpipe
-import xlearn.utils.dataset as xdata
-import xlearn.utils.tensor
+import xlearn.utils.xpipes as utp
+import xlearn.utils.tensor as utt
 
+
+def config_file_generator(path_data, prefix_data,
+                          path_label, prefix_label,
+                          patch_shape,
+                          strides,
+                          batch_size,
+                          same_file_data_label=False,
+                          single_file=False,
+                          filename = None,
+                          n_patch_per_file=None,
+                          down_sample_ratio=1,
+                          ids=None,
+                          padding=False,
+                          dataset_type='test',
+                          down_sample_method='fixed',
+                          mean=1,
+                          std=128):
+    data = dict()
+    data.update({'path_data': path_data})
+    data.update({'prefix_data': prefix_data})
+    data.update({'path_label': path_label})
+    data.update({'prefix_label': prefix_label})
 
 class DataSet(object):
     """
     A general super resolution net.
+    Args:
+    - config_file: a .JSON file containing configurations.
+            if this
 
-    next_batch() provides 
+    next_batch() provides
             (low_resolution_patch_tensor, high_resolution_patch_tensor)
     """
 
-    def __init__(self, path, prefix,
-                 patch_shape, strides,
-                 batch_size,
-                 n_patch_per_file=None,
-                 down_sample_ratio=1,
-                 ids=None,
-                 padding=False,
-                 dataset_type='test',
-                 down_sample_method='fixed',
-                 mean=1,
-                 std=128):
+    def __init__(self, **kwargs):
+                #  path_data, prefix_data,
+                #  path_label, prefix_label,
+                #  patch_shape,
+                #  strides,
+                #  batch_size,
+                #  same_file_data_label=False,
+                #  single_file=False,
+                #  filename,
+                #  n_patch_per_file=None,
+                #  down_sample_ratio=1,
+                #  ids=None,
+                #  padding=False,
+                #  dataset_type='test',
+                #  down_sample_method='fixed',
+                #  mean=1,
+                #  std=128):
+        if "conf" in kwargs:
+            with open(kwargs["conf"]) as conf_file:
+                args = json.load(conf_file)
         self._path = os.path.abspath(path)
         self._patch_shape = patch_shape
         self._batch_size = batch_size
@@ -43,36 +77,36 @@ class DataSet(object):
         self._ratio = down_sample_ratio
         self._padding = padding
         if self._dataset_type == 'test':
-            self._npyreader = xpipe.NPYReader(path, prefix,
-                                              random_shuffle=False,
-                                              ids=ids)
+            self._filename_looper = utp.FileNameLooper(path, prefix,
+                                                       random_shuffle=False,
+                                                       ids=ids)
         if self._dataset_type == 'train':
-            self._npyreader = xpipe.NPYReader(path, prefix,
-                                              random_shuffle=True,
-                                              ids=ids)
-
-        self._tensor_rgb = xpipe.TensorFormater(self._npyreader,
-                                                auto_shape=True)
-        self._gray = xpipe.ImageGrayer(self._tensor_rgb)
-        self._tensor_image = xpipe.TensorFormater(self._gray, auto_shape=True)
+            self._filename_looper = utp.FileNameLooper(path, prefix,
+                                                       random_shuffle=False,
+                                                       ids=ids)
+        self._npyreader = utp.NPYReaderSingle(self._filename_looper)
+        self._tensor_rgb = utp.TensorFormater(self._npyreader,
+                                              auto_shape=True)
+        self._gray = utp.ImageGrayer(self._tensor_rgb)
+        self._tensor_image = utp.TensorFormater(self._gray, auto_shape=True)
         if self._dataset_type == 'test':
-            self._batch_generator = xpipe.PatchGenerator(self._tensor_image,
-                                                         shape=self._patch_shape,
-                                                         n_patches=self._n_patch,
-                                                         strides=strides)
+            self._batch_generator = utp.PatchGenerator(self._tensor_image,
+                                                       shape=self._patch_shape,
+                                                       n_patches=self._n_patch,
+                                                       strides=strides)
         if self._dataset_type == 'train':
-            self._batch_generator = xpipe.PatchGenerator(self._tensor_image,
-                                                         shape=self._patch_shape,
-                                                         random_gen=True,
-                                                         n_patches=self._n_patch,
-                                                         strides=strides)
-        self._buffer = xpipe.Buffer(self._batch_generator)
-        self._copyer = xpipe.Copyer(self._buffer, copy_number=2)
-        self._hr_patch_gen = xpipe.TensorFormater(
+            self._batch_generator = utp.PatchGenerator(self._tensor_image,
+                                                       shape=self._patch_shape,
+                                                       random_gen=True,
+                                                       n_patches=self._n_patch,
+                                                       strides=strides)
+        self._buffer = utp.Buffer(self._batch_generator)
+        self._copyer = utp.Copyer(self._buffer, copy_number=2)
+        self._hr_patch_gen = utp.TensorFormater(
             self._copyer, auto_shape=True)
-        self._down_sample = xpipe.DownSampler(
+        self._down_sample = utp.DownSampler(
             self._copyer, self._ratio, method=down_sample_method)
-        self._lr_patch_gen = xpipe.TensorFormater(
+        self._lr_patch_gen = utp.TensorFormater(
             self._down_sample, auto_shape=True)
         self._std = std
         self._mean = mean
@@ -106,11 +140,6 @@ class DataSet(object):
         return low_tensor, high_tensor
 
     @property
-    def n_files(self):
-        #TODO: Safely delete this method. (Or implement it.)
-        return self._n_file
-
-    @property
     def height(self):
         return self._patch_shape[0]
 
@@ -121,7 +150,7 @@ class DataSet(object):
     @property
     def epoch(self):
         """current epoch"""
-        return self._npyreader.epoch
+        return self._filename_looper.epoch
 
 
 class TestImageHolder(object):
@@ -183,12 +212,12 @@ class TestImageHolder(object):
                          self._ratio, self._patch_shape * self._ratio]
         h_strides = [h_patch_shape[0] - self._patch_shape[0] + self._strides[0],
                      h_patch_shape[1] - self._patch_shape[1] + self._strides[1]]
-        self._recon_tensor = xlearn.utils.tensor.patches_recon_tensor(self._infer,
-                                                                      tensor_shape,
-                                                                      h_patch_shape,
-                                                                      h_strides,
-                                                                      self._valid_shape,
-                                                                      self._valid_offset)
+        self._recon_tensor = utt.patches_recon_tensor(self._infer,
+                                                      tensor_shape,
+                                                      h_patch_shape,
+                                                      h_strides,
+                                                      self._valid_shape,
+                                                      self._valid_offset)
         return self._recon_tensor
 
     @property

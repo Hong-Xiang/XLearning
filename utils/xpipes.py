@@ -21,10 +21,11 @@ import time
 import numpy as np
 from six.moves import xrange
 import scipy.misc
+import pickle
 
-import xlearn.utils.tensor
-import xlearn.utils.image
-import xlearn.utils.general
+import xlearn.utils.tensor as utt
+import xlearn.utils.image as uti
+import xlearn.utils.general as utg
 
 
 class Pipe(object):
@@ -57,16 +58,17 @@ class Pipe(object):
         self._is_start = len(input_) == 0
         self._branches = []
         for pipe in input_:
-            self._attach(pipe)        
+            self._attach(pipe)
         self._check_input_type()
 
         self._is_seal = is_seal
         self._output_type = (object, list)
 
     def _check_input_type(self):
-        for id_pipe in xrange(self.n_inputs):
-            if self._branches[id_pipe].output_type != object:
-                raise TypeError("Output Type mismatch of %d-th input."%id_pipe)
+        # for id_pipe in xrange(self.n_inputs):
+        #     if self._branches[id_pipe].output_type != object:
+        #         raise TypeError("Output Type mismatch of %d-th input."%id_pipe)
+        pass
 
     def close(self):
         self._is_seal = True
@@ -97,7 +99,10 @@ class Pipe(object):
             return results
 
     def _process(self):
-        return self._gather()
+        input_ = self._gather()
+        if len(self._branches) == 1:
+            input_ = input_[0]
+        return input_
 
     @property
     def output_type(self):
@@ -132,10 +137,26 @@ class Pipe(object):
         return self._n_inputs
 
 
+class Runner(Pipe):
+
+    def __init__(self, input_, name="Go"):
+        super(Runner, self).__init__(
+            input_, name=name, is_start=False, is_seal=False)
+
+    def run(self):
+        try:
+            while True:
+                self._gather()
+        except StopIteration:
+            return None
+
+
 class SingleInput(Pipe):
     """
     Base class of pipes with only one input.
+    Previous pipe must havs output, None is *NOT* allowed.
     """
+
     def __init__(self, input_, name='SingleInput', is_seal=False):
         if not isinstance(input_, Pipe):
             raise TypeError('Required {0} given {1}.'.format(Pipe,
@@ -149,7 +170,19 @@ class SingleInput(Pipe):
     def _father(self):
         return self._branches[0]
 
+    def _gather_f(self):
+        input_ = self._gather()
+        if len(input_) != 1:
+            raise ValueError(utg.errmsg(
+                len(input_), 1, "Wrong input list length, "))
+        output = input_[0]
+        if output is None:
+            raise TypeError("None input is not allowed.")
+        return output
+
+
 class Counter(Pipe):
+
     def __init__(self, max_state=None, is_frozen=False, name='Counter', is_seal=False):
         super(Counter, self).__init__(input_=None,
                                       name=name, is_start=True, is_seal=is_seal)
@@ -172,7 +205,7 @@ class Counter(Pipe):
     @property
     def state(self):
         return self._state
-        
+
     @property
     def max_state(self):
         return self._max_state
@@ -192,6 +225,7 @@ class Counter(Pipe):
             return False
         return True
 
+
 class Buffer(Pipe):
     """
     Buffer type pipe. can buffer a result list.
@@ -199,6 +233,7 @@ class Buffer(Pipe):
     If Buffer pipe was linked to a pipe which generates output with list, Buffer
     pipe will store its result and output one element of the list per time.
     """
+
     def __init__(self, input_=None, fixed_max_state=False,
                  name='Buffer', is_start=None, is_seal=False):
         super(Buffer, self).__init__(input_, name=name,
@@ -209,6 +244,8 @@ class Buffer(Pipe):
 
     def _new_buffer(self):
         self._buffer = self._gather()
+        if len(self._branches) == 1:
+            self._buffer = self._buffer[0]
         if not self._is_fixed_max_state:
             self._counter.max_state = len(self._buffer)
         self._counter.reset()
@@ -225,9 +262,12 @@ class Buffer(Pipe):
     def counter(self):
         return self._counter
 
+
 class Inputer(Buffer):
+
     def __init__(self, item=None, const_output=False, name='Inputer'):
-        super(Inputer, self).__init__(fixed_max_state=True, name=name, is_start=True)
+        super(Inputer, self).__init__(
+            fixed_max_state=True, name=name, is_start=True)
         self._buffer = collections.deque()
         if const_output:
             self._counter.max_state = None
@@ -252,11 +292,13 @@ class Inputer(Buffer):
             output = self._buffer[0]
         return output
 
+
 class Copyer(Buffer):
     """
     Copy and buffer result from input pipe.
     Can used to broadcast results.
     """
+
     def __init__(self, input_, copy_number=1, name="Copyer", is_start=None, is_seal=False):
         super(Copyer, self).__init__(
             input_, fixed_max_state=True, name=name, is_start=False, is_seal=is_seal)
@@ -276,12 +318,45 @@ class Copyer(Buffer):
         if self._counter.is_end():
             self._new_buffer()
         next(self._counter.out)
-        output = self._buffer[0]
+        if len(self._branches) == 1:
+            output = self._buffer
+        else:
+            output = self._buffer[0]
         return output
 
+
+class BatchMaker(Pipe):
+
+    def __init__(self, input_, batch_size, pad_item=None, name="BatchMaker", is_seal=False):
+        super(BatchMaker, self).__init__(
+            input_, name=name, is_start=False, is_seal=is_seal)
+        self._batch_size = batch_size
+        self._buffer = []
+        self._pad_item = pad_item
+
+    def _dump_out(self):
+        output = self._buffer[:self._batch_size]
+        self._buffer = self._buffer[self._batch_size:]
+        return output
+
+    def _process(self):
+        try:
+            while len(self._buffer) < self._batch_size:
+                input_ = self._gather()
+                self._buffer.extend(input_)
+        except StopIteration:
+            while len(self._buffer) < self._batch_size:
+                self._buffer.append(self._pad_item)
+        return self._dump_out()
+
+
 class RandomPrefix(Pipe):
+    """Generate a valid filename with given prefix.
+    """
+
     def __init__(self, prefix=None, name='RandomPrefix', is_seal=False):
-        super(RandomPrefix, self).__init__(is_start=True, name=name, is_seal=is_seal)
+        super(RandomPrefix, self).__init__(
+            is_start=True, name=name, is_seal=is_seal)
         if prefix is None:
             self._prefix = "TMPRAND"
         else:
@@ -292,51 +367,54 @@ class RandomPrefix(Pipe):
         self._counter = Counter()
 
     def _pump(self):
-        output = self._prefix + "%09d"%(next(self._counter.out),)
+        output = self._prefix + "%09d" % (next(self._counter.out),)
         return output
 
-class NPYReader(Pipe):
-    """Load all *.npy file with which matches with file name like 'prefix\d9.npy' under given folder.
-    <input> None
-    <output> tensor from .npy file.
-    """
+
+class FileNameLooper(Pipe):
+    """File name iterator for a folder."""
     def __init__(self, folder,
                  prefix,
                  ids=None,
                  random_shuffle=False,
-                 name='NPYReader',
+                 suffix='npy',
+                 name='FileNameLooper',
+                 max_epoch=None,
                  is_seal=False):
-        super(NPYReader, self).__init__(is_start=True,
-                                        name=name,
-                                        is_seal=is_seal)
-        self._output_type = np.ndarray
+        super(FileNameLooper, self).__init__(is_start=True,
+                                             name=name,
+                                             is_seal=is_seal)
+        self._output_type = str
         self._path = os.path.abspath(folder)
+        self._is_random = random_shuffle
         self._prefix = prefix
-        self._suffix = 'npy'
+        self._suffix = suffix
         list_all = os.listdir(self._path)
         list_all.sort()
+
+        # file name filter
         self._file_names = []
         if ids is None:
-            pre = re.compile(self._prefix + r'\d9' + '.' + self._suffix)
+            pre = re.compile(prefix + r'[0-9]' + suffix)
             for file in list_all:
                 if pre.match(file):
                     self._file_names.append(file)
         else:
             for id_ in ids:
-                filename = xlearn.utils.dataset.form_file_name(self._prefix,
-                                                               id_,
-                                                               self._suffix)
+                filename = utg.form_file_name(self._prefix,
+                                              id_,
+                                              self._suffix)
                 if filename in list_all:
                     self._file_names.append(filename)
-        self._epoch_counter = Counter()
-        self._fid_counter = Counter()
-        self._fid_counter.max_state = len(self._file_names)
+
+        # counters
+        self._epoch_counter = Counter(max_epoch)
+        self._fid_counter = Counter(len(self._file_names))
+
         self._is_random = random_shuffle
         self._new_epoch()
-        self._shape = None
 
     def _new_epoch(self):
-        # TODO: Add a StopIteration raised by hitting maximum epoch number.
         next(self._epoch_counter.out)
         self._fid_counter.reset()
         if self._is_random:
@@ -345,15 +423,75 @@ class NPYReader(Pipe):
     def _pump(self):
         filename = self._file_names[next(self._fid_counter.out)]
         fullname = os.path.join(self._path, filename)
-        data = np.array(np.load(fullname))
-        self._shape = data.shape
         if self._fid_counter.is_end():
             self._new_epoch()
-        return data
+        return fullname
 
     @property
     def n_files(self):
         return self._fid_counter.max_state
+
+    @property
+    def epoch(self):
+        return self._epoch_counter.state
+
+    @property
+    def max_epoch(self):
+        return self._epoch_counter.max_state
+
+
+class NPYReaderSingle(SingleInput):
+
+    def __init__(self, input_, name='NPYReader', is_seal=False):
+        super(NPYReaderSingle, self).__init__(
+            input_, name=name, is_seal=is_seal)
+
+    def _process(self):
+        filename = self._gather_f()
+        data = np.load(filename)
+        return data
+
+
+class FolderReader(Pipe):
+    """Load all *.npy file with which matches with file name like 'prefix\d9.npy' under given folder.
+    <input> None
+    <output> tensor from .npy file.
+    """
+
+    def __init__(self, folder,
+                 prefix,
+                 ids=None,
+                 random_shuffle=False,
+                 suffix='npy',
+                 name='FileReader',
+                 is_seal=False):
+        super(FolderReader, self).__init__(is_start=True,
+                                           name=name,
+                                           is_seal=is_seal)
+        self._output_type = np.ndarray
+        self._path = os.path.abspath(folder)
+        self._suffix = suffix
+        self._filename_looper = FileNameLooper(self._path,
+                                               prefix,
+                                               ids=ids,
+                                               random_shuffle=random_shuffle,
+                                               suffix=suffix)
+        self._shape = None
+
+    def _pump(self):
+        filename = next(self._filename_looper.out)
+        fullname = os.path.join(self._path, filename)
+        if self._suffix == 'npy':
+            data = np.array(np.load(fullname))
+        if self._suffix == 'dat':
+            with open(fullname, 'r') as file_in:
+                data = pickle.load(file_in)
+        self._shape = data.shape
+        return data
+
+    @property
+    def n_files(self):
+        return self._filename_looper.n_files
 
     @property
     def last_shape(self):
@@ -361,95 +499,95 @@ class NPYReader(Pipe):
 
     @property
     def epoch(self):
-        return self._epoch_counter.state
+        return self._filename_looper.epoch
 
-class NPYWriter(Pipe):
+
+class FolderWriter(Pipe):
     """Write a series of numpy.ndarray to npy files.
     """
-    def __init__(self, path, prefix, data, count, name='NPYWriter'):
-        super(NPYWriter, self).__init__()
+
+    def __init__(self, path, prefix, data, count, name='NPYWriter', suffix='npy'):
+        super(FolderWriter, self).__init__()
         self._branches.append(data)
         self._branches.append(count)
         self._branches[1].reset()
         self._prefix = prefix
         self._path = os.path.abspath(path)
+        self._suffix = suffix
 
     def _process(self):
         input_ = self._gather()
         data = input_[0]
         count = input_[1]
-        filename = xlearn.utils.dataset.form_file_name(self._prefix,
-                                                       count,
-                                                       'npy')
+        filename = utg.form_file_name(self._prefix,
+                                      count,
+                                      self._suffix)
         fullname = os.path.join(self._path, filename)
-        np.save(fullname, data)
+        if self._suffix == 'npy':
+            np.save(fullname, data)
+        if self._suffix == 'dat':
+            with open(fullname, 'w') as file_out:
+                pickle.dump(file_out, data)
+
 
 class ImageFormater(SingleInput):
     """
-    Convert tensor input format which is plotable.
+    Convert tensor input format which is plotable via numpy.imshow.
     """
+
     def __init__(self, input_, is_uint8=False, offset=3, name='ImageFormater', is_seal=False):
-        super(ImageFormater, self).__init__(input_, name=name, is_start=False, is_seal=is_seal)
+        super(ImageFormater, self).__init__(
+            input_, name=name, is_start=False, is_seal=is_seal)
         self._is_uint8 = is_uint8
         self._offset = offset
 
     def _process(self):
-        img_maybe = self._gather()
-        if img_maybe is None:
-            return None
-        img_maybe = img_maybe[0]
-        if not isinstance(img_maybe, np.ndarray):
-            raise TypeError('ImageFormater only accepts {0}, given {1}'.format(
-                np.ndarray, type(img_maybe)))
-        img_type = xlearn.utils.tensor.image_type(img_maybe)
-        output = img_maybe
-        if img_type is 'gray' or img_type is 'RGB':
-            output = img_maybe
-        if img_type is 'gray1':
-            output = img_maybe[:, :, 0]
-        if img_type is '1gray1':
-            output = img_maybe[0, :, :, 0]
-        if img_type is 'Ngray':
-            if img_maybe.shape[0] == 1:
-                output = img_maybe[0, :, :]
-            else:
-                output = xlearn.utils.tensor.multi_image2large_image(
-                    img_maybe, offset=self._offset)
-        if img_type is 'NRGB':
-            if img_maybe.shape[0] == 1:
-                output = img_maybe[0, :, :, :]
-            else:
-                output = xlearn.utils.tensor.multi_image2large_image(
-                    img_maybe, offset=self._offset)
-        if self._is_uint8:
-            output = np.uint8(output)
+        img_maybe = self._gather_f()
+        output = uti.image_formater(
+            img_maybe, is_uint8=self.is_uint8, offset=self._offset)
         return output
 
-    def set_uint8(self, flag):
-        self._is_uint8 = flag
+    @property
+    def is_uint8(self):
+        return self._is_uint8
 
-    def set_offset(self, offset):
-        self._offset = offset
+    @is_uint8.setter
+    def is_uint8(self, value):
+        self._is_uint8 = value
+
+    @property
+    def offset(self):
+        return self._offset
+
+    @offset.setter
+    def offset(self, value):
+        self._offset = value
 
 
 class ImageGrayer(SingleInput):
+    """Convert rgb images into gray images.
+    """
+
     def __init__(self, input_, name='ImageGrayer', is_seal=False):
         super(ImageGrayer, self).__init__(input_, name=name, is_seal=is_seal)
 
     def _process(self):
-        image = self._gather()
-        if image is None:
-            return None
-        if len(image) > 1:
-            raise TypeError("Wrong input length.")
-        image = image[0]        
-        gray = xlearn.utils.image.rgb2gray(image)
+        image = self._gather_f()
+        gray = uti.rgb2gray(image)
         return gray
 
 
 class TensorFormater(SingleInput):
+    """Reshape a tensor
+        squeeze: boolean, delete all dimensions with dimension size = 1, DEFAULT=False;
+        new_shape: list of int, new shape, DEFAULT=None;
+        auto_shape: boolean, form input into NHWC form, DEFAULT=True
+    """
 
-    def __init__(self, input_, squeeze=True, new_shape=None, auto_shape=True,
+    def __init__(self, input_,
+                 new_shape=None,
+                 auto_shape=True,
+                 squeeze=False,
                  name='TensorFormater', is_seal=False):
         super(TensorFormater, self).__init__(
             input_, name=name, is_seal=is_seal)
@@ -458,38 +596,26 @@ class TensorFormater(SingleInput):
         self._squeeze = squeeze
 
     def _process(self):
-        tensor_list = self._gather()
-        tensor_list = tensor_list[0]
-        if tensor_list is None:
-            return None
-        output = xlearn.utils.tensor.merge_tensor_list(
-            tensor_list, squeeze=self._squeeze)
-
-        preshape = output.shape
+        tensor = self._gather_f()
+        if self._auto_shape:
+            output = uti.image2tensor(tensor)
+        else:
+            preshape = output.shape
         if self._shape is not None:
             newshape = self._shape
-        elif self._auto_shape:
-            if len(preshape) == 3 and tensor_list[0].shape[0] == 1:
-                newshape = [1, 1, 1, 1]
-                newshape[:-1] = preshape
-            elif len(preshape) == 3:
-                newshape = [1, 1, 1, 1]
-                newshape[-len(preshape):] = preshape
-            elif len(preshape) == 2:
-                newshape = [1, 1, 1, 1]
-                newshape[1:3] = preshape
-            else:
-                newshape = preshape
         else:
-            newshape = preshape
-        output = np.reshape(output, newshape)
+            if self._squeeze:
+                newshape = list(preshape)
+                while 1 in newshape:
+                    newshape.remove(1)
+            output = np.reshape(output, newshape)
         return output
 
 
 class PatchGenerator(SingleInput):
 
     def __init__(self, input_,
-                 shape, strides, random_gen=False, n_patches=None, threshold=None,
+                 shape, strides, random_gen=False, n_patches=None, check_all=False,
                  name='PatchGenerator', is_seal=False):
         super(PatchGenerator, self).__init__(
             input_, name=name, is_seal=is_seal)
@@ -497,44 +623,40 @@ class PatchGenerator(SingleInput):
         self._strides = strides
         self._random = random_gen
         self._n_patches = n_patches
-        self._threshold = threshold
-    
-    def _check_input_type(self, id):
-
-    def _gather_with_check(self):
-        tensor = self._gather()
-        if tensor is None:
-            return None
-        tensor = tensor[0]
-        if not isinstance(tensor, np.ndarray):
-            raise TypeError('Input required {0}, got {1}.'.format(
-                np.ndarray, type(tensor)))
-        if tensor.shape[1] < self._shape[0] or tensor.shape[2] < self._shape[1]:
-            return self._gather_with_check()
-        else:
-            return tensor
+        self._check_all = check_all
 
     def _process(self):
-        tensor = self._gather_with_check()
-        output = []
-        patch_gen = xlearn.utils.tensor.patch_generator_tensor(tensor,
-                                                               self._shape,
-                                                               self._strides,
-                                                               self._n_patches,
-                                                               self._random,
-                                                               threshold=self._threshold)
-        for patches in patch_gen:
-            output.append(patches)
-        while len(output) == 0:
-            tensor = self._gather_with_check()
-            patch_gen = xlearn.utils.tensor.patch_generator_tensor(tensor,
-                                                                   self._shape,
-                                                                   self._strides,
-                                                                   self._n_patches,
-                                                                   self._random,
-                                                                   threshold=self._threshold)
-            for patches in patch_gen:
-                output.append(patches)
+        input_ = self._gather_f()
+        output = utt.crop_tensor(input_, self._shape,
+                                 strides=self._strides,
+                                 check_all=self._check_all,
+                                 random_shuffle=self._random,
+                                 n_patches=self._n_patches)
+        return output
+
+
+class ImageCropper(SingleInput):
+
+    def __init__(self, input_, margin0, margin1, name="ImageCropper", is_seal=False):
+        super(ImageCropper, self).__init__(input_, name=name, is_seal=is_seal)
+        self._margin0 = margin0
+        self._margin1 = margin1
+
+    def _process(self):
+        input_ = self._gather_f()
+        patch_shape = list(input_.shape)
+        dim = len(patch_shape)
+        for i in xrange(dim):
+            patch_shape[i] -= self._margin0[i]
+            patch_shape[i] -= self._margin1[1]
+            if patch_shape[i] < 1:
+                raise ValueError(utg.errmsg(
+                    patch_shape[i], ">0", "crop smaller than 0, "))
+        ind = []
+        for i in xrange(dim):
+            ind.append(
+                xrange(self._margin0[i] + 1, input_.shape[i] - self._margin1[i]))
+        output = input_[ind]
         return output
 
 
@@ -542,197 +664,30 @@ class PatchMerger(SingleInput):
 
     def __init__(self, input_,
                  tensor_shape, patch_shape, strides,
-                 valid_shape, valid_offset,
                  name="PatchMerger", is_end=None, is_seal=False):
         super(PatchMerger, self).__init__(input_, is_seal=is_seal)
         self._tensor_shape = tensor_shape
         self._patch_shape = patch_shape
         self._strides = strides
-        self._valid_shape = valid_shape
-        self._valid_offset = valid_offset
 
     def _process(self):
-        input_ = self._gather()
-        if input_ is None:
-            return None
-        input_ = input_[0]
-        output_ = xlearn.utils.tensor.patches_recon_tensor(input_,
-                                                           self._tensor_shape,
-                                                           self._patch_shape,
-                                                           self._strides,
-                                                           self._valid_shape,
-                                                           self._valid_offset)
+        input_ = self._gather_f()
+        output_ = utt.combine_tensor_list(
+            input_, self._tensor_shape, self._strides)
         return output_
-
-
-
-
-class Proj2Sino(Buffer):
-
-    def __init__(self, input_, name='Proj2Sino', is_start=False, is_seal=False):
-        super(Proj2Sino, self).__init__(
-            input_, name=name, is_start=is_start, is_seal=is_seal)
-
-    def _new_buffer(self):
-        proj_data = self._gather()
-        if proj_data is None:
-            self._buffer = None
-            return None
-        proj_data = proj_data[0]
-        height = proj_data.shape[0]
-        width = proj_data.shape[1]
-        nangle = proj_data.shape[2]
-        sinograms = []
-        for iz in xrange(height):
-            sinogram = np.zeros([width, nangle])
-            for iwidth in range(width):
-                for iangle in range(nangle):
-                    sinogram[iwidth, iangle] = proj_data[iz, iwidth, iangle]
-            sinograms.append(sinogram)
-        self._buffer = sinograms
-        self._max_state = height
-        self._state = 0
-
-
-class DownSamplerSingle(SingleInput):
-
-    def __init__(self, input_, axis=2, ratio=1, method='mean', name='DownSampler', padding=False):
-        super(DownSamplerSingle, self).__init__(input_, name=name)
-        self._ratio = ratio
-        self._method = method
-        self._padding = padding
-        self._axis = axis
-
-    def _process(self):
-        input_ = self._gather()
-        input_ = input_[0]
-        if not isinstance(input_, np.ndarray):
-            raise TypeError('Input of {0} is required, get {1}'.format(
-                np.ndarray, type(input_)))
-        if len(input_.shape) != 4:
-            raise TypeError('Tensor of 4 D is required, get %d D.' %
-                            len(input_.shape))
-        ratio = self._ratio
-        axis = self._axis
-        input_shape = list(input_.shape)
-
-        if self._padding:
-            new_slices = np.ceil(input_shape[axis] / ratio)
-            input_shape[axis] = new_slices * ratio
-            padded = np.pad(input_, input_shape, mode='constant')
-        else:
-            new_slices = int(input_shape[axis] / ratio)
-        input_shape = list(input_shape)
-        output_shape = list(input_shape)
-        output_shape[axis] = new_slices
-
-        output = np.zeros(output_shape)
-        for ii in xrange(output_shape[0]):
-            for ix in xrange(output_shape[2]):
-                for iy in xrange(output_shape[1]):
-                    for ic in xrange(output_shape[3]):
-                        if self._method == 'mean':
-                            for step in xrange(ratio):
-                                if axis == 0:
-                                    picked = input_[
-                                        ii * ratio + step, iy, ix, ic]
-                                if axis == 1:
-                                    picked = input_[
-                                        ii, iy * ratio + step, ix, ic]
-                                if axis == 2:
-                                    picked = input_[
-                                        ii, iy, ix * ratio + step, ic]
-                                if axis == 3:
-                                    picked = input_[
-                                        ii, iy, ix, ic * ratio + step]
-                                output[ii, iy, ix, ic] += picked
-                            output[ii, iy, ix, ic] /= ratio
-                        if self._method == 'fixed':
-                            if axis == 0:
-                                ids = ii * ratio + int((ratio - 1) / 2)
-                                picked = input_[ids, iy, ix, ic]
-                            if axis == 1:
-                                ids = iy * ratio + int((ratio - 1) / 2)
-                                picked = input_[ii, ids, ix, ic]
-                            if axis == 2:
-                                ids = ix * ratio + int((ratio - 1) / 2)
-                                picked = input_[ii, iy, ids, ic]
-                            if axis == 3:
-                                ids = ic * ratio + int((ratio - 1) / 2)
-                                picked = input_[ii, iy, ix, ids]
-                            output[ii, iy, ix, ic] = picked
-        return output
 
 
 class DownSampler(SingleInput):
 
-    def __init__(self, input_, ratio=1, method='mean', name='DownSampler', padding=False, is_seal=False):
+    def __init__(self, input_, ratio, method='mean', name='DownSampler', is_seal=False):
         super(DownSampler, self).__init__(input_, name=name, is_seal=is_seal)
         self._ratio = ratio
         self._method = method
-        self._padding = padding
 
     def _process(self):
-        """
-        --------++-----------++---------++----------++
-        ratio   ||     1     ||    2    ||     3    ||
-        --------++-----------++---------++----------++
-        down    ||    +-+    ||  +-+-+  ||  +-+-+-+ ||
-                ||    |x|    ||  |x| |  ||  | | | | ||
-                ||    +-+    ||  +-+-+  ||  +-+-+-+ ||
-                ||           ||  | | |  ||  | |x| | ||
-                ||           ||  +-+-+  ||  +-+-+-+ ||
-                ||           ||         ||  | | | | ||
-                ||           ||         ||  +-+-+-+ ||
-        --------++-----------++---------++----------++
-        """
-        input_ = self._gather()
-        input_ = input_[0]
-        if not isinstance(input_, np.ndarray):
-            raise TypeError('Input of {0} is required, get {1}'.format(
-                np.ndarray, type(input_)))
-        if len(input_.shape) != 4:
-            raise TypeError('Tensor of 4 D is required, get %d D.' %
-                            len(input_.shape))
-
-        ratio = self._ratio
-        input_height = input_.shape[1]
-        input_width = input_.shape[2]
-        if self._padding:
-            output_height = int(np.ceil(input_height / ratio))
-            output_width = int(np.ceil(input_width / ratio))
-        else:
-            output_height = int(input_height / ratio)
-            output_width = int(input_width / ratio)
-        n_image = input_.shape[0]
-        n_channel = input_.shape[3]
-        output_shape = [n_image, output_height, output_width, n_channel]
-        output = np.zeros(output_shape)
-
-        for iy in xrange(output_height):
-            for ix in xrange(output_width):
-                for ii in xrange(n_image):
-                    for ic in xrange(n_channel):
-                        output[ii, iy, ix, ic] = 0
-                        if self._method == 'mean':
-                            for stepy in xrange(ratio):
-                                for stepx in xrange(ratio):
-                                    idy = iy * ratio + stepy
-                                    idx = ix * ratio + stepx
-                                    if idy >= input_height or idx >= input_width:
-                                        picked = 0
-                                    else:
-                                        picked = input_[ii, idy, idx, ic]
-                                    output[ii, iy, ix, ic] += picked
-                            output[ii, iy, ix, ic] /= (ratio * ratio)
-                        if self._method == 'fixed':
-                            idy = iy * ratio + int((ratio - 1) / 2)
-                            idx = ix * ratio + int((ratio - 1) / 2)
-                            if idy >= input_height or idx >= input_width:
-                                picked = 0
-                            else:
-                                picked = input_[ii, idy, idx, ic]
-                            output[ii, iy, ix, ic] = picked
+        input_ = self._gather_f()
+        output = utt.down_sample_nd(
+            input_, ratio=self._ratio, method=self._method)
         return output
 
 
@@ -745,49 +700,55 @@ class TensorSlicer(SingleInput):
         super(TensorSlicer, self).__init__(input_, name)
 
     def _process(self):
-        input_ = self._gather()
-        input_ = input_[0]
-        output = xlearn.utils.tensor.crop_tensor()
-        
-        for i in xrange(input_.shape[0]):
-            output.append(input_[i, :, :, 0])
+        input_ = self._gather_f()
+        output_shape = [1, input_.shape[1], input_.shape[2], 1]
+        output = utt.crop_tensor(input_, output_shape)
         return output
 
 
 class PeriodicalPadding(SingleInput):
     """
-    Padding for sinograms.
+    Padding for sinograms, input must have shape NHW1
 
     Zero padding for y.
-    Periodical padding for x.
-
-    padding method see
+    Periodical padding for x.    
     """
 
-    def __init__(self, input_, x_padding, y_padding, period):
+    def __init__(self, input_, pw_x0, pw_x1, pw_y0, pw_y1):
         super(PeriodicalPadding, self).__init__(input_)
-        self._x_padding = x_padding
-        self._y_padding = y_padding
+        self._pw_x0 = pw_x0
+        self._pw_x1 = pw_x1
+        self._pw_y0 = pw_y0
+        self._pw_y1 = pw_y1
 
     def _process(self):
-        input_ = self._gather()        
-        input_ = input_[0]
-        if input_.shape[1] < self._period:
-            raise ValueError('Input too small, width {0} smaller than period {1}.'.format(
-                input_.shape[1], self._period))
-        output = np.zeros(self._shape)
-        height_new, width_new = self._shape[0], self._shape[1]
-        height_old, width_old = input_.shape[0], input_.shape[1]        
-        for iy in xrange(height_new):
-            for ix in xrange(width_new):
-                idy = iy - self._y_off
-                idx = ix - self._x_off
-                while idx < 0:
-                    idx += self._period
-                while idx >= width_old:
-                    idx -= self._period
-                if idy < 0 or idy >= height_old:
-                    output[iy, ix] = 0.0
-                else:
-                    output[iy, ix] = input_[idy, idx]
+        input_ = self._gather_f()
+        pad_width = ((0, 0), (self._pw_x0, self._pw_x1), (0, 0), (0, 0))
+        output = np.pad(input, pad_width=pad_width, mode='constant')
+        pad_width = ((0, 0), (0, 0), (self._pw_y0, self._pw_y1), (0, 0))
+        output = np.pad(input, pad_width=pad_width, mode='wrap')
+        return output
+
+
+class Proj2Sino(SingleInput):
+
+    def __init__(self, input_, name='Proj2Sino', is_start=False, is_seal=False):
+        super(Proj2Sino, self).__init__(
+            input_, name=name, is_start=is_start, is_seal=is_seal)
+
+    def _process(self):
+        input_ = self._gather_f()
+        output = uti.proj2sino(input_)
+        return output
+
+
+class Sino2Proj(SingleInput):
+
+    def __init__(self, input_, name='Sino2Proj', is_start=False, is_seal=False):
+        super(Sino2Proj, self).__init__(
+            input_, name=name, is_start=is_start, is_seal=is_seal)
+
+    def _process(self):
+        input_ = self._gather_f()
+        output = uti.sino2proj(input_)
         return output

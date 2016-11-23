@@ -24,47 +24,18 @@ import numpy as np
 
 
 from six.moves import xrange
-
-import xlearn.utils.xpipes as xpipes
+import xlearn.utils.general as utg
+import xlearn.utils.xpipes as utp
+import xlearn.utils.image as uti
 
 IMAGE_SUFFIX = ['png', 'jpg']
-
-
-def seperate_file_name(file):
-    """Analysis standard file name.
-    """
-    pfn = re.compile('\D+\d+\w*')
-    if not pfn.match(file):
-        raise ValueError('Invalid file name.')
-    pid = re.compile('\D\d+')
-    psu = re.compile('.\w*')
-    mid = pid.search(file)
-    prefix = file[:mid.start() + 1]
-
-    id = int(file[mid.start() + 1:mid.end()])
-
-    suffix = file[mid.end() + 1:]
-
-    if suffix != '':
-        seperater = file[mid.end()]
-        if seperater != '.':
-            raise ValueError('Invalid file name, seperater should be "."')
-    return prefix, id, suffix
-
-
-def form_file_name(prefix, id, suffix):
-    """Standard file name of datas, given prefix and suffix.
-    """
-    filename = prefix + '%09d' % id + '.' + suffix
-    return filename
-
 
 def rename(folder_name, prefix=None):
     """Rename all files in a folder, changing its prefix, keep its suffix.
     """
     folder_name = os.path.abspath(folder_name)
     if prefix is None:
-        pipe_random_prefix = xpipes.RandomPrefix()
+        pipe_random_prefix = utp.RandomPrefix()
         listing = os.listdir(folder_name)
         for infile in listing:
             prefix = next(pipe_random_prefix.out)
@@ -88,7 +59,7 @@ def rename(folder_name, prefix=None):
 
             else:
                 suffix = ''
-            fname_new = form_file_name(prefix, cid, suffix)
+            fname_new = utg.form_file_name(prefix, cid, suffix)
             old_name = os.path.join(folder_name, infile)
             new_name = os.path.join(folder_name, fname_new)
             os.rename(old_name, new_name)
@@ -98,10 +69,8 @@ def rename(folder_name, prefix=None):
 def img2jpeg(folder_name):
     path = os.path.abspath(folder_name)
     files = os.listdir(path)
-
     for file in files:
-
-        prefix, id, suffix = seperate_file_name(file)
+        prefix, id, suffix = utg.seperate_file_name(file)
         if suffix == 'jpg':
             continue
         fullname = os.path.join(path, file)
@@ -109,7 +78,7 @@ def img2jpeg(folder_name):
         im = scipy.misc.imread(fullname)
         if im.mode != 'RGB':
             im.convert('RGB')
-        newname = form_file_name(prefix, id, 'jpg')
+        newname = utg.form_file_name(prefix, id, 'jpg')
         print('convert:', file, newname)
 
         fullnamenew = os.path.join(path, newname)
@@ -126,7 +95,7 @@ def jpg2npy(folder_name, prefix, id0, id1):
         fullname = os.path.join(path, file)
         if os.path.isdir(fullname):
             continue
-        prefix_f, id_f, suffix_f = seperate_file_name(file)
+        prefix_f, id_f, suffix_f = utg.seperate_file_name(file)
 
         if prefix_f != prefix:
             continue
@@ -136,25 +105,59 @@ def jpg2npy(folder_name, prefix, id0, id1):
             continue
         im = scipy.misc.imread(fullname)
         im = np.array(im)
-        filename = form_file_name(prefix, id_f, 'npy')
+        filename = utg.form_file_name(prefix, id_f, 'npy')
         np.save(filename, im)
 
+def load_raw(filename, shape):
+    """load raw data of single type."""
+    height = shape[0]
+    width = shape[1]
+    frame = shape[2]
+    pixel = height * width * frame
+    data = np.zeros([pixel])
+    with open(filename) as f:
+        bindata = f.read()
+        for i in xrange(pixel):
+            res = struct.unpack('<f', bindata[i * 4:i * 4 + 4])
+            data[i] = res[0]
+    data2 = np.zeros([height, width, frame])
+    for i in range(width):
+        for j in range(height):
+            for k in range(frame):
+                idf = i + j * width + k * width * height
+                data2[j, i, k] = data[idf]
+    return data2
 
-def raw2npy(folder_name, prefix, suffix, id0, id1, shape):
+def raw2npy(folder_name, shape, prefix, **kwargs):
+    """convert all raw files into npy files.
+    """
     path = os.path.abspath(folder_name)
     files = os.listdir(path)
-    ids = list(xrange(int(id0), int(id1) + 1))
 
+    if 'suffix' in kwargs:
+        suffix = kwargs['suffix']
+    else:
+        suffix = ''
+    if 'id0' in kwargs:
+        id0 = kwargs['id0']
+    else:
+        id0 = 0
+    if 'id1' in kwargs:
+        id1 = kwargs['id1']
+    else:
+        id1 = len(files)
+
+    ids = list(xrange(int(id0), int(id1) + 1))
     for file in files:
         fullname = os.path.join(path, file)
         if os.path.isdir(fullname):
             continue
-        prefix_f, id_f, suffix_f = seperate_file_name(file)
+        prefix_f, id_f, suffix_f = utg.seperate_file_name(file)
         if prefix_f != prefix:
             continue
         if suffix_f != suffix:
             continue
-        if not id_f in ids:
+        if id_f not in ids:
             continue
         height = shape[0]
         width = shape[1]
@@ -172,28 +175,19 @@ def raw2npy(folder_name, prefix, suffix, id0, id1, shape):
                 for k in range(frame):
                     idf = i + j * width + k * width * height
                     data2[j, i, k] = data[idf]
-        filename = form_file_name(prefix_f, id_f, 'npy')
+        filename = utg.form_file_name(prefix_f, id_f, 'npy')
         np.save(filename, data2)
 
-def proj2sino(folder, prefix_old, prefix_new, id0, id1):    
-    pipe_input = xpipes.NPYReader(folder, prefix_old, ids=xrange(id0, id1))
-    cid = 0
-    for input_ in pipe_input.out:
-        height = input_.shape[0]
-        width = input_.shape[1]
-        nangles = input_.shape[2]
-        output = []
-        for iz in xrange(height):
-            sinogram = np.zeros([width, nangles])
-            for iwidth in range(width):
-                for iangle in range(nangles):
-                    sinogram[iwidth, iangle] = input_[iz, iwidth, iangle]
-            output.append(sinogram)
-        filename = form_file_name(prefix_new, cid, 'npy')
-        cid += 1
-        np.save(filename, output)
+def proj2sino(folder, prefix_old, prefix_new, id0, id1, folder_out=None):
+    if folder_out is None:
+        folder_out = folder
+    pipe_input = utp.NPYReader(folder, prefix_old, ids=xrange(id0, id1))
+    pipe_sino = utp.Proj2Sino(pipe_input)
+    pipe_count = utp.Counter()
+    pipe_output = utp.NPYWriter(folder_out, prefix_new, pipe_sino, pipe_count)
 
-def sion2proj(input_):
+
+def sion2proj(folder, prefix_old, prefix_new, id0, id1, folder_out=None):
     if not hasattr(input_, "__iter__"):
         input_ = [input_]
     height = len(input_)
@@ -254,7 +248,7 @@ def main(argv):
         print(args)
         return
     if args.filename:
-        print(seperate_file_name(args.source))
+        print(utg.seperate_file_name(args.source))
         return
 
     if args.rename:
