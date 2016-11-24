@@ -9,34 +9,73 @@ General image inputer
 """
 from __future__ import absolute_import, division, print_function
 import os
+import itertools
 import json
 import numpy as np
 from six.moves import xrange
 import xlearn.utils.xpipes as utp
 import xlearn.utils.tensor as utt
+import xlearn.utils.general as utg
 
 
-def config_file_generator(path_data, prefix_data,
+def label_name(data_name, case_digit=None, label_prefix=None):
+    prefix, id, suffix = utg.seperate_file_name(data_name)
+    if case_digit is not None:
+        id = str(id)
+        id = id[:-case_digit]
+        id = int(id)
+    if label_prefix is None:
+        label_prefix = 'label'
+    output = utg.form_file_name(label_prefix, id, suffix)
+    return output
+
+
+def config_file_generator(conf_file,
+                          path_data, prefix_data,
                           path_label, prefix_label,
                           patch_shape,
                           strides,
                           batch_size,
                           same_file_data_label=False,
                           single_file=False,
-                          filename = None,
+                          filename=None,
                           n_patch_per_file=None,
                           down_sample_ratio=1,
                           ids=None,
                           padding=False,
                           dataset_type='test',
                           down_sample_method='fixed',
+                          random_shuffle=False,
                           mean=1,
-                          std=128):
+                          std=128,
+                          **kwargs):
+    """generate config .JSON file."""
     data = dict()
     data.update({'path_data': path_data})
     data.update({'prefix_data': prefix_data})
     data.update({'path_label': path_label})
     data.update({'prefix_label': prefix_label})
+    data.update({'patch_shape': patch_shape})
+    data.update({'strides': strides})
+    data.update({'batch_size': batch_size})
+    data.update({'same_file_data_label': same_file_data_label})
+    data.update({'single_file': single_file})
+    data.update({'filename': filename})
+    data.update({'n_patches': n_patch_per_file})
+    data.update({'down_sample_ratio': down_sample_ratio})
+    data.update({'ids': ids})
+    data.update({'padding': padding})
+    data.update({'dataset_type': dataset_type})
+    data.update({'down_sample_method': down_sample_method})
+    data.update({'random_shuffle': random_shuffle})
+    data.update({'need_gray': True})
+    data.update({'check_all': False})
+    data.update({'mean': mean})
+    data.update({'std': std})
+    data.update(kwargs)
+    with open(conf_file, 'w') as fp:
+        json.dump(data, fp, sort_keys=True, indent=4, separators=(',', ': '))
+
 
 class DataSet(object):
     """
@@ -68,69 +107,96 @@ class DataSet(object):
                 #  std=128):
         if "conf" in kwargs:
             with open(kwargs["conf"]) as conf_file:
-                args = json.load(conf_file)
-        self._path = os.path.abspath(path)
-        self._patch_shape = patch_shape
-        self._batch_size = batch_size
-        self._dataset_type = dataset_type
-        self._n_patch = n_patch_per_file
-        self._ratio = down_sample_ratio
-        self._padding = padding
-        if self._dataset_type == 'test':
-            self._filename_looper = utp.FileNameLooper(path, prefix,
-                                                       random_shuffle=False,
-                                                       ids=ids)
-        if self._dataset_type == 'train':
-            self._filename_looper = utp.FileNameLooper(path, prefix,
-                                                       random_shuffle=False,
-                                                       ids=ids)
-        self._npyreader = utp.NPYReaderSingle(self._filename_looper)
-        self._tensor_rgb = utp.TensorFormater(self._npyreader,
-                                              auto_shape=True)
-        self._gray = utp.ImageGrayer(self._tensor_rgb)
-        self._tensor_image = utp.TensorFormater(self._gray, auto_shape=True)
-        if self._dataset_type == 'test':
-            self._batch_generator = utp.PatchGenerator(self._tensor_image,
-                                                       shape=self._patch_shape,
-                                                       n_patches=self._n_patch,
-                                                       strides=strides)
-        if self._dataset_type == 'train':
-            self._batch_generator = utp.PatchGenerator(self._tensor_image,
-                                                       shape=self._patch_shape,
-                                                       random_gen=True,
-                                                       n_patches=self._n_patch,
-                                                       strides=strides)
+                paras = json.load(conf_file)
+        else:
+            paras = kwargs
+
+        self._patch_shape = paras['patch_shape']
+        self._batch_size = paras['batch_size']
+        self._dataset_type = paras['dataset_type']
+        self._ratio = paras['down_sample_ratio']
+        self._padding = paras['padding']
+        self._dataset_type = paras['dataset_type']
+        self._strides = paras['strides']
+        self._std = paras['std']
+        self._mean = paras['mean']
+        self._data_filename_iter = utp.FileNameLooper(paras['path_data'],
+                                                      prefix=paras[
+                                                          'prefix_data'],
+                                                      random_shuffle=paras[
+                                                          'random_shuffle'],
+                                                      ids=paras['ids'])
+        if paras['same_file_data_label']:
+            self._data_image = utp.NPYReaderSingle(self._data_filename_iter)
+            self._data_image_copyer = utp.Copyer(
+                self._data_image, copy_number=2)
+            self._data_tensor = utp.TensorFormater(self._data_image_copyer)
+            self._label_tensor = utp.TensorFormater(self._data_image_copyer)
+        else:
+            self._data_filename_copyer = utp.Copyer(
+                self._data_filename_iter, copy_number=2)
+            if paras['same_file_data_label']:
+                self._label_filename = utp.Pipe(self._data_filename_copyer)
+            else:
+                self._label_filename = utp.LabelFinder(
+                    self._data_filename_copyer, label_name)
+            self._data_filename = utp.Pipe(self._data_filename_copyer)
+            self._data_image = utp.NPYReaderSingle(self._data_filename)
+            self._label_image = utp.NPYReaderSingle(self._label_filename)
+            self._data_tensor = utp.TensorFormater(
+                self._data_image, auto_shape=True)
+            self._label_tensor = utp.TensorFormater(
+                self._label_image, auto_shape=True)
+        if paras['need_gray']:
+            self._data_gray = utp.ImageGrayer(self._data_tensor)
+            self._label_gray = utp.ImageGrayer(self._label_tensor)
+            np.save('test_data_gray.npy', next(self._data_gray.out))
+            np.save('test_label_gray.npy', next(self._label_gray.out))
+            self._merge = utp.Pipe([self._data_gray, self._label_gray])
+            np.save('test_merge_gray.npy', next(self._merge.out))
+        else:
+            self._merge = utp.Pipe([self._data_tensor, self._label_tensor])
+        self._tensor = utp.TensorFormater(self._merge, auto_shape=True)
+        np.save('test_tensor.npy', next(self._merge.out))
+        patch_shape = paras['patch_shape']
+        patch_shape_2 = patch_shape[:]
+        patch_shape_2[0] = 2
+
+        self._batch_generator = utp.PatchGenerator(self._tensor,
+                                                   shape=patch_shape_2,
+                                                   n_patches=paras[
+                                                       'n_patches'],
+                                                   strides=paras[
+                                                       'strides'],
+                                                   random_gen=paras[
+                                                       'random_shuffle'],
+                                                   check_all=paras['check_all'])
         self._buffer = utp.Buffer(self._batch_generator)
-        self._copyer = utp.Copyer(self._buffer, copy_number=2)
-        self._hr_patch_gen = utp.TensorFormater(
-            self._copyer, auto_shape=True)
+        self._slicer = utp.TensorSlicer(self._buffer, patch_shape)
+        self._buffer2 = utp.Buffer(self._slicer)
+        self._hr_patch_gen = utp.TensorFormater(self._buffer2)
         self._down_sample = utp.DownSampler(
-            self._copyer, self._ratio, method=down_sample_method)
-        self._lr_patch_gen = utp.TensorFormater(
-            self._down_sample, auto_shape=True)
-        self._std = std
-        self._mean = mean
+            self._buffer2, self._ratio, method=paras['down_sample_method'])
+        self._lr_patch_gen = utp.TensorFormater(self._down_sample)
 
     def next_batch(self):
-
         high_shape = [self._batch_size, self._patch_shape[
-            0], self._patch_shape[1], 1]
-
+            1], self._patch_shape[2], self._patch_shape[3]]
         if self._padding:
-            low_height = int(np.ceil(self._patch_shape[0] / self._ratio))
-            low_width = int(np.ceil(self._patch_shape[1] / self._ratio))
+            low_height = int(np.ceil(self._patch_shape[1] / self._ratio[1]))
+            low_width = int(np.ceil(self._patch_shape[2] / self._ratio[2]))
         else:
-            low_height = int(self._patch_shape[0] / self._ratio)
-            low_width = int(self._patch_shape[1] / self._ratio)
-
-        low_shape = [self._batch_size, low_height, low_width, 1]
+            low_height = int(self._patch_shape[1] / self._ratio[1])
+            low_width = int(self._patch_shape[2] / self._ratio[2])
+        low_shape = [self._batch_size, low_height,
+                     low_width, self._patch_shape[2]]
         high_tensor = np.zeros(high_shape)
         low_tensor = np.zeros(low_shape)
-        for i in xrange(self._batch_size):
-            patch_high = self._hr_patch_gen.out.next()
-            patch_low = self._lr_patch_gen.out.next()
-            high_tensor[i, :, :, :] = patch_high
-            low_tensor[i, :, :, :] = patch_low
+        cid = 0
+        for patch_high, patch_low in zip(self._hr_patch_gen.out, self._lr_patch_gen.out):
+            high_tensor[cid, :, :, :] = patch_high
+            low_tensor[cid, :, :, :] = patch_low
+            cid += 1
 
         low_tensor /= self._std
         low_tensor -= self._mean
@@ -138,6 +204,12 @@ class DataSet(object):
         high_tensor -= self._mean
 
         return low_tensor, high_tensor
+
+    def form_image(self, patches, image_shape, strides=None):
+        if strides is None:
+            strides = self._strides
+        output = utt.combine_tensor_list(patches, image_shape, strides)
+        return output
 
     @property
     def height(self):
@@ -150,76 +222,4 @@ class DataSet(object):
     @property
     def epoch(self):
         """current epoch"""
-        return self._filename_looper.epoch
-
-
-class TestImageHolder(object):
-
-    def __init__(self,
-                 tensor,
-                 patch_shape, strides,
-                 valid_shape, valid_offset,
-                 down_sample_ratio,
-                 batch_size,
-                 mean=1,
-                 std=128):
-        super(TestImageHolder, self).__init__()
-        self._patch_shape = patch_shape
-        self._strides = strides
-        self._valid_shape = valid_shape
-        self._valid_offset = valid_offset
-        self._ratio = down_sample_ratio
-        self._tensor = tensor
-        self._patches = xlearn.utils.tensor.patch_generator_tensor(self._tensor,
-                                                                   self._patch_shape,
-                                                                   self._strides)
-        self._n_patch = len(self._patches)
-        self._infer = []
-        self._oid = 0
-        self._iid = 0
-        self._mean = mean
-        self._std = std
-
-    def next_batch(self, batch_size):
-        low_shape = [batch_size, self._patch_shape[0], self._patch_shape[1], 1]
-        low_tensor = np.zeros(low_shape)
-        for i in xrange(batch_size):
-            if self._oid < self._n_patch:
-                low_tensor[i, :, :, :] = self._patches[self._oid]
-            else:
-                low_tensor[i, :, :, :] = np.zeros([self._patch_shape[0],
-                                                   self._patch_shape[1], 1])
-            self._oid += 1
-        low_tensor /= self._std
-        low_tensor -= self._mean
-        return low_tensor
-
-    def append_infer(self, infer_list):
-        for infer in infer_list:
-            infer += self._mean
-            infer *= self._std
-            self._infer.append(infer)
-        if len(self._infer) > self._n_patch:
-            self._infer = self._infer[:self._n_patch]
-
-    def low_image(self):
-        return self._tensor[0, :, :, 0]
-
-    def recon(self):
-        tensor_shape = [1, self._tensor.shape[0] * self._ratio,
-                        self._tensor.shape[1] * self._ratio, 1]
-        h_patch_shape = [self._patch_shape[0] *
-                         self._ratio, self._patch_shape * self._ratio]
-        h_strides = [h_patch_shape[0] - self._patch_shape[0] + self._strides[0],
-                     h_patch_shape[1] - self._patch_shape[1] + self._strides[1]]
-        self._recon_tensor = utt.patches_recon_tensor(self._infer,
-                                                      tensor_shape,
-                                                      h_patch_shape,
-                                                      h_strides,
-                                                      self._valid_shape,
-                                                      self._valid_offset)
-        return self._recon_tensor
-
-    @property
-    def n_patch(self):
-        return self._n_patch
+        return self._data_filename_iter.epoch

@@ -20,8 +20,7 @@ import xlearn.utils.tensor as utt
 
 
 def imread(filename):
-    return misc.imread(filename)
-
+    return np.array(misc.imread(filename))
 
 def image_type(tensor):
 

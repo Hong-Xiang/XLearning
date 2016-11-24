@@ -20,7 +20,10 @@ class TestImage2Tensor(unittest.TestCase):
         output = tensor.shape
         expect = tuple([1, img.shape[0], img.shape[1], img.shape[2]])
         self.assertTrue(output == expect, msg=utg.errmsg(output, expect))
-
+    
+    def test_stack(self):
+        pass
+    
 class TestRGB2Gray(unittest.TestCase):
     def test_basic(self):
         img = np.load(os.path.join(TEST_DATA_PATH, 'img000000001.npy'))

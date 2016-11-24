@@ -30,6 +30,7 @@ import xlearn.utils.image as uti
 
 IMAGE_SUFFIX = ['png', 'jpg']
 
+
 def rename(folder_name, prefix=None):
     """Rename all files in a folder, changing its prefix, keep its suffix.
     """
@@ -56,7 +57,6 @@ def rename(folder_name, prefix=None):
             index = infile.rfind('.')
             if index < len(infile) - 1:
                 suffix = infile[index + 1:]
-
             else:
                 suffix = ''
             fname_new = utg.form_file_name(prefix, cid, suffix)
@@ -66,47 +66,31 @@ def rename(folder_name, prefix=None):
             cid += 1
 
 
-def img2jpeg(folder_name):
+def img2jpg(folder_name, prefix, ids=None):
+    """Convert all image files under a folder into jpg files."""
     path = os.path.abspath(folder_name)
     files = os.listdir(path)
     for file in files:
         prefix, id, suffix = utg.seperate_file_name(file)
         if suffix == 'jpg':
             continue
+        if ids is not None and id not in ids:
+            continue
         fullname = os.path.join(path, file)
-        # im = Image.open(fullname)
-        im = scipy.misc.imread(fullname)
-        if im.mode != 'RGB':
-            im.convert('RGB')
+        img = uti.imread(fullname)
+        if img.mode != 'RGB':
+            img.convert('RGB')
         newname = utg.form_file_name(prefix, id, 'jpg')
-        print('convert:', file, newname)
-
         fullnamenew = os.path.join(path, newname)
-        im.save(fullnamenew, 'JPEG')
+        img.save(fullnamenew, 'JPEG')
 
-
-def jpg2npy(folder_name, prefix, id0, id1):
-    print("JPEG to NPY Tool...")
+def jpg2npy(folder_name, prefix, ids=None):
     path = os.path.abspath(folder_name)
-    files = os.listdir(path)
-    ids = list(xrange(int(id0), int(id1) + 1))
-
-    for file in files:
-        fullname = os.path.join(path, file)
-        if os.path.isdir(fullname):
-            continue
-        prefix_f, id_f, suffix_f = utg.seperate_file_name(file)
-
-        if prefix_f != prefix:
-            continue
-        if suffix_f != 'jpg':
-            continue
-        if id_f not in ids:
-            continue
-        im = scipy.misc.imread(fullname)
-        im = np.array(im)
-        filename = utg.form_file_name(prefix, id_f, 'npy')
-        np.save(filename, im)
+    pipe_reader = utp.FolderReader(path, prefix=prefix, ids=ids, suffix='jpg')
+    pipe_counter = utp.Counter()
+    pipe_writer = utp.FolderWriter(path, prefix, pipe_reader, pipe_counter)
+    pipe_runner = utp.Runner(pipe_writer)
+    pipe_runner.run()
 
 def load_raw(filename, shape):
     """load raw data of single type."""
@@ -127,6 +111,7 @@ def load_raw(filename, shape):
                 idf = i + j * width + k * width * height
                 data2[j, i, k] = data[idf]
     return data2
+
 
 def raw2npy(folder_name, shape, prefix, **kwargs):
     """convert all raw files into npy files.
@@ -178,6 +163,7 @@ def raw2npy(folder_name, shape, prefix, **kwargs):
         filename = utg.form_file_name(prefix_f, id_f, 'npy')
         np.save(filename, data2)
 
+
 def proj2sino(folder, prefix_old, prefix_new, id0, id1, folder_out=None):
     if folder_out is None:
         folder_out = folder
@@ -198,6 +184,7 @@ def sion2proj(folder, prefix_old, prefix_new, id0, id1, folder_out=None):
             for iangle in range(nangles):
                 output[iz, iwidth, iangle] = input_[iz][iwidth, iangle]
     return output
+
 
 def main(argv):
     print('Dataset tools for command line.')
@@ -255,7 +242,7 @@ def main(argv):
         rename(args.source, args.prefix)
 
     if args.img2jpg:
-        img2jpeg(args.source)
+        img2jpeg(args.source, args.prefix)
 
     if args.jpg2npy:
         jpg2npy(args.source, args.prefix, args.id0, args.id1)

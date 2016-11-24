@@ -15,12 +15,13 @@ def unpack_list_nd(input_, item_type=None, keep_types=[str, np.ndarray]):
         for keep in keep_types:
             if isinstance(list_maybe, keep):
                 is_list = False
-        if  is_list:
+        if is_list:
             result.extend(unpack_list_nd(list_maybe, item_type))
         else:
             if item_type is None or type(list_maybe) is item_type:
                 result.append(list_maybe)
     return result
+
 
 def errmsg(got, required, msg=""):
     return msg + "got: {0}, required: {1}.".format(got, required)
@@ -29,22 +30,13 @@ def errmsg(got, required, msg=""):
 def seperate_file_name(file):
     """Analysis standard file name.
     """
-    pfn = re.compile('\D+\d+\w*')
-    if not pfn.match(file):
-        raise ValueError('Invalid file name.')
-    pid = re.compile('\D\d+')
-    psu = re.compile('.\w*')
-    mid = pid.search(file)
-    prefix = file[:mid.start() + 1]
-
-    id = int(file[mid.start() + 1:mid.end()])
-
-    suffix = file[mid.end() + 1:]
-
-    if suffix != '':
-        seperater = file[mid.end()]
-        if seperater != '.':
-            raise ValueError('Invalid file name, seperater should be "."')
+    pat = re.compile('(\D*)(\d+).*(\D*)')
+    m = pat.match(file)
+    if not m:
+        return None, None, None
+    prefix = m.group(1)
+    id = int(m.group(2))
+    suffix = m.group(3)
     return prefix, id, suffix
 
 

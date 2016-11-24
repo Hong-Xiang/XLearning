@@ -12,6 +12,7 @@ import copy
 import xlearn.utils.general as utg
 import xlearn.utils.xpipes as xpipes
 
+TEST_DATA_PATH = '/home/hongxwing/Workspace/xlearn/tests/data/'
 
 class TestPipe(unittest.TestCase):
 
@@ -92,6 +93,18 @@ class TestCopyer(unittest.TestCase):
 class TestNPYReader(unittest.TestCase):
     pass
 
+class TestTensorFormater(unittest.TestCase):
+    def test_auto_imgrgb(self):
+        data_file = os.path.join(TEST_DATA_PATH, 'img000000001.npy')
+        imgrgb = np.array(np.load(data_file))
+        shapergb = imgrgb.shape
+        pipe_input = xpipes.Inputer(imgrgb)
+        pipe_formater = xpipes.TensorFormater(pipe_input)
+        imgtensor = next(pipe_formater.out)
+        output = imgtensor.shape
+        expect = [1]+list(shapergb)
+        expect = tuple(expect)
+        self.assertTrue(output == expect, msg=utg.errmsg(output, expect))
 
 if __name__ == "__main__":
     unittest.main()

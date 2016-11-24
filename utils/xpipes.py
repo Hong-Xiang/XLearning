@@ -22,6 +22,7 @@ import numpy as np
 from six.moves import xrange
 import scipy.misc
 import pickle
+import json
 
 import xlearn.utils.tensor as utt
 import xlearn.utils.image as uti
@@ -137,18 +138,20 @@ class Pipe(object):
         return self._n_inputs
 
 
-class Runner(Pipe):
+class FunctionCaller(Pipe):
 
-    def __init__(self, input_, name="Go"):
-        super(Runner, self).__init__(
-            input_, name=name, is_start=False, is_seal=False)
+    def __init__(self, input_, foo, name="FunctionCaller", is_start=None, is_seal=False, *args, **kwargs):
+        super(FunctionCaller, self).__init__(
+            input_, name=name, is_start=is_start, is_seal=is_seal)
+        self._foo = foo
+        self._args = args
+        self._kwargs = kwargs
 
-    def run(self):
-        try:
-            while True:
-                self._gather()
-        except StopIteration:
-            return None
+    def _pump(self):
+        return self._foo(*self._args, **self._kwargs)
+
+    def _process(self):
+        return self._foo(*self._args, **self._kwargs)
 
 
 class SingleInput(Pipe):
@@ -181,7 +184,20 @@ class SingleInput(Pipe):
         return output
 
 
+class Runner(SingleInput):
+    """Drive pipes to run."""
+
+    def __init__(self, input_, name="Runner"):
+        super(Runner, self).__init__(
+            input_, name=name, is_seal=False)
+
+    def run(self):
+        for _ in self._father.out:
+            pass
+
+
 class Counter(Pipe):
+    """Counter pipe."""
 
     def __init__(self, max_state=None, is_frozen=False, name='Counter', is_seal=False):
         super(Counter, self).__init__(input_=None,
@@ -263,9 +279,19 @@ class Buffer(Pipe):
         return self._counter
 
 
-class Inputer(Buffer):
+class ListTranspose(SingleInput):
 
-    def __init__(self, item=None, const_output=False, name='Inputer'):
+    def __init__(self, input_, name="ListTranspose", is_seal=False):
+        super(ListTranspose, self).__init__(input_, name=name, is_seal=is_seal)
+
+
+class Inputer(Buffer):
+    """Dump given items to pipeline.
+    Automtically expand list and tuple items (as a Buffer), this feature can BufferError
+    shutdown by passing auto_expand=False.
+    """
+
+    def __init__(self, item=None, const_output=False, auto_expand=True, name='Inputer'):
         super(Inputer, self).__init__(
             fixed_max_state=True, name=name, is_start=True)
         self._buffer = collections.deque()
@@ -273,11 +299,12 @@ class Inputer(Buffer):
             self._counter.max_state = None
         else:
             self._counter.max_state = 1
+        self._auto_expand = auto_expand
         if item is not None:
             self.insert(item)
 
     def insert(self, item):
-        if not hasattr(item, "__iter__"):
+        if not isinstance(item, (list, tuple)) or self._auto_expand is False:
             item = [item]
         self._buffer.extend(item)
 
@@ -371,8 +398,30 @@ class RandomPrefix(Pipe):
         return output
 
 
+class LabelFinder(SingleInput):
+
+    def __init__(self, input_, label_foo=None, conf_file=None, name="LabelFinder", is_seal=False):
+        super(LabelFinder, self).__init__(
+            input_, name=name, is_seal=is_seal)
+        if conf_file is None:
+            self._label_foo = label_foo
+            self._use_file = False
+        else:
+            with open(conf_file) as cfile:
+                self._pair_dict = json.load(cfile)
+            self._use_file = True
+
+    def _process(self):
+        data_filename = self._gather_f()
+        if self._use_file:
+            return self._pair_dict[data_filename]
+        else:
+            return self._label_foo(data_filename)
+
+
 class FileNameLooper(Pipe):
     """File name iterator for a folder."""
+
     def __init__(self, folder,
                  prefix,
                  ids=None,
@@ -386,18 +435,18 @@ class FileNameLooper(Pipe):
                                              is_seal=is_seal)
         self._output_type = str
         self._path = os.path.abspath(folder)
+
         self._is_random = random_shuffle
         self._prefix = prefix
         self._suffix = suffix
         list_all = os.listdir(self._path)
         list_all.sort()
-
         # file name filter
         self._file_names = []
         if ids is None:
-            pre = re.compile(prefix + r'[0-9]' + suffix)
             for file in list_all:
-                if pre.match(file):
+                prefix, id, suffix = utg.seperate_file_name(file)
+                if prefix is not None:
                     self._file_names.append(file)
         else:
             for id_ in ids:
@@ -406,7 +455,6 @@ class FileNameLooper(Pipe):
                                               self._suffix)
                 if filename in list_all:
                     self._file_names.append(filename)
-
         # counters
         self._epoch_counter = Counter(max_epoch)
         self._fid_counter = Counter(len(self._file_names))
@@ -441,6 +489,7 @@ class FileNameLooper(Pipe):
 
 
 class NPYReaderSingle(SingleInput):
+    """A pipe warper for .npy reader."""
 
     def __init__(self, input_, name='NPYReader', is_seal=False):
         super(NPYReaderSingle, self).__init__(
@@ -453,10 +502,14 @@ class NPYReaderSingle(SingleInput):
 
 
 class FolderReader(Pipe):
-    """Load all *.npy file with which matches with file name like 'prefix\d9.npy' under given folder.
+    """Load all files with valid data file name.
+    Support type:
+        - npy
+        - dat (pickle data)
     <input> None
     <output> tensor from .npy file.
     """
+    # TODO Add support for raw data.
 
     def __init__(self, folder,
                  prefix,
@@ -506,10 +559,9 @@ class FolderWriter(Pipe):
     """Write a series of numpy.ndarray to npy files.
     """
 
-    def __init__(self, path, prefix, data, count, name='NPYWriter', suffix='npy'):
-        super(FolderWriter, self).__init__()
-        self._branches.append(data)
-        self._branches.append(count)
+    def __init__(self, path, prefix, data, count, name='NPYWriter', suffix='npy', is_seal=False):
+        super(FolderWriter, self).__init__(
+            [data, count], name=name, is_start=False, is_seal=is_seal)
         self._branches[1].reset()
         self._prefix = prefix
         self._path = os.path.abspath(path)
@@ -577,10 +629,27 @@ class ImageGrayer(SingleInput):
         return gray
 
 
+# class TensorStacker(SingleInput):
+
+#     def __init__(self, input_, name="TensorStacker", is_seal=False):
+#         super(TensorStacker, self).__init__(input_, name=name, is_seal=is_seal)
+
+#     def _process(self):
+#         tensor_list = self._gather_f()
+#         if not isinstance(tensor_list, (list, tuple)):
+#             raise TypeError('Only list of 1HW? or 1HWD? tensor is allowed.')
+#         oldshape = tensor_list[0].shape
+#         oldshape = list(oldshape)
+#         n_tensor = len(shape)
+#         newshape = [n_tensor] + oldshape[1:]
+#         output = np.zeros(newshape)
+        
+
+
 class TensorFormater(SingleInput):
-    """Reshape a tensor
-        squeeze: boolean, delete all dimensions with dimension size = 1, DEFAULT=False;
+    """Reshape a tensor, e.g. image to a standard tensor format.
         new_shape: list of int, new shape, DEFAULT=None;
+        squeeze: boolean, delete all dimensions with dimension size = 1, DEFAULT=False;
         auto_shape: boolean, form input into NHWC form, DEFAULT=True
     """
 
@@ -597,17 +666,15 @@ class TensorFormater(SingleInput):
 
     def _process(self):
         tensor = self._gather_f()
-        if self._auto_shape:
-            output = uti.image2tensor(tensor)
-        else:
-            preshape = output.shape
         if self._shape is not None:
-            newshape = self._shape
-        else:
-            if self._squeeze:
-                newshape = list(preshape)
-                while 1 in newshape:
-                    newshape.remove(1)
+            output = np.reshape(tensor, self._shape)
+        elif self._auto_shape:
+            output = uti.image2tensor(tensor)
+        elif self._squeeze:
+            preshape = tensor.shape
+            newshape = list(preshape)
+            while 1 in newshape:
+                newshape.remove(1)
             output = np.reshape(output, newshape)
         return output
 
@@ -696,13 +763,13 @@ class TensorSlicer(SingleInput):
     Slice a 4D NHW1 tensor into a list of HW tensor.
     """
 
-    def __init__(self, input_, name='TensorSlicer'):
+    def __init__(self, input_, shape, name='TensorSlicer'):
         super(TensorSlicer, self).__init__(input_, name)
+        self._shape = shape
 
     def _process(self):
         input_ = self._gather_f()
-        output_shape = [1, input_.shape[1], input_.shape[2], 1]
-        output = utt.crop_tensor(input_, output_shape)
+        output = utt.crop_tensor(input_, self._shape)
         return output
 
 
