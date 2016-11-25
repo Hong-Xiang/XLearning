@@ -629,21 +629,29 @@ class ImageGrayer(SingleInput):
         return gray
 
 
-# class TensorStacker(SingleInput):
+class TensorStacker(SingleInput):
 
-#     def __init__(self, input_, name="TensorStacker", is_seal=False):
-#         super(TensorStacker, self).__init__(input_, name=name, is_seal=is_seal)
+    def __init__(self, input_, name="TensorStacker", is_seal=False):
+        super(TensorStacker, self).__init__(input_, name=name, is_seal=is_seal)
 
-#     def _process(self):
-#         tensor_list = self._gather_f()
-#         if not isinstance(tensor_list, (list, tuple)):
-#             raise TypeError('Only list of 1HW? or 1HWD? tensor is allowed.')
-#         oldshape = tensor_list[0].shape
-#         oldshape = list(oldshape)
-#         n_tensor = len(shape)
-#         newshape = [n_tensor] + oldshape[1:]
-#         output = np.zeros(newshape)
-        
+    def _process(self):
+        tensor_list = self._gather_f()
+        if not isinstance(tensor_list, (list, tuple)):
+            raise TypeError('Only list of 1HW? or 1HWD? tensor is allowed.')
+        oldshape = tensor_list[0].shape
+        oldshape = list(oldshape)
+        n_tensor = len(tensor_list)
+        if oldshape[0] == 1:
+            oldshape = oldshape[1:]
+        newshape = [n_tensor] + oldshape
+        output = np.zeros(newshape)
+        dim = len(oldshape)
+        for i in xrange(n_tensor):
+            ind = [i]
+            for j in xrange(dim):
+                ind.append(slice(0, oldshape[j]))
+            output[ind] = tensor_list[i]
+        return output
 
 
 class TensorFormater(SingleInput):

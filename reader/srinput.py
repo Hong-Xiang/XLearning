@@ -86,25 +86,25 @@ class DataSet(object):
 
     next_batch() provides
             (low_resolution_patch_tensor, high_resolution_patch_tensor)
+            #  path_data, prefix_data,
+            #  path_label, prefix_label,
+            #  patch_shape,
+            #  strides,
+            #  batch_size,
+            #  same_file_data_label=False,
+            #  single_file=False,
+            #  filename,
+            #  n_patch_per_file=None,
+            #  down_sample_ratio=1,
+            #  ids=None,
+            #  padding=False,
+            #  dataset_type='test',
+            #  down_sample_method='fixed',
+            #  mean=1,
+            #  std=128):
     """
 
     def __init__(self, **kwargs):
-                #  path_data, prefix_data,
-                #  path_label, prefix_label,
-                #  patch_shape,
-                #  strides,
-                #  batch_size,
-                #  same_file_data_label=False,
-                #  single_file=False,
-                #  filename,
-                #  n_patch_per_file=None,
-                #  down_sample_ratio=1,
-                #  ids=None,
-                #  padding=False,
-                #  dataset_type='test',
-                #  down_sample_method='fixed',
-                #  mean=1,
-                #  std=128):
         if "conf" in kwargs:
             with open(kwargs["conf"]) as conf_file:
                 paras = json.load(conf_file)
@@ -143,26 +143,22 @@ class DataSet(object):
             self._data_filename = utp.Pipe(self._data_filename_copyer)
             self._data_image = utp.NPYReaderSingle(self._data_filename)
             self._label_image = utp.NPYReaderSingle(self._label_filename)
-            self._data_tensor = utp.TensorFormater(
-                self._data_image, auto_shape=True)
-            self._label_tensor = utp.TensorFormater(
-                self._label_image, auto_shape=True)
+            self._data_tensor = utp.TensorFormater(self._data_image)
+            self._label_tensor = utp.TensorFormater(self._label_image)
         if paras['need_gray']:
             self._data_gray = utp.ImageGrayer(self._data_tensor)
             self._label_gray = utp.ImageGrayer(self._label_tensor)
-            np.save('test_data_gray.npy', next(self._data_gray.out))
-            np.save('test_label_gray.npy', next(self._label_gray.out))
             self._merge = utp.Pipe([self._data_gray, self._label_gray])
-            np.save('test_merge_gray.npy', next(self._merge.out))
+            self._stacker = utp.TensorStacker(self._merge)
         else:
             self._merge = utp.Pipe([self._data_tensor, self._label_tensor])
-        self._tensor = utp.TensorFormater(self._merge, auto_shape=True)
-        np.save('test_tensor.npy', next(self._merge.out))
+            self._stacker = utp.TensorStacker(self._merge)
+        self._tensor = utp.TensorFormater(self._stacker)
         patch_shape = paras['patch_shape']
         patch_shape_2 = patch_shape[:]
         patch_shape_2[0] = 2
 
-        self._batch_generator = utp.PatchGenerator(self._tensor,
+        self._patch_generator = utp.PatchGenerator(self._tensor,
                                                    shape=patch_shape_2,
                                                    n_patches=paras[
                                                        'n_patches'],
@@ -171,12 +167,18 @@ class DataSet(object):
                                                    random_gen=paras[
                                                        'random_shuffle'],
                                                    check_all=paras['check_all'])
-        self._buffer = utp.Buffer(self._batch_generator)
+
+        self._buffer = utp.Buffer(self._patch_generator)
+
         self._slicer = utp.TensorSlicer(self._buffer, patch_shape)
+
         self._buffer2 = utp.Buffer(self._slicer)
+
         self._hr_patch_gen = utp.TensorFormater(self._buffer2)
+
         self._down_sample = utp.DownSampler(
             self._buffer2, self._ratio, method=paras['down_sample_method'])
+
         self._lr_patch_gen = utp.TensorFormater(self._down_sample)
 
     def next_batch(self):
@@ -189,11 +191,18 @@ class DataSet(object):
             low_height = int(self._patch_shape[1] / self._ratio[1])
             low_width = int(self._patch_shape[2] / self._ratio[2])
         low_shape = [self._batch_size, low_height,
-                     low_width, self._patch_shape[2]]
+                     low_width, self._patch_shape[3]]
         high_tensor = np.zeros(high_shape)
         low_tensor = np.zeros(low_shape)
-        cid = 0
-        for patch_high, patch_low in zip(self._hr_patch_gen.out, self._lr_patch_gen.out):
+        cid = 0        
+        for i in xrange(self._batch_size):
+            # for patch_high, patch_low in zip(self._hr_patch_gen.out,
+            # self._lr_patch_gen.out):
+            try:
+                patch_high = next(self._hr_patch_gen.out)
+                patch_low = next(self._lr_patch_gen.out)
+            except StopIteration:
+                break
             high_tensor[cid, :, :, :] = patch_high
             low_tensor[cid, :, :, :] = patch_low
             cid += 1

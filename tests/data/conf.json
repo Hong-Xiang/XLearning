@@ -1,0 +1,38 @@
+{
+    "batch_size": 64,
+    "check_all": false,
+    "dataset_type": "train",
+    "down_sample_method": "fixed",
+    "down_sample_ratio": [
+        1,
+        3,
+        3,
+        1
+    ],
+    "filename": null,
+    "ids": null,
+    "mean": 1,
+    "n_patches": null,
+    "need_gray": true,
+    "padding": false,
+    "patch_shape": [
+        1,
+        33,
+        33,
+        1
+    ],
+    "path_data": "/home/hongxwing/Workspace/Datas/nature_image",
+    "path_label": "/home/hongxwing/Workspace/Datas/nature_image",
+    "prefix_data": "img",
+    "prefix_label": "img",
+    "random_shuffle": false,
+    "same_file_data_label": true,
+    "single_file": false,
+    "std": 128,
+    "strides": [
+        1,
+        10,
+        10,
+        1
+    ]
+}

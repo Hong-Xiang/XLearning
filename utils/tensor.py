@@ -246,23 +246,19 @@ def combine_tensor_list(tensor_list, shape, strides=None, margin0=None, margin1=
     n_tensor = len(tensor_list)
     if n_tensor == 0:
         raise ValueError("Empty imput list.")
-
     element_shape = tensor_list[0].shape
     patch_shape, embed_shape = shape_dim_fix(
         element_shape, shape, dim0, dim1, n_items=n_tensor)
     dim = len(embed_shape)
     output = np.zeros(embed_shape)
     if strides is None:
-        strides = [0] * dim
+        strides = patch_shape
     else:
         strides = list(strides)
     if margin0 is None:
         margin0 = [0] * dim
     if margin1 is None:
         margin1 = [0] * dim
-
-    for i in xrange(dim):
-        strides[i] += patch_shape[i]
     cid = 0
     for offset in offset_nd(embed_shape, patch_shape, strides, margin0, margin1, check_all):
         sli = multidim_slicer(offset, patch_shape)
@@ -284,7 +280,7 @@ def down_sample_1d(input_, axis, ratio, offset=0, method='mean'):
         index_start = [0] * dim
         index_range = list(input_shape)
         strides = [1] * dim
-        index_start[axis] = offset + (ratio-1) // 2
+        index_start[axis] = offset + (ratio - 1) // 2
         index_range[axis] = output_shape[axis] * ratio
         strides[axis] = ratio
         sli = multidim_slicer(index_start, index_range, strides)

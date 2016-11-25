@@ -16,6 +16,7 @@ TEST_DATA_PATH = '/home/hongxwing/Workspace/xlearn/tests/data/'
 
 
 class TestLoadMat(unittest.TestCase):
+
     def test_basic(self):
         # TODO: Implement
         pass
@@ -223,6 +224,7 @@ class TestCombineTensorList(unittest.TestCase):
     def test_image(self):
         large_shape = (800, 800, 3)
         offset = (3, 3, 0)
+        strides = map(lambda a, b: a + b, (64, 64, 3), offset)
         datapath = "/home/hongxwing/Workspace/xlearn/tests/data"
         input_fn = "test_combine_tensor_list.test_image.input.dat"
         output_fn = "test_combine_tensor_list.test_image.output.dat"
@@ -230,7 +232,7 @@ class TestCombineTensorList(unittest.TestCase):
             input_ = pickle.load(file_in)
         with open(os.path.join(datapath, output_fn)) as file_ex:
             expected = pickle.load(file_ex)
-        output = utt.combine_tensor_list(input_, large_shape, offset)
+        output = utt.combine_tensor_list(input_, large_shape, strides)
         self.assertTrue(np.array_equal(output, expected),
                         msg=utg.errmsg(output, expected))
 

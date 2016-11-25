@@ -22,6 +22,7 @@ import xlearn.utils.tensor as utt
 def imread(filename):
     return np.array(misc.imread(filename))
 
+
 def image_type(tensor):
 
     if len(tensor.shape) == 2:
@@ -98,7 +99,6 @@ def sino2proj(input_):
     return output
 
 
-
 def image2tensor(input_):
     """<image> or <list[image]> to <tensor> of shape NHWC
     """
@@ -106,7 +106,7 @@ def image2tensor(input_):
         input_ = [input_]
     refined = []
     for image in input_:
-        image = np.squeeze(image)
+        # image = np.squeeze(image)
         img_t = image_type(image)
         if img_t[0] == 'N':
             image_shape = list(image.shape)
@@ -118,7 +118,10 @@ def image2tensor(input_):
     tensor_shape = list(image_shape)
     if len(image_shape) == 2:
         tensor_shape += [1]
-    tensor_shape = [len(refined)] + tensor_shape
+    if len(image_shape) == 4 and tensor_shape[0] == 1:
+        tensor_shape[0] = len(refined)
+    else:
+        tensor_shape = [len(refined)] + tensor_shape
 
     strides = [1, image_shape[0], image_shape[1], 1]
     output = utt.combine_tensor_list(refined, tensor_shape, strides=strides)
@@ -161,7 +164,6 @@ def tensor2image(input_, id_list=None, offset=3, n_image_row=None):
         image_list, new_shape, strides=strides, margin0=margin0, margin1=margin1)
 
     return output
-
 
 
 def split_channel(input_, id_N_list=None, id_C_list=None, offset=3, n_image_row=None):
