@@ -18,7 +18,7 @@ import random
 import argparse
 import time
 import struct
-
+import shutil
 import scipy.misc
 import numpy as np
 
@@ -31,38 +31,60 @@ import xlearn.utils.image as uti
 IMAGE_SUFFIX = ['png', 'jpg']
 
 
-def rename(folder_name, prefix=None):
-    """Rename all files in a folder, changing its prefix, keep its suffix.
+def rename(source, prefix=None, suffix=None, recurrent=False, no_action=False):
+    """Rename all files in a folder, reform prefixes, with filter using suffix.
+    Only files with form: name[.suffix] will be checked.
+    If prefix is None, a random prefix will be added.
     """
+    folder_name = source
+    if isinstance(folder_name, (list, tuple)):
+        for folder in folder_name:
+            rename(folder, prefix, suffix, recurrent, no_action)
+        return None
     folder_name = os.path.abspath(folder_name)
+    files_maybe = os.listdir(folder_name)
+
+    files_full = list(map(lambda filename: os.path.join(
+        folder_name, filename), files_maybe))
+
+    files = list(filter(os.path.isfile, files_full))
+    files = list(map(os.path.basename, files))
+    if suffix is not None:
+        for file_old in files:
+            _, _, suffix_old = utg.seperate_file_name(file_old)
+            if suffix_old != suffix:
+                files.remove(file_old)
+
+    dirs = filter(os.path.isdir, files_full)
+    dirs = list(map(os.path.basename, dirs))
+    if recurrent:
+        for dir_ in dirs:
+            fullpath = os.path.join(folder_name, dir_)
+            rename(fullpath, prefix, suffix, recurrent, no_action)
     if prefix is None:
+        print("RENAME>>>RANDOM PREFIX: {}".format(folder_name))
         pipe_random_prefix = utp.RandomPrefix()
-        listing = os.listdir(folder_name)
-        for infile in listing:
+        for file_old in files:
             prefix = next(pipe_random_prefix.out)
-            if os.path.isdir(infile):
-                continue
-            fname_new = prefix + infile
-            old_name = os.path.join(folder_name, infile)
-            new_name = os.path.join(folder_name, fname_new)
-            os.rename(old_name, new_name)
-    else:
-        print('renaming:', folder_name)
-        rename(folder_name)
-        listing = os.listdir(folder_name)
-        cid = 0
-        for infile in listing:
-            if os.path.isdir(infile):
-                continue
-            index = infile.rfind('.')
-            if index < len(infile) - 1:
-                suffix = infile[index + 1:]
+            file_new = prefix + file_old
+            full_old = os.path.join(folder_name, file_old)
+            full_new = os.path.join(folder_name, file_new)
+            if no_action:
+                print("rename: {0} TO: {1}.".format(full_old, full_new))
             else:
-                suffix = ''
-            fname_new = utg.form_file_name(prefix, cid, suffix)
-            old_name = os.path.join(folder_name, infile)
-            new_name = os.path.join(folder_name, fname_new)
-            os.rename(old_name, new_name)
+                os.rename(full_old, full_new)
+    else:
+        print("RENAME>>>FORMAL RENAME: {}".format(folder_name))
+        cid = 0
+        for file_old in files:
+            _, _, suffix_old = utg.seperate_file_name(file_old)
+            file_new = utg.form_file_name(prefix, cid, suffix_old)
+            full_old = os.path.join(folder_name, file_old)
+            full_new = os.path.join(folder_name, file_new)
+            if no_action:
+                print("rename: {0} TO: {1}.".format(full_old, full_new))
+            else:
+                os.rename(full_old, full_new)
             cid += 1
 
 
@@ -84,6 +106,7 @@ def img2jpg(folder_name, prefix, ids=None):
         fullnamenew = os.path.join(path, newname)
         img.save(fullnamenew, 'JPEG')
 
+
 def jpg2npy(folder_name, prefix, ids=None):
     path = os.path.abspath(folder_name)
     pipe_reader = utp.FolderReader(path, prefix=prefix, ids=ids, suffix='jpg')
@@ -91,6 +114,7 @@ def jpg2npy(folder_name, prefix, ids=None):
     pipe_writer = utp.FolderWriter(path, prefix, pipe_reader, pipe_counter)
     pipe_runner = utp.Runner(pipe_writer)
     pipe_runner.run()
+
 
 def load_raw(filename, shape):
     """load raw data of single type."""
@@ -186,13 +210,78 @@ def sion2proj(folder, prefix_old, prefix_new, id0, id1, folder_out=None):
     return output
 
 
+def print_std_filename(file):
+    if isinstance(file, (list, tuple)):
+        map(print_std_filename, file)
+    prefix, id_, suffix = utg.seperate_file_name(file)
+    print("Analysic filename:{}".format(file))
+    print("+P:{0}, I:{1}, S:{2}.".format(prefix, id_, suffix))
+    name_std = utg.form_file_name(prefix, id_, suffix)
+    print("+STD:{}".format(name_std))
+
+
+def merge(source, target, random_rename=True, copy_file=False, no_action=False, recurrent=False, prefix=None, suffix=None):
+    if random_rename:
+        rename(source, prefix=None, suffix=suffix,
+               recurrent=recurrent, no_action=no_action)
+
+    if isinstance(source, (list, tuple)):
+        map(lambda folder: merge(folder, target, random_rename, copy_file, no_action, recurrent, prefix, suffix),
+            source)
+        return None
+
+    folder_name = os.path.abspath(source)
+    target_full = os.path.abspath(target)
+    files_maybe = os.listdir(folder_name)
+    files_full = list(map(lambda filename: os.path.join(
+        folder_name, filename), files_maybe))
+
+    files = list(filter(os.path.isfile, files_full))
+    files = list(map(os.path.basename, files))
+    if suffix is not None:
+        for file_old in files:
+            _, _, suffix_old = utg.seperate_file_name(file_old)
+            if suffix_old != suffix:
+                files.remove(file_old)
+
+    dirs = list(filter(os.path.isdir, files_full))
+    dirs = list(map(os.path.basename, dirs))
+
+    if recurrent:
+        for dir_ in dirs:
+            fullpath = os.path.join(folder_name, dir_)
+            merge(fullpath, target_full, random_rename, copy_file,
+                  no_action, recurrent, prefix, suffix)
+
+    for file_old in files:
+
+        full_old = os.path.join(folder_name, file_old)
+        full_new = os.path.join(target_full, file_old)
+        action = "COPY" if copy_file else "MOVE"
+        if no_action:
+            print("{0}: {1} TO: {2}.".format(action, full_old, full_new))
+        else:
+            if copy_file:
+                shutil.copyfile(full_old, full_new)
+            else:
+                os.rename(full_old, full_new)
+
+
 def main(argv):
+    """command line support.
+    """
+
     print('Dataset tools for command line.')
     parser = argparse.ArgumentParser(description='Dataset construction.')
     parser.add_argument('--rename',
                         action='store_true',
                         default=False,
                         help='rename all data items.')
+    parser.add_argument('--merge',
+                        action='store_true',
+                        default=False,
+                        help='merge multiple folders.')
+
     parser.add_argument('--img2jpg',
                         action='store_true',
                         default=False,
@@ -209,47 +298,66 @@ def main(argv):
                         action='store_true',
                         default=False,
                         help='Analysis file name.')
-    parser.add_argument('--noaction', '-n',
+    parser.add_argument('--print',
                         action='store_true',
                         default=False,
-                        help='print setting, do noting.')
+                        help='print args, do nothing.')
+    parser.add_argument('--no_action', '-n',
+                        action='store_true',
+                        default=False,
+                        help='print settings, do noting.')
+    parser.add_argument('--recurrent', '-r',
+                        action='store_true',
+                        default=False,
+                        help='recurrent on sub folders.')
+    parser.add_argument('--copy_file',
+                        action='store_true',
+                        default=False,
+                        help='copy files instead of move files.')
+    parser.add_argument('--random_rename',
+                        action='store_true',
+                        default=False,
+                        help='Add random prefix before merge.')
 
-    parser.add_argument('--source', '-s',
-                        dest='source',
-                        required=True,
-                        help='working folder/file.')
-    parser.add_argument('--suffix',
-                        dest='suffix', default='',
-                        help='suffix')
-    parser.add_argument('--prefix', dest='prefix')
+    parser.add_argument('--source', '-s', dest='source', required=True, nargs='+',
+                        help='source folder/file.')
+    parser.add_argument('--target', '-t',
+                        dest='target', default=None,
+                        help='target folder/file.')
+    parser.add_argument('--suffix', dest='suffix', default=None, help='suffix')
+    parser.add_argument('--prefix', dest='prefix', default=None, help='prefix')
     parser.add_argument('--shape', dest='shape', nargs='+', type=int)
     parser.add_argument('--index0', dest='id0', type=int)
     parser.add_argument('--index1', dest='id1', type=int)
-    parser.add_argument('--endian',
-                        dest='endian',
-                        default='l',
-                        help='Endianness, l or b')
+    parser.add_argument('--endian', dest='endian',
+                        default='l', help='Endianness, l or b')
 
     args = parser.parse_args(argv)
-    if args.noaction:
+    if args.print:
         print(args)
         return
+
     if args.filename:
         print(utg.seperate_file_name(args.source))
         return
 
     if args.rename:
-        rename(args.source, args.prefix)
+        rename(args.source, args.prefix, args.suffix,
+               args.recurrent, args.no_action)
 
-    if args.img2jpg:
-        img2jpeg(args.source, args.prefix)
+    if args.merge:
+        merge(args.source, args.target, args.random_rename, args.copy_file,
+              args.no_action, args.recurrent, args.prefix, args.suffix)
 
-    if args.jpg2npy:
-        jpg2npy(args.source, args.prefix, args.id0, args.id1)
+    # if args.img2jpg:
+    #     img2jpeg(args.source, args.prefix)
 
-    if args.raw2npy:
-        raw2npy(args.source, args.prefix, args.suffix,
-                args.id0, args.id1, args.shape)
+    # if args.jpg2npy:
+    #     jpg2npy(args.source, args.prefix, args.id0, args.id1)
+
+    # if args.raw2npy:
+    #     raw2npy(args.source, args.prefix, args.suffix,
+    #             args.id0, args.id1, args.shape)
 
     # if argv[1] == 'rename':
 

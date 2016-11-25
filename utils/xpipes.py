@@ -390,7 +390,8 @@ class RandomPrefix(Pipe):
             self._prefix = prefix
         time_str_list = list(str(time.time()))
         time_str_list.remove('.')
-        self._prefix += ''.join(time_str_list)
+        self._prefix += ''.join(time_str_list[-2:])
+        self._prefix += '%08d'%random.randint(0, 99999999)
         self._counter = Counter()
 
     def _pump(self):

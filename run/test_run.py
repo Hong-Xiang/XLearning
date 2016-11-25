@@ -5,7 +5,7 @@ import numpy as np
 import tensorflow as tf
 import matplotlib.pyplot as plt
 import xlearn.nets.layers
-import xlearn.utils.xpipes as xp
+import xlearn.utils.xpipes as utp
 import argparse
 import os
 
@@ -18,19 +18,20 @@ from xlearn.reader.sino import DataSetSinogram
 FLAGS = tf.app.flags.FLAGS
 
 
-def check_dataset(dataset):
+def check_dataset(dataset, n_show=4):
     data, label = dataset.next_batch()
-    n_show = 4
+    n_axis = np.ceil(np.sqrt(n_show * 2))
     for i in range(n_show):
         plt.figure()
-        plt.subplot(1, 2, 1)
+        plt.subplot(n_axis, n_axis, i * 2)
         plt.imshow(data[i, :, :, 0])
         plt.gray()
         plt.show()
-        plt.subplot(1, 2, 2)
+        plt.subplot(n_axis, n_axis, i * 2 + 1)
         plt.imshow(label[i, :, :, 0])
         plt.gray()
         plt.show()
+
 
 def test_one_over_x(argv):
     data_set = DataSetOneOverX(batch_size=FLAGS.batch_size)
@@ -53,11 +54,12 @@ def test_one_over_x(argv):
                                       feed_dict={net.inputs: x,
                                                  net.label: y})
             print('step={0:5d},\t test loss={1:4E}.'.format(i, loss_test))
-    
+
     x = np.linspace(0.1, 1.1, num=FLAGS.batch_size)
     x = np.reshape(x, [FLAGS.batch_size, 1])
     y_ = manager.run([net.infer], feed_dict={net.inputs: x})
     np.save('oneoverx.npy', y_)
+
 
 def inferSino(argv):
     patch_shape = [FLAGS.height,
@@ -65,18 +67,18 @@ def inferSino(argv):
     strides = [5, 5]
 
     fullname = os.path.join(FLAGS.infer_path, FLAGS.infer_file)
-    input_ = np.load(fullname)    
-    pipe_input = xp.Inputer()
+    input_ = np.load(fullname)
+    pipe_input = utp.Inputer()
     pipe_input.insert(input_)
-    pipe_patch = xp.PatchGenerator(pipe_input, patch_shape, strides)
-    pipe_patch_tensor = xp.TensorFormater(pipe_patch)
-    pipe_down_sample = xp.DownSamplerSingle(pipe_patch_tensor, axis=2, ratio=FLAGS.down_ratio, method='fixed')
-    pipe_sliced = xp.TensorSlicer(pipe_down_sample)
+    pipe_patch = utp.PatchGenerator(pipe_input, patch_shape, strides)
+    pipe_patch_tensor = utp.TensorFormater(pipe_patch)
+    pipe_down_sample = utp.DownSamplerSingle(
+        pipe_patch_tensor, axis=2, ratio=FLAGS.down_ratio, method='fixed')
+    pipe_sliced = utp.TensorSlicer(pipe_down_sample)
     input_list = pipe_sliced.out.next()
-    
-    len_list = len(input_list)
-    n_batch = int(np.ceil( float(len_list)/FLAGS.batch_size ))
 
+    len_list = len(input_list)
+    n_batch = int(np.ceil(float(len_list) / FLAGS.batch_size))
 
     if FLAGS.task == "SuperNetCrop":
         net = xlearn.model.supernet.SuperNetCrop()
@@ -90,7 +92,7 @@ def inferSino(argv):
     patch_shape_down = input_list[0].shape
     patch_result = []
     valid_offset = [FLAGS.hidden_layer, FLAGS.hidden_layer]
-    
+
     mean_std = 0
     for i in xrange(len_list):
         mean_std += np.std(input_list[i])
@@ -104,7 +106,8 @@ def inferSino(argv):
         input_list[i] -= mean_mean
     cid = 0
     for i in xrange(n_batch):
-        tensor_input = np.zeros([FLAGS.batch_size, patch_shape_down[0], patch_shape_down[1], 1])
+        tensor_input = np.zeros(
+            [FLAGS.batch_size, patch_shape_down[0], patch_shape_down[1], 1])
         for j in xrange(FLAGS.batch_size):
             if cid < len_list:
                 temp = input_list[cid]
@@ -112,17 +115,20 @@ def inferSino(argv):
                 temp = np.zeros(patch_shape_down)
             cid += 1
             tensor_input[j, :, :, 0] = temp
-        tensor_output = manager.run(net.infer, feed_dict={net.inputs: tensor_input})        
+        tensor_output = manager.run(
+            net.infer, feed_dict={net.inputs: tensor_input})
         for j in xrange(FLAGS.batch_size):
             result = tensor_output[j, :, :, 0]
             result += mean_mean
             result *= mean_std
-            result_pad = np.zeros([1]+patch_shape+[1])
-            result_pad[0, valid_offset[0]:-valid_offset[0], valid_offset[1]:-valid_offset[1], 0] = result            
+            result_pad = np.zeros([1] + patch_shape + [1])
+            result_pad[0, valid_offset[0]:-valid_offset[0],
+                       valid_offset[1]:-valid_offset[1], 0] = result
             patch_result.append(result_pad)
     patch_result = patch_result[:len_list]
-    output = xlearn.utils.tensor.patches_recon_tensor(patch_result, input_.shape, patch_shape, strides, [23, 89], valid_offset)
-    np.save(FLAGS.infer_file,output)
+    output = xlearn.utils.tensor.patches_recon_tensor(
+        patch_result, input_.shape, patch_shape, strides, [23, 89], valid_offset)
+    np.save(FLAGS.infer_file, output)
 
     # print(tensor.shape)
 
@@ -177,10 +183,11 @@ def testSino(argv):
             print('step={0:5d},\t test loss={1:0.3f}.'.format(i, loss_test))
             test_loss.append(loss_test)
     # manager.save()
-    np.save('test_loss.npy',np.array(test_loss))
+    np.save('test_loss.npy', np.array(test_loss))
     saver = tf.train.Saver(tf.all_variables())
     path = saver.save(manager.sess, FLAGS.save_path, FLAGS.steps)
     print("net variables saved to: " + path + '.')
+
 
 def testSR(argv):
     patch_shape = [FLAGS.height * FLAGS.down_ratio,
@@ -243,7 +250,7 @@ def testSR(argv):
 
 def main(argv):
     # testSR(argv)
-    #test_one_over_x(argv)
+    # test_one_over_x(argv)
     testSino(argv)
     # inferSino(argv)
 

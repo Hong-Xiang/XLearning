@@ -30,7 +30,7 @@ def errmsg(got, required, msg=""):
 def seperate_file_name(file):
     """Analysis standard file name.
     """
-    pat = re.compile('(\D*)(\d+).*(\D*)')
+    pat = re.compile(r'(\w*)(\d+).*(\w*)')
     m = pat.match(file)
     if not m:
         return None, None, None
@@ -43,7 +43,10 @@ def seperate_file_name(file):
 def form_file_name(prefix, id, suffix):
     """Standard file name of datas, given prefix and suffix.
     """
-    filename = prefix + '%09d' % id + '.' + suffix
+    if suffix == '':
+        filename = prefix + '%09d' % id
+    else:
+        filename = prefix + '%09d' % id + '.' + suffix
     return filename
 
 # def valid_filename_form():
