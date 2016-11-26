@@ -16,6 +16,7 @@ from six.moves import xrange
 import xlearn.utils.xpipes as utp
 import xlearn.utils.tensor as utt
 import xlearn.utils.general as utg
+import itertools
 
 
 def label_name(data_name, case_digit=None, label_prefix=None):
@@ -77,7 +78,7 @@ def config_file_generator(conf_file,
         json.dump(data, fp, sort_keys=True, indent=4, separators=(',', ': '))
 
 
-class DataSet(object):
+class DataSetSR(object):
     """
     A general super resolution net.
     Args:
@@ -120,6 +121,7 @@ class DataSet(object):
         self._strides = paras['strides']
         self._std = paras['std']
         self._mean = paras['mean']
+        self._eps = paras['eps']
         self._data_filename_iter = utp.FileNameLooper(paras['path_data'],
                                                       prefix=paras[
                                                           'prefix_data'],
@@ -194,23 +196,31 @@ class DataSet(object):
                      low_width, self._patch_shape[3]]
         high_tensor = np.zeros(high_shape)
         low_tensor = np.zeros(low_shape)
-        cid = 0        
+        cid = 0
         for i in xrange(self._batch_size):
-            # for patch_high, patch_low in zip(self._hr_patch_gen.out,
-            # self._lr_patch_gen.out):
+            # for patch_high, patch_low in
+            # itertools.izip(self._hr_patch_gen.out, self._lr_patch_gen.out):
             try:
                 patch_high = next(self._hr_patch_gen.out)
                 patch_low = next(self._lr_patch_gen.out)
             except StopIteration:
                 break
+            pstd = np.std(patch_high)
+            patch_high /= (pstd+self._eps)
+            patch_low /= (pstd+self._eps)
+            pmean = np.mean(patch_high)
+            patch_high -= pmean
+            patch_low -= pmean
             high_tensor[cid, :, :, :] = patch_high
             low_tensor[cid, :, :, :] = patch_low
             cid += 1
+            # if cid == self._batch_size:
+            #     break
 
-        low_tensor /= self._std
-        low_tensor -= self._mean
-        high_tensor /= self._std
-        high_tensor -= self._mean
+        # low_tensor /= self._std
+        # low_tensor -= self._mean
+        # high_tensor /= self._std
+        # high_tensor -= self._mean
 
         return low_tensor, high_tensor
 

@@ -391,7 +391,7 @@ class RandomPrefix(Pipe):
         time_str_list = list(str(time.time()))
         time_str_list.remove('.')
         self._prefix += ''.join(time_str_list[-2:])
-        self._prefix += '%08d'%random.randint(0, 99999999)
+        self._prefix += '%08d' % random.randint(0, 99999999)
         self._counter = Counter()
 
     def _pump(self):
@@ -429,7 +429,7 @@ class FileNameLooper(Pipe):
                  random_shuffle=False,
                  suffix='npy',
                  name='FileNameLooper',
-                 max_epoch=None,
+                 max_epoch=1,
                  is_seal=False):
         super(FileNameLooper, self).__init__(is_start=True,
                                              name=name,
@@ -462,6 +462,7 @@ class FileNameLooper(Pipe):
 
         self._is_random = random_shuffle
         self._new_epoch()
+        self._epoch_counter.reset()
 
     def _new_epoch(self):
         next(self._epoch_counter.out)
@@ -575,6 +576,7 @@ class FolderWriter(Pipe):
         filename = utg.form_file_name(self._prefix,
                                       count,
                                       self._suffix)
+
         fullname = os.path.join(self._path, filename)
         if self._suffix == 'npy':
             np.save(fullname, data)
@@ -787,7 +789,7 @@ class PeriodicalPadding(SingleInput):
     Padding for sinograms, input must have shape NHW1
 
     Zero padding for y.
-    Periodical padding for x.    
+    Periodical padding for x.
     """
 
     def __init__(self, input_, pw_x0, pw_x1, pw_y0, pw_y1):
@@ -800,9 +802,9 @@ class PeriodicalPadding(SingleInput):
     def _process(self):
         input_ = self._gather_f()
         pad_width = ((0, 0), (self._pw_x0, self._pw_x1), (0, 0), (0, 0))
-        output = np.pad(input, pad_width=pad_width, mode='constant')
+        output = np.pad(input_, pad_width=pad_width, mode='constant')
         pad_width = ((0, 0), (0, 0), (self._pw_y0, self._pw_y1), (0, 0))
-        output = np.pad(input, pad_width=pad_width, mode='wrap')
+        output = np.pad(output, pad_width=pad_width, mode='wrap')
         return output
 
 
@@ -820,11 +822,31 @@ class Proj2Sino(SingleInput):
 
 class Sino2Proj(SingleInput):
 
-    def __init__(self, input_, name='Sino2Proj', is_start=False, is_seal=False):
+    def __init__(self, input_, name='Sino2Proj', is_seal=False):
         super(Sino2Proj, self).__init__(
-            input_, name=name, is_start=is_start, is_seal=is_seal)
+            input_, name=name, is_seal=is_seal)
 
     def _process(self):
         input_ = self._gather_f()
         output = uti.sino2proj(input_)
+        return output
+
+
+class Sino3D2Sino2D(SingleInput):
+
+    def __init__(self, input_, name="Sino3D2Sino2D", is_seal=False):
+        super(Sino3D2Sino2D, self).__init__(input_, name=name, is_seal=is_seal)
+
+    def _process(self):
+        input_ = self._gather_f()
+        n_detec = input_.shape[1]
+        n_angle = input_.shape[0]
+        n_depth = input_.shape[2]
+        output = []
+        for iz in xrange(n_depth):
+            sino = np.zeros([1, n_detec, n_angle, 1])
+            for ix in xrange(n_detec):
+                for iy in xrange(n_angle):
+                    sino[0, ix, iy, 0] = input_[iy, ix, iz]
+            output.append(sino)
         return output

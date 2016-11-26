@@ -30,20 +30,20 @@ def errmsg(got, required, msg=""):
 def seperate_file_name(file):
     """Analysis standard file name.
     """
-    pat = re.compile(r'(\w*)(\d+).*(\w*)')
+    pat = re.compile(r'(\D*)(\d+)\.{0,1}(\w*)')
     m = pat.match(file)
     if not m:
         return None, None, None
     prefix = m.group(1)
-    id = int(m.group(2))
+    id_ = int(m.group(2))
     suffix = m.group(3)
-    return prefix, id, suffix
+    return prefix, id_, suffix
 
 
 def form_file_name(prefix, id, suffix):
     """Standard file name of datas, given prefix and suffix.
     """
-    if suffix == '':
+    if suffix == '' or suffix is None:
         filename = prefix + '%09d' % id
     else:
         filename = prefix + '%09d' % id + '.' + suffix

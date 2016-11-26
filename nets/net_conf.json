@@ -1,0 +1,176 @@
+[
+    {
+        "helpdoc": "gradient clipping coefficient",
+        "name": "grad_clip",
+        "type": "int",
+        "value": 100
+    },
+    {
+        "helpdoc": "restore flag",
+        "name": "restore",
+        "type": "bool",
+        "value": false
+    },
+    {
+        "helpdoc": "leak ReLU slope",
+        "name": "leak_ratio",
+        "type": "float",
+        "value": null
+    },
+    {
+        "helpdoc": "test conf file",
+        "name": "test_conf",
+        "type": "string",
+        "value": null
+    },
+    {
+        "helpdoc": "infer file name",
+        "name": "infer_file",
+        "type": "string",
+        "value": null
+    },
+    {
+        "helpdoc": "patch height",
+        "name": "height",
+        "type": "int",
+        "value": 11
+    },
+    {
+        "helpdoc": "prefix",
+        "name": "prefix",
+        "type": "string",
+        "value": null
+    },
+    {
+        "helpdoc": "weight decay coefficient",
+        "name": "weight_decay",
+        "type": "float",
+        "value": 0.0001
+    },
+    {
+        "helpdoc": "infer path",
+        "name": "infer_path",
+        "type": "string",
+        "value": "."
+    },
+    {
+        "helpdoc": "down sample ratio",
+        "name": "down_ratio",
+        "type": "int",
+        "value": 3
+    },
+    {
+        "helpdoc": "initial learning rate",
+        "name": "lr_init",
+        "type": "float",
+        "value": 1e-3
+    },
+    {
+        "helpdoc": "patch width",
+        "name": "width",
+        "type": "int",
+        "value": 11
+    },
+    {
+        "helpdoc": "number of hidden layer",
+        "name": "hidden_layer",
+        "type": "int",
+        "value": 10
+    },
+    {
+        "helpdoc": "save path",
+        "name": "save_path",
+        "type": "string",
+        "value": "netsave"
+    },
+    {
+        "helpdoc": "summary folder",
+        "name": "train_summary_dir",
+        "type": "string",
+        "value": "./summary_train"
+    },
+    {
+        "helpdoc": "summary folder",
+        "name": "test_summary_dir",
+        "type": "string",
+        "value": "./summary_test"
+    },
+    {
+        "helpdoc": "train flag",
+        "name": "is_train",
+        "type": "bool",
+        "value": true
+    },
+    {
+        "helpdoc": "learning rate decay factor",
+        "name": "lr_decay_factor",
+        "type": "float",
+        "value": 0.6
+    },
+    {
+        "helpdoc": "batch size",
+        "name": "batch_size",
+        "type": "int",
+        "value": 64
+    },
+    {
+        "helpdoc": "net name",
+        "name": "net",
+        "type": "string",
+        "value": null
+    },
+    {
+        "helpdoc": "task name",
+        "name": "task",
+        "type": "string",
+        "value": null
+    },
+    {
+        "helpdoc": "# of hidden units",
+        "name": "hidden_units",
+        "type": "int",
+        "value": 64
+    },
+    {
+        "helpdoc": "max tolerance",
+        "name": "eps",
+        "type": "float",
+        "value": 1e-05
+    },
+    {
+        "helpdoc": "# of steps",
+        "name": "steps",
+        "type": "int",
+        "value": 1000
+    },
+    {
+        "helpdoc": "save path",
+        "name": "save_dir",
+        "type": "string",
+        "value": "."
+    },
+    {
+        "helpdoc": "train conf file",
+        "name": "train_conf",
+        "type": "string",
+        "value": null
+    },
+    {
+        "helpdoc": "learning rate decay steps",
+        "name": "lr_decay_steps",
+        "type": "int",
+        "value": 1000
+    },
+    {
+        "helpdoc": "# of patches per file",
+        "name": "patch_per_file",
+        "type": "int",
+        "value": 32
+    },
+    {
+        "helpdoc": "only downsample width flag",
+        "name": "only_down_width",
+        "type": "bool",
+        "value": false
+    }
+]

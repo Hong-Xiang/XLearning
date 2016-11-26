@@ -137,9 +137,30 @@ def load_raw(filename, shape):
     return data2
 
 
+def sino3d2sino2d(source, target, prefix):
+    if isinstance(source, (list, tuple)):
+        for folder in source:
+            sino3d2sino2d(folder, target, prefix)
+        return None
+    pipe_filename = utp.FileNameLooper(source, prefix)
+    pipe_sino3d = utp.NPYReaderSingle(pipe_filename)
+    pipe_conv3d2d = utp.Sino3D2Sino2D(pipe_sino3d)
+    pipe_buffer = utp.Buffer(pipe_conv3d2d)
+    pipe_counter = utp.Counter()
+    pipe_sino2dwirter = utp.FolderWriter(
+        target, prefix, pipe_buffer, pipe_counter)
+
+    pipe_runner = utp.Runner(pipe_sino2dwirter)
+    pipe_runner.run()
+
+
 def raw2npy(folder_name, shape, prefix, **kwargs):
     """convert all raw files into npy files.
     """
+    if isinstance(folder_name, (list, tuple)):
+        for folder in folder_name:
+            raw2npy(folder, shape, prefix, **kwargs)
+        return None
     path = os.path.abspath(folder_name)
     files = os.listdir(path)
 
@@ -150,15 +171,20 @@ def raw2npy(folder_name, shape, prefix, **kwargs):
     if 'id0' in kwargs:
         id0 = kwargs['id0']
     else:
+        id0 = None
+    if id0 is None:
         id0 = 0
     if 'id1' in kwargs:
         id1 = kwargs['id1']
     else:
+        id1 = None
+    if id1 is None:
         id1 = len(files)
 
     ids = list(xrange(int(id0), int(id1) + 1))
     for file in files:
         fullname = os.path.join(path, file)
+        print("processing: {}.".format(fullname))
         if os.path.isdir(fullname):
             continue
         prefix_f, id_f, suffix_f = utg.seperate_file_name(file)
@@ -185,29 +211,49 @@ def raw2npy(folder_name, shape, prefix, **kwargs):
                     idf = i + j * width + k * width * height
                     data2[j, i, k] = data[idf]
         filename = utg.form_file_name(prefix_f, id_f, 'npy')
-        np.save(filename, data2)
+        fullname = os.path.join(folder_name, filename)
+        np.save(fullname, data2)
 
 
 def proj2sino(folder, prefix_old, prefix_new, id0, id1, folder_out=None):
+    # TODO: Reimplementation
     if folder_out is None:
         folder_out = folder
-    pipe_input = utp.NPYReader(folder, prefix_old, ids=xrange(id0, id1))
+    pipe_input = utp.FolderReader(folder, prefix_old, ids=xrange(id0, id1))
     pipe_sino = utp.Proj2Sino(pipe_input)
     pipe_count = utp.Counter()
-    pipe_output = utp.NPYWriter(folder_out, prefix_new, pipe_sino, pipe_count)
+    pipe_output = utp.FolderWriter(
+        folder_out, prefix_new, pipe_sino, pipe_count)
 
 
-def sion2proj(folder, prefix_old, prefix_new, id0, id1, folder_out=None):
-    if not hasattr(input_, "__iter__"):
-        input_ = [input_]
-    height = len(input_)
-    width, nangles = input_[0].shape
-    output = np.zeros([height, width, nangles])
-    for iz in xrange(height):
-        for iwidth in range(width):
-            for iangle in range(nangles):
-                output[iz, iwidth, iangle] = input_[iz][iwidth, iangle]
-    return output
+def sion2proj(source, target, prefix_new, id0, id1, folder_out=None):
+    # TODO: Reimplementation
+    # if not hasattr(input_, "__iter__"):
+    #     input_ = [input_]
+    # height = len(input_)
+    # width, nangles = input_[0].shape
+    # output = np.zeros([height, width, nangles])
+    # for iz in xrange(height):
+    #     for iwidth in range(width):
+    #         for iangle in range(nangles):
+    #             output[iz, iwidth, iangle] = input_[iz][iwidth, iangle]
+    # return output
+    pass
+
+
+def pad_sino(source, target, prefix, pwx, pwy):
+    if isinstance(source, (list, tuple)):
+        for folder in source:
+            pad_sino(folder, target, prefix, pwx, pwy)
+        return None
+    pipe_filename = utp.FileNameLooper(source, prefix)
+    pipe_sino2d = utp.NPYReaderSingle(pipe_filename)
+    pipe_padded = utp.PeriodicalPadding(pipe_sino2d, pwx, pwx, pwy, pwy)
+    pipe_counter = utp.Counter()
+    pipe_sino2dwirter = utp.FolderWriter(
+        target, prefix, pipe_padded, pipe_counter)
+    pipe_runner = utp.Runner(pipe_sino2dwirter)
+    pipe_runner.run()
 
 
 def print_std_filename(file):
@@ -281,11 +327,14 @@ def main(argv):
                         action='store_true',
                         default=False,
                         help='merge multiple folders.')
-
     parser.add_argument('--img2jpg',
                         action='store_true',
                         default=False,
                         help='convert all images to JPEG.')
+    parser.add_argument('--sino3d2sino2d',
+                        action='store_true',
+                        default=False,
+                        help='Convert 3D sinograms to multiple 2D sinograms.')
     parser.add_argument('--jpg2npy',
                         action='store_true',
                         default=False,
@@ -302,6 +351,11 @@ def main(argv):
                         action='store_true',
                         default=False,
                         help='print args, do nothing.')
+    parser.add_argument('--pad_sino',
+                        action='store_true',
+                        default=False,
+                        help='padding sinograms.')
+
     parser.add_argument('--no_action', '-n',
                         action='store_true',
                         default=False,
@@ -326,11 +380,17 @@ def main(argv):
                         help='target folder/file.')
     parser.add_argument('--suffix', dest='suffix', default=None, help='suffix')
     parser.add_argument('--prefix', dest='prefix', default=None, help='prefix')
+    parser.add_argument('--prefix_new', dest='prefix_new',
+                        default=None, help='new prefix')
+
     parser.add_argument('--shape', dest='shape', nargs='+', type=int)
     parser.add_argument('--index0', dest='id0', type=int)
     parser.add_argument('--index1', dest='id1', type=int)
     parser.add_argument('--endian', dest='endian',
                         default='l', help='Endianness, l or b')
+
+    parser.add_argument('--pwx', type=int, help='padding window x')
+    parser.add_argument('--pwy', type=int, help='padding window y')
 
     args = parser.parse_args(argv)
     if args.print:
@@ -338,7 +398,8 @@ def main(argv):
         return
 
     if args.filename:
-        print(utg.seperate_file_name(args.source))
+        for filename in args.source:
+            print(utg.seperate_file_name(filename))
         return
 
     if args.rename:
@@ -349,15 +410,20 @@ def main(argv):
         merge(args.source, args.target, args.random_rename, args.copy_file,
               args.no_action, args.recurrent, args.prefix, args.suffix)
 
+    if args.pad_sino:
+        pad_sino(args.source, args.target, args.prefix, args.pwx, args.pwy)
     # if args.img2jpg:
     #     img2jpeg(args.source, args.prefix)
 
     # if args.jpg2npy:
     #     jpg2npy(args.source, args.prefix, args.id0, args.id1)
 
-    # if args.raw2npy:
-    #     raw2npy(args.source, args.prefix, args.suffix,
-    #             args.id0, args.id1, args.shape)
+    if args.raw2npy:
+        raw2npy(args.source, shape=args.shape, prefix=args.prefix,
+                suffix=args.suffix, id0=args.id0, id1=args.id1)
+
+    if args.sino3d2sino2d:
+        sino3d2sino2d(args.source, args.target, args.prefix)
 
     # if argv[1] == 'rename':
 

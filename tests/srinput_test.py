@@ -24,7 +24,7 @@ class TestSRInput(unittest.TestCase):
 
     def test_data_set(self):
         fullname = os.path.join(TEST_DATA_PATH, "conf.json")
-        dataset = sri.DataSet(conf=fullname)
+        dataset = sri.DataSetSR(conf=fullname)
         img_l, img_h = dataset.next_batch()
         exp_l_fn = os.path.join(TEST_DATA_PATH, "test_srinput_dataset.low.dat")
         exp_h_fn = os.path.join(
