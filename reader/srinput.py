@@ -83,26 +83,9 @@ class DataSetSR(object):
     A general super resolution net.
     Args:
     - config_file: a .JSON file containing configurations.
-            if this
 
     next_batch() provides
             (low_resolution_patch_tensor, high_resolution_patch_tensor)
-            #  path_data, prefix_data,
-            #  path_label, prefix_label,
-            #  patch_shape,
-            #  strides,
-            #  batch_size,
-            #  same_file_data_label=False,
-            #  single_file=False,
-            #  filename,
-            #  n_patch_per_file=None,
-            #  down_sample_ratio=1,
-            #  ids=None,
-            #  padding=False,
-            #  dataset_type='test',
-            #  down_sample_method='fixed',
-            #  mean=1,
-            #  std=128):
     """
 
     def __init__(self, **kwargs):
@@ -128,6 +111,7 @@ class DataSetSR(object):
                                                       random_shuffle=paras[
                                                           'random_shuffle'],
                                                       ids=paras['ids'])
+        self._nzratio = paras['nzratio']
         if paras['same_file_data_label']:
             self._data_image = utp.NPYReaderSingle(self._data_filename_iter)
             self._data_image_copyer = utp.Copyer(
@@ -184,6 +168,7 @@ class DataSetSR(object):
         self._lr_patch_gen = utp.TensorFormater(self._down_sample)
 
     def next_batch(self):
+        """Generate next batch data, padding zeros, and whiten."""
         high_shape = [self._batch_size, self._patch_shape[
             1], self._patch_shape[2], self._patch_shape[3]]
         if self._padding:
@@ -201,13 +186,20 @@ class DataSetSR(object):
             # for patch_high, patch_low in
             # itertools.izip(self._hr_patch_gen.out, self._lr_patch_gen.out):
             try:
-                patch_high = next(self._hr_patch_gen.out)
-                patch_low = next(self._lr_patch_gen.out)
+                while True:
+                    patch_high = next(self._hr_patch_gen.out)
+                    patch_low = next(self._lr_patch_gen.out)
+                    total_pixel = np.size(patch_high)
+                    total_nonez = np.count_nonzero(patch_high)
+                    nnz_ratio = np.float(total_nonez)/np.float(total_pixel)
+                    if nnz_ratio >= self._nzratio:
+                        break
             except StopIteration:
                 break
             pstd = np.std(patch_high)
-            patch_high /= (pstd+self._eps)
-            patch_low /= (pstd+self._eps)
+            pstd = np.max([pstd, 1.0])
+            patch_high /= pstd
+            patch_low /= pstd
             pmean = np.mean(patch_high)
             patch_high -= pmean
             patch_low -= pmean
@@ -237,6 +229,10 @@ class DataSetSR(object):
     @property
     def width(self):
         return self._patch_shape[1]
+
+    @property
+    def strides(self):
+        return self._strides
 
     @property
     def epoch(self):

@@ -701,7 +701,7 @@ class PatchGenerator(SingleInput):
         self._strides = strides
         self._random = random_gen
         self._n_patches = n_patches
-        self._check_all = check_all
+        self._check_all = check_all        
 
     def _process(self):
         input_ = self._gather_f()
