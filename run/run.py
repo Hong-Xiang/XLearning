@@ -158,7 +158,7 @@ def train_SR_sino(argv):
     manager = NetManager(net)
     test_loss = []
     n_step = FLAGS.steps
-    for i in range(n_step):
+    for i in range(1, n_step+1):
         data, label = train_set.next_batch()
         [loss_train, _, lr] = manager.run([net.loss, net.train, net.learn_rate],
                                           feed_dict={net.inputs: data, net.label: label})
