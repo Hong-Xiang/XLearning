@@ -174,9 +174,9 @@
         "value": false
     },
     {
-        "helpdoc": "continue train flag",
-        "name": "continue_train",
-        "type": "bool",
-        "value": false
-    }    
+        "helpdoc": "infer conf file",
+        "name": "infer_conf",
+        "type": "string",
+        "value": null
+    }
 ]

@@ -260,8 +260,15 @@ def combine_tensor_list(tensor_list, shape, strides=None, margin0=None, margin1=
     if margin1 is None:
         margin1 = [0] * dim
     cid = 0
+    for i in xrange(dim):
+        if margin0[i] < 0:
+            raise ValueError(utg.errmsg(margin0, ">0", "margin0 needs to be positive"))
+        if margin1[i] < 0:
+            raise ValueError(utg.errmsg(margin0, ">0", "margin1 needs to be positive"))
     for offset in offset_nd(embed_shape, patch_shape, strides, margin0, margin1, check_all):
+
         sli = multidim_slicer(offset, patch_shape)
+
         output[sli] = np.reshape(tensor_list[cid], patch_shape)
         cid += 1
         if cid == len(tensor_list):

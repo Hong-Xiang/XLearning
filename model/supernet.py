@@ -17,6 +17,33 @@ FLAGS = tf.app.flags.FLAGS
 ACTIVITION_FUNCTION = tf.nn.relu
 
 
+class SuperNetInterp(TFNet):
+
+    def _net_definition(self, name="SuperNetInterp", varscope=tf.get_variable_scope()):
+        super(SuperNetInterp, self).__init__(varscope=varscope)
+        self._name = name
+        self._ratio = FLAGS.down_ratio
+        print("=" * 8 + "SuperNet." + name + " Constructed." + "=" * 8)
+        self._input = layer.inputs([None,
+                                    FLAGS.height,
+                                    FLAGS.width,
+                                    1],
+                                   "input_low_res")
+        self._width_only = FLAGS.only_down_width
+        high_shape = self._high_shape()
+        self._infer = tf.image.resize_images(self._input,
+                                             high_shape[0],
+                                             high_shape[1])
+
+    def _high_shape(self):
+        if self._width_only:
+            high_shape = [FLAGS.height, FLAGS.width * self._ratio]
+        else:
+            high_shape = [FLAGS.height * self._ratio,
+                          FLAGS.width * self._ratio]
+        return high_shape
+
+
 class SuperNetBase(TFNet):
 
     def __init__(self,
@@ -32,7 +59,6 @@ class SuperNetBase(TFNet):
                                     1],
                                    "input_low_res")
         self._width_only = FLAGS.only_down_width
-        self._ratio = FLAGS.down_ratio
         high_shape = self._high_shape()
         self._label = layer.labels([None,
                                     high_shape[0],

@@ -15,12 +15,16 @@ from xlearn.nets.model import NetManager
 from xlearn.reader.oneoverx import DataSetOneOverX
 from xlearn.reader.srinput import DataSetSR
 from xlearn.reader.srinput import DataSetSRInfer
+
 import xlearn.utils.image as uti
+import xlearn.utils.tensor as utt
 
 FLAGS = tf.app.flags.FLAGS
 
 
 def construct_net():
+    if FLAGS.net == "SuperNetInterp":
+        net = xlearn.model.supernet.SuperNetInterp()
     if FLAGS.net == "SuperNetCrop":
         net = xlearn.model.supernet.SuperNetCrop()
     if FLAGS.net == "SuperNet0":
@@ -85,26 +89,31 @@ def train_one_over_x(argv):
 
 def infer_SR_Sino(argv):
     dataset_infer = DataSetSRInfer(FLAGS.infer_conf)
+    infer_path = dataset_infer.path_infer
     net = construct_net()
     manager = NetManager(net)
     manager.restore()
-
-    for i in xrange(dataset_infer.n_batch):
-        low_sr = dataset_infer.next_batch()
-        result = manager.run([net.infer], feed_dict={net.inputs: low_sr})
-        dataset_infer.add_result(result)
+    pipe_file = utp.FileNameLooper(infer_path, prefix='sino')
+    for input_file in pipe_file.out:
+        dataset_infer.load_new_file(input_file)
+        input_file = os.path.basename(input_file)
+        for i in xrange(dataset_infer.n_batch):
+            low_sr = dataset_infer.next_batch()
+            result = manager.run(net.infer, feed_dict={net.inputs: low_sr})
+            dataset_infer.add_result(result)
+        dataset_infer.form_image()
+        image_orginal = dataset_infer.image
+        image_superre = dataset_infer.recon
+        output_name = 'sr' + input_file
+        input_name = 'or' + input_file
+        fullnameo = os.path.join(dataset_infer.path_output, output_name)
+        fullnamei = os.path.join(dataset_infer.path_output, input_name)
+        np.save(fullnameo, image_superre)
+        np.save(fullnamei, image_orginal)
     
-    image_orginal = dataset_infer.image
-    image_superre = dataset_infer.recon
+    # image_orginal = uti.image_formater(image_orginal)
 
-    dataset_infer.save_result
-
-    plt.figure()
-    image_orginal = uti.image_formater(image_orginal)
-    plt.imshow(image_orginal)
-    plt.figure()
-    image_superre = uti.image_formater(image_superre)
-    plt.imshow(image_superre)   
+    # image_superre = uti.image_formater(image_superre)
 
 
 def train_SR_sino(argv):
@@ -119,7 +128,7 @@ def train_SR_sino(argv):
     manager = NetManager(net)
     test_loss = []
     n_step = FLAGS.steps
-    for i in range(1, n_step+1):
+    for i in range(1, n_step + 1):
         data, label = train_set.next_batch()
         [loss_train, _, lr] = manager.run([net.loss, net.train, net.learn_rate],
                                           feed_dict={net.inputs: data, net.label: label})
@@ -189,7 +198,7 @@ def main(argv):
         train_SR_nature(argv)
     if FLAGS.task == "train_SR_sino":
         train_SR_sino(argv)
-    if FLAGS.task == "infer_SR_Sino":
+    if FLAGS.task == "infer_SR_sino":
         infer_SR_Sino(argv)
 
 
