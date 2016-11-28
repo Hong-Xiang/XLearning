@@ -14,6 +14,8 @@ from xlearn.model.supernet import *
 from xlearn.nets.model import NetManager
 from xlearn.reader.oneoverx import DataSetOneOverX
 from xlearn.reader.srinput import DataSetSR
+from xlearn.reader.srinput import DataSetSRInfer
+import xlearn.utils.image as uti
 
 FLAGS = tf.app.flags.FLAGS
 
@@ -33,6 +35,8 @@ def construct_net():
 def construct_dataset(conf_file):
     if FLAGS.task == "train_SR_sino" or FLAGS.task == "train_SR_nature":
         data_set = DataSetSR(conf=conf_file)
+    if FLAGS.task == "infer_SR_Sino":
+        data_set = DataSetSRInfer(conf_file)
     return data_set
 
 
@@ -80,70 +84,27 @@ def train_one_over_x(argv):
 
 
 def infer_SR_Sino(argv):
-    # patch_shape = [FLAGS.height,
-    #                FLAGS.width * FLAGS.down_ratio]
-    # strides = [5, 5]
+    dataset_infer = DataSetSRInfer(FLAGS.infer_conf)
+    net = construct_net()
+    manager = NetManager(net)
+    manager.restore()
 
-    # fullname = os.path.join(FLAGS.infer_path, FLAGS.infer_file)
-    # input_ = np.load(fullname)
-    # pipe_input = utp.Inputer()
-    # pipe_input.insert(input_)
-    # pipe_patch = utp.PatchGenerator(pipe_input, patch_shape, strides)
-    # pipe_patch_tensor = utp.TensorFormater(pipe_patch)
-    # pipe_down_sample = utp.DownSamplerSingle(
-    #     pipe_patch_tensor, axis=2, ratio=FLAGS.down_ratio, method='fixed')
-    # pipe_sliced = utp.TensorSlicer(pipe_down_sample)
-    # input_list = pipe_sliced.out.next()
+    for i in xrange(dataset_infer.n_batch):
+        low_sr = dataset_infer.next_batch()
+        result = manager.run([net.infer], feed_dict={net.inputs: low_sr})
+        dataset_infer.add_result(result)
+    
+    image_orginal = dataset_infer.image
+    image_superre = dataset_infer.recon
 
-    # len_list = len(input_list)
-    # n_batch = int(np.ceil(float(len_list) / FLAGS.batch_size))
+    dataset_infer.save_result
 
-    # net = construct_net()
-    # manager = NetManager(net)
-
-    # patch_shape_down = input_list[0].shape
-    # patch_result = []
-    # valid_offset = [FLAGS.hidden_layer, FLAGS.hidden_layer]
-
-    # mean_std = 0
-    # for i in xrange(len_list):
-    #     mean_std += np.std(input_list[i])
-    # mean_std /= len_list
-    # mean_mean = 0
-    # for i in xrange(len_list):
-    #     input_list[i] /= mean_std
-    #     mean_mean += np.mean(input_list[i])
-    # mean_mean /= len_list
-    # for i in xrange(len_list):
-    #     input_list[i] -= mean_mean
-    # cid = 0
-    # for i in xrange(n_batch):
-    #     tensor_input = np.zeros(
-    #         [FLAGS.batch_size, patch_shape_down[0], patch_shape_down[1], 1])
-    #     for j in xrange(FLAGS.batch_size):
-    #         if cid < len_list:
-    #             temp = input_list[cid]
-    #         else:
-    #             temp = np.zeros(patch_shape_down)
-    #         cid += 1
-    #         tensor_input[j, :, :, 0] = temp
-    #     tensor_output = manager.run(
-    #         net.infer, feed_dict={net.inputs: tensor_input})
-    #     for j in xrange(FLAGS.batch_size):
-    #         result = tensor_output[j, :, :, 0]
-    #         result += mean_mean
-    #         result *= mean_std
-    #         result_pad = np.zeros([1] + patch_shape + [1])
-    #         result_pad[0, valid_offset[0]:-valid_offset[0],
-    #                    valid_offset[1]:-valid_offset[1], 0] = result
-    #         patch_result.append(result_pad)
-    # patch_result = patch_result[:len_list]
-    # output = xlearn.utils.tensor.patches_recon_tensor(
-    #     patch_result, input_.shape, patch_shape, strides, [23, 89], valid_offset)
-    # np.save(FLAGS.infer_file, output)
-
-    # print(tensor.shape)
-    pass
+    plt.figure()
+    image_orginal = uti.image_formater(image_orginal)
+    plt.imshow(image_orginal)
+    plt.figure()
+    image_superre = uti.image_formater(image_superre)
+    plt.imshow(image_superre)   
 
 
 def train_SR_sino(argv):
@@ -228,7 +189,8 @@ def main(argv):
         train_SR_nature(argv)
     if FLAGS.task == "train_SR_sino":
         train_SR_sino(argv)
-    # inferSino(argv)
+    if FLAGS.task == "infer_SR_Sino":
+        infer_SR_Sino(argv)
 
 
 if __name__ == '__main__':

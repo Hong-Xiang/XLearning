@@ -48,6 +48,7 @@ def image_type(tensor):
     return 'unknown'
 
 
+
 def rgb2gray(image):
     """
     Calculate gray image from RGB image.

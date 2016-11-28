@@ -16,6 +16,7 @@ from six.moves import xrange
 import xlearn.utils.xpipes as utp
 import xlearn.utils.tensor as utt
 import xlearn.utils.general as utg
+import xlearn.utils.image as uti
 import itertools
 
 
@@ -191,7 +192,7 @@ class DataSetSR(object):
                     patch_low = next(self._lr_patch_gen.out)
                     total_pixel = np.size(patch_high)
                     total_nonez = np.count_nonzero(patch_high)
-                    nnz_ratio = np.float(total_nonez)/np.float(total_pixel)
+                    nnz_ratio = np.float(total_nonez) / np.float(total_pixel)
                     if nnz_ratio >= self._nzratio:
                         break
             except StopIteration:
@@ -238,3 +239,137 @@ class DataSetSR(object):
     def epoch(self):
         """current epoch"""
         return self._data_filename_iter.epoch
+
+
+class DataSetSRInfer(object):
+
+    def __init__(self, config_file, filename=None):
+        with open(config_file) as conf_file:
+            paras = json.load(conf_file)
+        self._path_input = paras['path_input']
+        self._filename_input = paras['filename_input']
+        self._need_gray = paras['need_gray']
+
+        self._batch_size = paras['batch_size']
+        self._patch_shape = paras['patch_shape']
+        self._strides = paras['strides']
+        self._ratio = paras['down_sample_ratio']
+        self._method = paras['down_sample_method']
+
+        self._std = paras['std']
+        self._mean = paras['mean']
+
+        self._path_output = paras['path_output']
+        self._filename_output = paras['filename_output']
+
+        self._patch_shape_low = list(
+            map(lambda x: x[0] // x[1], zip(self._patch_shape, self._ratio)))
+
+        self._image = None
+        self._recon = None
+
+        if self._filename_input is not None:
+            fullname = os.path.join(self._path_input, self._filename_input)
+            self._load_new_file(fullname)
+
+    def _load_new_file(self, fullname):
+        self._filename = fullname
+        self._image = np.array(np.load(self._filename))
+        self._image = uti.image2tensor(self._image)
+        if self._need_gray:
+            self._image = uti.rgb2gray(self._image)
+        self._patches = utt.crop_tensor(
+            self._image, self._patch_shape, self._strides, check_all=False)
+        self._down_patches = []
+        for patch in self._patches:
+            self._down_patches.append(utt.down_sample_nd(patch, self._ratio))
+        self._n_patch = len(self._down_patches)
+        self._n_batch = int(
+            np.ceil(np.float(self._n_patch) / np.float(self._batch_size)))
+        self._stds = []
+        self._means = []
+        for i in xrange(self._n_patch):
+            pstd = np.std(self._down_patches[i])
+            pstd = np.max([pstd, 1.0])
+            self._down_patches[i] /= pstd
+            self._stds.append(pstd)
+            pmean = np.mean(self._down_patches[i])
+            self._down_patches[i] -= pmean
+            self._means.append(pmean)
+        self._cid = 0
+        self._result = []
+
+    def next_batch(self):
+        """Generate next batch data, padding zeros, and whiten."""
+        low_shape = [self._batch_size, self._patch_shape_low[1],
+                     self._patch_shape_low[2], self._patch_shape_low[3]]
+        low_tensor = np.zeros(low_shape)
+        for i in xrange(self._batch_size):
+            if self._cid < self._n_patch:
+                low_tensor[i, :, :, :] = self._down_patches[self._cid]
+                self._cid += 1
+        return low_tensor
+
+    def add_result(self, tensor):
+        n_patches = tensor.shape[0]
+        sr_patch_shape = list(tensor.shape)
+        sr_patch_shape[0] = 1
+        for i in xrange(n_patches):
+            tmppatch = tensor[i, :, :, :]
+            tmppatch = np.reshape(tmppatch, sr_patch_shape)
+            self._result.append(tmppatch)
+
+    def form_image(self):
+        """Reconstruct pathches to image.
+        If strides is None, then non crop net is assumed.
+        """
+        patches = self._result[:self._n_patch]
+        sr_patch_shape = patches[0].shape
+        margin0 = list(
+            map(lambda x: (x[0] - x[1]) / 2, zip(self._patch_shape, sr_patch_shape)))
+        margin0[1] -= 1
+        margin0[2] -= 1
+        margin1 = list(
+            map(lambda x: (x[1] - x[1]) / 2, zip(self._patch_shape, sr_patch_shape)))
+        margin1_last = list(map(lambda x: (
+            x[1] - x[0] % x[1]) % x[1], zip(self._image.shape, self._patch_shape)))
+        margin1 = list(map(lambda x: x[0] + x[1], zip(margin1, margin1_last)))
+
+        margin0 = list(map(int, margin0))
+        margin1 = list(map(int, margin1))
+        patches = self._result
+        for i in xrange(self._n_patch):
+            patches[i] += self._means[i]
+            patches[i] *= self._stds[i]
+        output = utt.combine_tensor_list(
+            patches, shape=self._image.shape, strides=self._strides, margin0=margin0, margin1=margin1)
+        self._recon = output
+        return output
+
+    def save_result(self):
+        fullname = os.path.join(self._path_output, self._filename_output)
+        np.save(fullname, self._recon)
+
+    @property
+    def height(self):
+        return self._patch_shape[0]
+
+    @property
+    def width(self):
+        return self._patch_shape[1]
+
+    @property
+    def strides(self):
+        return self._strides
+
+    @property
+    def n_batch(self):
+        return self._n_batch
+
+    @property
+    def image(self):
+        return self._image
+
+    @property
+    def recon(self):
+        return self._recon

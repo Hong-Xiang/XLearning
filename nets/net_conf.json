@@ -172,5 +172,11 @@
         "name": "only_down_width",
         "type": "bool",
         "value": false
-    }
+    },
+    {
+        "helpdoc": "continue train flag",
+        "name": "continue_train",
+        "type": "bool",
+        "value": false
+    }    
 ]
