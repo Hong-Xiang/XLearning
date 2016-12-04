@@ -31,7 +31,7 @@ import xlearn.utils.image as uti
 IMAGE_SUFFIX = ['png', 'jpg']
 
 
-def rename(source, prefix=None, suffix=None, recurrent=False, no_action=False):
+def rename(source, prefix=None, suffix=None, recurrent=False, no_action=False, force=False):
     """Rename all files in a folder, reform prefixes, with filter using suffix.
     Only files with form: name[.suffix] will be checked.
     If prefix is None, a random prefix will be added.
@@ -39,7 +39,7 @@ def rename(source, prefix=None, suffix=None, recurrent=False, no_action=False):
     folder_name = source
     if isinstance(folder_name, (list, tuple)):
         for folder in folder_name:
-            rename(folder, prefix, suffix, recurrent, no_action)
+            rename(folder, prefix, suffix, recurrent, no_action, force)
         return None
     folder_name = os.path.abspath(folder_name)
     files_maybe = os.listdir(folder_name)
@@ -49,8 +49,12 @@ def rename(source, prefix=None, suffix=None, recurrent=False, no_action=False):
 
     files = list(filter(os.path.isfile, files_full))
     files = list(map(os.path.basename, files))
-    if suffix is not None:
+
+
+    if suffix is not None and not force:
+
         for file_old in files:
+
             _, _, suffix_old = utg.seperate_file_name(file_old)
             if suffix_old != suffix:
                 files.remove(file_old)
@@ -267,6 +271,7 @@ def print_std_filename(file):
 
 
 def merge(source, target, random_rename=True, copy_file=False, no_action=False, recurrent=False, prefix=None, suffix=None):
+    print("merge tool called on {0}".format(source))
     if random_rename:
         rename(source, prefix=None, suffix=suffix,
                recurrent=recurrent, no_action=no_action)
@@ -360,6 +365,10 @@ def main(argv):
                         action='store_true',
                         default=False,
                         help='print settings, do noting.')
+    parser.add_argument('--force', '-f',
+                        action='store_true',
+                        default=False,
+                        help='force doing.')
     parser.add_argument('--recurrent', '-r',
                         action='store_true',
                         default=False,
@@ -404,7 +413,7 @@ def main(argv):
 
     if args.rename:
         rename(args.source, args.prefix, args.suffix,
-               args.recurrent, args.no_action)
+               args.recurrent, args.no_action, args.force)
 
     if args.merge:
         merge(args.source, args.target, args.random_rename, args.copy_file,

@@ -1,7 +1,9 @@
 from __future__ import absolute_import, division, print_function
+
 from six.moves import xrange
 import tensorflow as tf
 import numpy as np
+import xlearn.utils.general as utg
 
 FLAGS = tf.app.flags.FLAGS
 
@@ -46,20 +48,28 @@ def _weight_variable_with_decay(name, shape, ncolumn, wd=0.0, scope=tf.get_varia
         tf.add_to_collection('losses', weight_decay)
     return var
 
-def _moving_average_variable(name, shape, scope=tf.get_variable_scope()):
+
+def _moving_average_variable(name, shape, scope=None):
+    if scope is None:
+        scope = tf.get_variable_scope()
     dtype = tf.float32
     initer = tf.constant_initializer(0.0)
     with tf.variable_scope(scope):
-        var = tf.get_variable(name, shape, initializer=initer, dtype=dtype, trainable=False)
+        var = tf.get_variable(name, shape, initializer=initer,
+                              dtype=dtype, trainable=False)
     ema = tf.train.ExponentialMovingAverage(decay=FLAGS.bn_decay)
     average_op = ema.apply([var])
-    return var, average_op
+    return ema, average_op
 
-def _bias_variable(name, shape, scope=tf.get_variable_scope(), trainable=True):
+
+def _bias_variable(name, shape, scope=None, trainable=True):
+    if scope is None:
+        scope = tf.get_variable_scope()
     dtype = tf.float32
     initer = tf.constant_initializer(0.0)
     with tf.variable_scope(scope):
-        var = tf.get_variable(name, shape, initializer=initer, dtype=dtype, trainable=trainable)
+        var = tf.get_variable(name, shape, initializer=initer,
+                              dtype=dtype, trainable=trainable)
     return var
 
 
@@ -69,28 +79,77 @@ def _placeholder(name, shape):
     return var
 
 
-def rrelu(tensor_input, name):
-    with tf.name_scope(name) as scope:
-        scalar = tf.random_uniform([], 
-                                   minval=FLAGS.rrelu_min,
-                                   maxval=FLAGS.rrelu_max,
-                                   dtype=tf.float32,
-                                   name='random_ratio')
-        leaked = tf.scalar_mul(scalar, tensor_input, name='multiply')
+def max_out(input0, input1, name=None):
+    """Computes max out units: max(feature1, feature2)
+    Args:
+        - features1: A Tensor.
+        _ features2: A Tensor with the same shape as features1.
+        - name: A name for the operation (optional)
+    Returns:
+        A Tensor.
+    """
+    if name is None:
+        name = "max_out"
+    with tf.name_scope(name):
+        output = tf.maximum(input0, input1, name=name)
+    return output
+
+
+def rrelu(tensor_input, name=None):
+    """Computes random leaky rectified linear: max(features, r * features)
+        - if FLAGS.is_train, r has a uniform distribution on [FLAGS.rrelu_min, FLAGS.rrelu_max]
+        - else r = 1/2 (FLAGS.rrelu_min + FLAGS.rrelu_max)
+    Args:
+        - features: A Tensor.
+        - name: A name for the operation (optional)
+    Returns:
+        A Tensor.
+    """
+    if name is None:
+        name = 'RReLU'
+    with tf.name_scope(name):
+        if FLAGS.is_train:
+            scalar = tf.random_uniform([],
+                                       minval=FLAGS.rrelu_min,
+                                       maxval=FLAGS.rrelu_max,
+                                       dtype=tf.float32,
+                                       name='random_ratio')
+        else:
+            scalar = (FLAGS.rrelu_min + FLAGS.rrelu_max) / 2
+        leaked = tf.scalar_mul(scalar, tensor_input)
         tensor = tf.maximum(tensor_input, leaked, name='maximum')
     return tensor
 
 
-def lrelu(tensor_input, name='LReLU'):
-    with tf.name_scope(name) as scope:
-        leaked = tf.scalar_mul(FLAGS.leak_ratio, tensor_input)
-        tensor = tf.maximum(tensor_input, leaked, name='maximum')
+def lrelu(features, name=None):
+    """Computes leaky rectified linear: max(features, FLAGS.leak_ratio * features)
+    Args:
+        - features: A Tensor.
+        - name: A name for the operation (optional)
+    Returns:
+        A Tensor.
+    """
+    if name is None:
+        name = 'LReLU'
+    with tf.name_scope(name):
+        leaked = tf.scalar_mul(FLAGS.leak_ratio, features)
+        tensor = tf.maximum(features, leaked, name='maximum')
     return tensor
 
 
-def activation(tensor_input, activation_function=tf.nn.relu, varscope=tf.get_variable_scope(), name='activation'):
+def activation(tensor_input, activation_function=None, varscope=tf.get_variable_scope(), name='activation'):
+    """Warp of activation functions"""
     if activation_function is None:
-        raise TypeError('No activation function!')
+        if FLAGS.activation_function == "rrelu":
+            activation_function = rrelu
+        elif FLAGS.activation_function == "lrelu":
+            activation_function = lrelu
+        elif FLAGS.activation_function == "max_out":
+            activation_function = max_out
+        elif FLAGS.activation_function == "elu":
+            activation_function = tf.nn.elu
+        else:
+            activation_function = tf.nn.relu
     if activation_function is tf.nn.relu:
         tensor = tf.nn.relu(tensor_input, name)
     if activation_function is lrelu:
@@ -129,11 +188,8 @@ def full_connect(input_,
                  varscope=tf.get_variable_scope()):
     with tf.name_scope(name) as scope:
         z = matmul_bias(input_, shape)
-        if activation_function is None:
-            output = activation(z, varscope=varscope)
-        else:
-            output = activation(
-                z, activation_function=activation_function, varscope=varscope)
+        output = activation(
+            z, activation_function=activation_function, varscope=varscope)
     return output
 
 
@@ -183,28 +239,74 @@ def conv_activate(input_,
     return output
 
 
-def batch_norm(input_, name='batch_norm', varscope=tf.get_variable_scope()):
+def batch_norm(input_, name=None, use_local_stat=None, is_train=None, decay=None, epsilon=None, varscope=None):
+    """
+    Batch normalization layer as described in:
+
+    `Batch Normalization: Accelerating Deep Network Training by
+    Reducing Internal Covariance Shift <http://arxiv.org/abs/1502.03167>`_.
+
+    :param input_: a NHWC or NC tensor
+    :param use_local_stat: bool. whether to use mean/var of this batch or the moving average.
+        Default to True in training and False in inference.
+    :param decay: decay rate. default to 0.9.
+    :param epsilon: default to 1e-5.
+    :param varscope: scope of variable for storing mean and standard variance.
+    """
+    if varscope is None:
+        varscope = tf.get_variable_scope()
+    if name is None:
+        name = "batch_norm"
+    if use_local_stat is None:
+        if FLAGS.is_train:
+            use_local_stat = False
+        else:
+            use_local_stat = True
+    if is_train is None:
+        is_train = FLAGS.is_train
+    if decay is None:
+        decay = 0.9
+    if epsilon is None:
+        epsilon = 1e-5
+
+    input_shape = input_.get_shape()
+    n_param = input_shape[-1:]
+    axis = list(xrange(len(input_shape) - 1))
+
+    if len(input_shape) not in [2, 4]:
+        raise TypeError(
+            "Batch_norm only acceptes NHWC or NC tensor, got %d dim." % len(input_shape))
+    n_param = input_shape[-1]  # channel number
+    if n_param is None:
+        raise TypeError
+
     with tf.name_scope(name) as scope:
-        input_shape = input_.get_shape()
-        n_param = input_shape[-1:]
-        axis = list(xrange(len(input_shape)-1))
-        beta = _bias_variable(scope + 'beta', [n_param], scope=varscope)
-        gamma = _bias_variable(scope + 'gamma', [n_param], scope=varscope)
-        moving_mean = _bias_variable(scope + 'moving_mean', [n_param], scope=varscope, trainable=False)
-        moving_variance = _bias_variable(scope + 'moving_variance', [n_param], scope=varscope, trainable=False)        
+        beta = _bias_variable(name='beta',
+                              shape=[n_param], scope=varscope)
+        gamma = _bias_variable(name='gamma',
+                               shape=[n_param], scope=varscope)
+        moving_mean = _bias_variable(
+            'moving_mean', [n_param], scope=varscope, trainable=False)
+        moving_variance = _bias_variable(
+            'moving_variance', [n_param], scope=varscope, trainable=False)
         # TODO: clean implementation
-        scale = tf.Variable(1.0)
-        mean, variance = tf.nn.moments(x, axis)
-        update_moving_mean = moving_averages.assign_moving_average(moving_mean,
-                                                                   mean, FLAGS.bn_decay)
-        update_moving_variance = moving_averages.assign_moving_average(moving_variance,
-                                                                       variance, FLAGS.bn_decay)
-        tf.add_to_collection('MOVING_AVERAGE_VARIABLES', update_moving_mean)
-        tf.add_to_collection('MOVING_AVERAGE_VARIABLES', update_moving_variance)
-        mean, variance = control_flow_ops.cond(FLAGS.is_train,
-                                               lambda: (mean, variance),
-                                               lambda: (moving_mean, moving_variance))
-        output = tf.nn.batch_normalization(input_, mean, variance, beta, gamma, FLAGS.eps, name='batch_norm')
+        batch_mean, batch_var = tf.nn.moments(input_, axis, keep_dims=False)
+        batch_mean = tf.identity(batch_mean, name="batch_mean")
+        batch_var = tf.identity(batch_var, name="batch_var")
+        ema = tf.train.ExponentialMovingAverage(
+            decay=decay, name='exp_moving_average')
+        ema_apply_op = ema.apply([batch_mean, batch_var]) # operators to apply ema
+        ema_mean = ema.average(batch_mean)  # variable to store mean
+        ema_var = ema.average(batch_var)  # operators to store var
+        tf.add_to_collection('MOVING_AVERAGE_VARIABLES', ema_mean)
+        tf.add_to_collection('MOVING_AVERAGE_VARIABLES', ema_var)
+        mean, variance = tf.control_flow_ops.cond(FLAGS.is_train,
+                                                  lambda: (mean, variance),
+                                                  lambda: (
+                                                      moving_mean, moving_variance),
+                                                  name="is_train_cond")
+        output = tf.nn.batch_normalization(
+            input_, mean, variance, beta, gamma, FLAGS.eps, name='batch_norm')
     return output
 
 
@@ -301,9 +403,20 @@ def l2_loss(inference_image, reference_image, name="loss_layer"):
     return loss
 
 
+def l2_ave_loss(inference_image, reference_image, name="loss_layer"):
+    with tf.name_scope(name) as scope:
+        loss = tf.nn.l2_loss(
+            inference_image - reference_image, name=scope + name)
+        batch_shape = loss.shape()
+        ave_loss = loss / batch_shape[0]
+        tf.add_to_collection('losses', ave_loss)
+    return loss
+
+
 def psnr_loss(inference_tensor, reference_tensor, name="loss_layer"):
     with tf.name_scope(name) as scope:
-        l2 = tf.square(inference_tensor - reference_tensor, name='l2_difference')
+        l2 = tf.square(inference_tensor - reference_tensor,
+                       name='l2_difference')
         MSE = tf.reduce_mean(l2, name='MSE')
         # MSE = tf.nn.l2_loss(inference_tensor - reference_tensor, name='MSE')
         loss = tf.neg(tf.log(tf.inv(tf.sqrt(MSE + FLAGS.eps))), name='psnr')
@@ -353,6 +466,8 @@ def predict_loss(inference, reference, name='predic_loss'):
 
 
 def predict_accuracy(inference, reference, name='predic_accuracy'):
+    """Accuracy for one-hot vector
+    """
     with tf.name_scope(name) as scope:
         correct_prediction = tf.equal(tf.argmax(inference, 1), tf.argmax(
             reference, 1), name=scope + 'correct_predictions')

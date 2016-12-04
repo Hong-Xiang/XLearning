@@ -112,7 +112,7 @@ class NetManager(object):
     def __init__(self, net, varnames=None):
         self._net = net
         self._summary = tf.merge_all_summaries()
-        self._sess = tf.Session()
+        self._sess = tf.Session(config=tf.ConfigProto(log_device_placement=True))
         init_op = tf.initialize_all_variables()
         self._sess.run(init_op)
         self._train_writer = tf.train.SummaryWriter(

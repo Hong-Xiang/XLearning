@@ -33,7 +33,7 @@
         "helpdoc": "patch height",
         "name": "height",
         "type": "int",
-        "value": 11
+        "value": 21
     },
     {
         "helpdoc": "prefix",
@@ -57,19 +57,19 @@
         "helpdoc": "down sample ratio",
         "name": "down_ratio",
         "type": "int",
-        "value": 3
+        "value": 5
     },
     {
         "helpdoc": "initial learning rate",
         "name": "lr_init",
         "type": "float",
-        "value": 1e-3
+        "value": 1e-4
     },
     {
         "helpdoc": "patch width",
         "name": "width",
         "type": "int",
-        "value": 11
+        "value": 21
     },
     {
         "helpdoc": "number of hidden layer",
@@ -117,13 +117,13 @@
         "helpdoc": "net name",
         "name": "net",
         "type": "string",
-        "value": null
+        "value": "SuperNet2"
     },
     {
         "helpdoc": "task name",
         "name": "task",
         "type": "string",
-        "value": null
+        "value": "train_SR_sino"
     },
     {
         "helpdoc": "# of hidden units",
@@ -141,7 +141,7 @@
         "helpdoc": "# of steps",
         "name": "steps",
         "type": "int",
-        "value": 1000
+        "value": 10000
     },
     {
         "helpdoc": "save path",
@@ -172,6 +172,12 @@
         "name": "only_down_width",
         "type": "bool",
         "value": false
+    },
+    {
+        "helpdoc": "infer conf file",
+        "name": "infer_conf",
+        "type": "string",
+        "value": null
     },
     {
         "helpdoc": "infer conf file",
