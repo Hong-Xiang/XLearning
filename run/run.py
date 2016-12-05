@@ -128,6 +128,7 @@ def train_SR_sino(argv):
     manager = NetManager(net)
     test_loss = []
     n_step = FLAGS.steps
+    saver = tf.train.Saver(tf.all_variables())
     for i in range(1, n_step + 1):
         data, label = train_set.next_batch()
         [loss_train, _, lr] = manager.run([net.loss, net.train, net.learn_rate],
@@ -147,9 +148,10 @@ def train_SR_sino(argv):
                                       feed_dict={net.inputs: data_test,
                                                  net.label: label_test})
             print('step={0:5d},\t test loss={1:0.3f}.'.format(i, loss_test))
+        if i % 1000 == 0:
+            path = saver.save(manager.sess, FLAGS.save_path, i)        
     # manager.save()
-    np.save('test_loss.npy', np.array(test_loss))
-    saver = tf.train.Saver(tf.all_variables())
+    np.save('test_loss.npy', np.array(test_loss))    
     path = saver.save(manager.sess, FLAGS.save_path, FLAGS.steps)
     print("net variables saved to: " + path + '.')
 
