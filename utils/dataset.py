@@ -50,7 +50,6 @@ def rename(source, prefix=None, suffix=None, recurrent=False, no_action=False, f
     files = list(filter(os.path.isfile, files_full))
     files = list(map(os.path.basename, files))
 
-
     if suffix is not None and not force:
 
         for file_old in files:
@@ -260,6 +259,37 @@ def pad_sino(source, target, prefix, pwx, pwy):
     pipe_runner.run()
 
 
+def combine_infer(source, target, prefix, pwx, pwy):
+    if isinstance(source, (list, tuple)):
+        source = source[0]
+    source = os.path.abspath(source)
+    files = os.listdir(source)
+    filesfull = []
+    for file_ in files:
+        fullname = os.path.join(source, file_)
+        if os.path.isdir(fullname):
+            continue
+        prefix_tmp, _, _ = utg.seperate_file_name(file_)
+        if prefix_tmp != prefix:
+            continue
+        filesfull.append(fullname)
+    tmp = np.array(np.load(filesfull[0]))
+    _, height, width, _ = tmp.shape
+    frames = len(filesfull)
+    height -= pwx * 2
+    width -= pwy * 2
+    sino3d = np.zeros([width, height, frames])
+    for i in xrange(frames):
+        filename = prefix + "%09d.npy" % i
+        fullname = os.path.join(source, filename)
+        sino2d = np.load(fullname)
+        for ix in xrange(height):
+            for iy in xrange(width):
+                sino3d[iy, ix, i] = sino2d[0, ix + pwx, iy + pwy, 0]
+    savename = os.path.join(os.path.abspath(target), 'srresult.npy')
+    np.save(savename, sino3d)
+
+
 def print_std_filename(file):
     if isinstance(file, (list, tuple)):
         map(print_std_filename, file)
@@ -340,6 +370,10 @@ def main(argv):
                         action='store_true',
                         default=False,
                         help='Convert 3D sinograms to multiple 2D sinograms.')
+    parser.add_argument('--combine_infer',
+                        action='store_true',
+                        default=False,
+                        help='combine inference sino2d to sino3d.')
     parser.add_argument('--jpg2npy',
                         action='store_true',
                         default=False,
@@ -421,6 +455,11 @@ def main(argv):
 
     if args.pad_sino:
         pad_sino(args.source, args.target, args.prefix, args.pwx, args.pwy)
+
+    if args.combine_infer:
+        combine_infer(source=args.source, target=args.target,
+                      prefix=args.prefix, pwx=args.pwx, pwy=args.pwy)
+
     # if args.img2jpg:
     #     img2jpeg(args.source, args.prefix)
 

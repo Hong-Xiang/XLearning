@@ -407,8 +407,9 @@ def l2_ave_loss(inference_image, reference_image, name="loss_layer"):
     with tf.name_scope(name) as scope:
         loss = tf.nn.l2_loss(
             inference_image - reference_image, name=scope + name)
-        batch_shape = loss.shape()
-        ave_loss = loss / batch_shape[0]
+        shape = inference_image.get_shape().as_list()
+        n_ele = shape[0] * shape[1] * shape[2] *shape[3]
+        ave_loss = loss / n_ele
         tf.add_to_collection('losses', ave_loss)
     return loss
 
@@ -427,8 +428,7 @@ def psnr_loss(inference_tensor, reference_tensor, name="loss_layer"):
 def loss_summation(name="total_loss", norm_batch=True, noramlization=1):
     with tf.name_scope(name) as scope:
         loss_list = tf.get_collection('losses')
-        loss = tf.add_n(loss_list, name=scope + 'summation')
-        # loss = loss_all / noramlization
+        loss = tf.add_n(loss_list, name=scope + 'summation')            
     return loss
 
 

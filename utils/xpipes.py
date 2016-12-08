@@ -456,13 +456,13 @@ class FileNameLooper(Pipe):
                                               self._suffix)
                 if filename in list_all:
                     self._file_names.append(filename)
+
         # counters
         self._epoch_counter = Counter(max_epoch)
         self._fid_counter = Counter(len(self._file_names))
 
         self._is_random = random_shuffle
         self._new_epoch()
-        self._epoch_counter.reset()
 
     def _new_epoch(self):
         next(self._epoch_counter.out)
@@ -471,10 +471,11 @@ class FileNameLooper(Pipe):
             random.shuffle(self._file_names)
 
     def _pump(self):
-        filename = self._file_names[next(self._fid_counter.out)]
-        fullname = os.path.join(self._path, filename)
         if self._fid_counter.is_end():
             self._new_epoch()
+        filename = self._file_names[self._fid_counter.state]
+        next(self._fid_counter.out)
+        fullname = os.path.join(self._path, filename)
         return fullname
 
     @property
@@ -701,7 +702,7 @@ class PatchGenerator(SingleInput):
         self._strides = strides
         self._random = random_gen
         self._n_patches = n_patches
-        self._check_all = check_all        
+        self._check_all = check_all
 
     def _process(self):
         input_ = self._gather_f()

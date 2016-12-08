@@ -152,7 +152,7 @@ class NetManager(object):
         with open(ckfile) as ckpf:
             for line in ckpf:
                 (key, value) = line.split()
-                if key == 'all_model_checkpoint_paths:':
+                if key == 'model_checkpoint_path:':
                     save_path = value
                     break
         save_path = save_path[1:-1]

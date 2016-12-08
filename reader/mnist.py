@@ -15,7 +15,9 @@ import xlearn.utils.xpipes as xpipe
 import xlearn.utils.dataset as xdata
 import random
 
+
 class DataSet(object):
+
     def __init__(self, data_file, label_file, is_shuffle=True, batch_size=None):
         self._data = np.array(np.load(data_file))
         self._label = np.array(np.load(label_file))
@@ -38,7 +40,8 @@ class DataSet(object):
         if sz is None:
             raise TypeError('No batchsize information.')
         if sz > self._num_example:
-            raise ValueError('Batch size {0} is larger than dataset size {1}.'.format(sz, self._num_example))
+            raise ValueError('Batch size {0} is larger than dataset size {1}.'.format(
+                sz, self._num_example))
 
         data = np.zeros([sz, self._height, self._width, 1])
         label = np.zeros([sz, 10])

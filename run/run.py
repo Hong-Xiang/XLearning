@@ -95,6 +95,7 @@ def infer_SR_Sino(argv):
     manager.restore()
     pipe_file = utp.FileNameLooper(infer_path, prefix='sino')
     for input_file in pipe_file.out:
+        print("processing {0}...".format(input_file))
         dataset_infer.load_new_file(input_file)
         input_file = os.path.basename(input_file)
         for i in xrange(dataset_infer.n_batch):
@@ -110,7 +111,7 @@ def infer_SR_Sino(argv):
         fullnamei = os.path.join(dataset_infer.path_output, input_name)
         np.save(fullnameo, image_superre)
         np.save(fullnamei, image_orginal)
-    
+
     # image_orginal = uti.image_formater(image_orginal)
 
     # image_superre = uti.image_formater(image_superre)
@@ -149,9 +150,9 @@ def train_SR_sino(argv):
                                                  net.label: label_test})
             print('step={0:5d},\t test loss={1:0.3f}.'.format(i, loss_test))
         if i % 1000 == 0:
-            path = saver.save(manager.sess, FLAGS.save_path, i)        
+            path = saver.save(manager.sess, FLAGS.save_path, i)
     # manager.save()
-    np.save('test_loss.npy', np.array(test_loss))    
+    np.save('test_loss.npy', np.array(test_loss))
     path = saver.save(manager.sess, FLAGS.save_path, FLAGS.steps)
     print("net variables saved to: " + path + '.')
 

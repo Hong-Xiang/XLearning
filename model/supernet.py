@@ -19,7 +19,7 @@ ACTIVITION_FUNCTION = tf.nn.relu
 
 class SuperNetInterp(TFNet):
 
-    def _net_definition(self, name="SuperNetInterp", varscope=tf.get_variable_scope()):
+    def __init__(self, name="SuperNetInterp", varscope=tf.get_variable_scope()):
         super(SuperNetInterp, self).__init__(varscope=varscope)
         self._name = name
         self._ratio = FLAGS.down_ratio
@@ -227,7 +227,7 @@ class SuperNet2(SuperNetBase):
                                                          padding='SAME', name='residual_inference')
 
         # self._psnr = layer.psnr_loss(self._residual_inference, self._residual_reference, name='psnr_loss')
-        self._l2_loss = layer.l2_loss(self._residual_inference,
+        self._l2_loss = layer.ave_l2_loss(self._residual_inference,
                                       self._residual_reference, name='l2_loss')
 
         with tf.name_scope('inference'):

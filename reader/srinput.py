@@ -247,7 +247,7 @@ class DataSetSRInfer(object):
     def __init__(self, config_file, filename=None):
         with open(config_file) as conf_file:
             paras = json.load(conf_file)
-        self._path_input = os.path.abspath(paras['path_input'])        
+        self._path_input = os.path.abspath(paras['path_input'])
         if filename is None:
             self._filename_input = paras['filename_input']
         else:
@@ -272,7 +272,6 @@ class DataSetSRInfer(object):
         self._image = None
         self._recon = None
 
-
         fullname = os.path.join(self._path_input, self._filename_input)
         self.load_new_file(fullname)
 
@@ -286,7 +285,7 @@ class DataSetSRInfer(object):
             self._image, self._patch_shape, self._strides, check_all=False)
         self._down_patches = []
         for patch in self._patches:
-            self._down_patches.append(utt.down_sample_nd(patch, self._ratio))        
+            self._down_patches.append(utt.down_sample_nd(patch, self._ratio))
         self._n_patch = len(self._down_patches)
         self._n_batch = int(
             np.ceil(np.float(self._n_patch) / np.float(self._batch_size)))
@@ -301,7 +300,7 @@ class DataSetSRInfer(object):
             self._down_patches[i] -= pmean
             self._means.append(pmean)
         self._cid = 0
-        self._result = []    
+        self._result = []
 
     def next_batch(self):
         """Generate next batch data, padding zeros, and whiten."""
@@ -331,14 +330,17 @@ class DataSetSRInfer(object):
         sr_patch_shape = patches[0].shape
         margin0 = list(
             map(lambda x: (x[0] - x[1]) / 2, zip(self._patch_shape, sr_patch_shape)))
+        
         margin1 = list(
             map(lambda x: (x[0] - x[1]) / 2, zip(self._patch_shape, sr_patch_shape)))
         margin1_last = list(map(lambda x: (
             x[1] - x[0] % x[1]) % x[1], zip(self._image.shape, self._patch_shape)))
         margin1 = list(map(lambda x: x[0] + x[1], zip(margin1, margin1_last)))
 
-        margin0 = list(map(int, margin0))
-        margin1 = list(map(int, margin1))        
+        margin0 = list(map(int, margin0))        
+        margin1 = list(map(int, margin1))
+        # margin0 = [0, 0, 0, 0]
+        # margin1 = [0, 0, 51, 0]        
         patches = self._result
         for i in xrange(self._n_patch):
             patches[i] += self._means[i]
@@ -375,7 +377,7 @@ class DataSetSRInfer(object):
     @property
     def recon(self):
         return self._recon
-    
+
     @property
     def path_infer(self):
         return self._path_input
