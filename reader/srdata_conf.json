@@ -8,12 +8,11 @@
         3,
         3,
         1
-    ],
-    "filename": null,
+    ],    
     "ids": null,
     "mean": 1,
     "n_patches": null,
-    "need_gray": true,
+    "is_need_gray": true,    
     "padding": false,
     "patch_shape": [
         1,

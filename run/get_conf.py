@@ -1,5 +1,11 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
+"""script for gather necessary conf files to work dir.
+"""
+#TODO: update to new conf system.
+
+raise NotImplementedError
+
 from __future__ import absolute_import, division, print_function
 import sys
 import json

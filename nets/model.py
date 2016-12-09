@@ -4,22 +4,31 @@ Definition of subnets.
 Subnets must have following methods:
 output = infer(input[s])
 output = loss(input[s], lable[s])
-variable_list = variables([flags])
 """
+# TODO: Add support for:
+# variable_list = variables([flags])
+
 from __future__ import absolute_import, division, print_function
 import os
+import json
+import numpy as np
+from six.moves import xrange
 import tensorflow as tf
 import xlearn.nets.layers as layer
 import xlearn.utils.tensor as ut
-import numpy as np
-from six.moves import xrange
-import json
+
 
 FLAGS = tf.app.flags.FLAGS
-DEFAULT_CONF_JSON = "/home/hongxwing/Workspace/xlearn/nets/net_conf.json"
+DEFAULT_CONF_JSON = os.getenv(
+    'DEFAULT_NET_CONF', "/home/hongxwing/Workspace/xlearn/nets/net_conf.json")
 
 
 def def_flag(var_type, name, value, helpdoc=None):
+    """Warper functions to define multi-type flags.
+    :param var_type: type of flag, in string.
+    :param name: name of flag
+
+    """
     flag = tf.app.flags
     if var_type == 'int':
         flag.DEFINE_integer(name, value, helpdoc)
@@ -112,7 +121,8 @@ class NetManager(object):
     def __init__(self, net, varnames=None):
         self._net = net
         self._summary = tf.merge_all_summaries()
-        self._sess = tf.Session(config=tf.ConfigProto(log_device_placement=True))
+        self._sess = tf.Session(
+            config=tf.ConfigProto(log_device_placement=True))
         init_op = tf.initialize_all_variables()
         self._sess.run(init_op)
         self._train_writer = tf.train.SummaryWriter(

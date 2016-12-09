@@ -1,6 +1,4 @@
 #!/usr/bin/python
-
-
 import os
 
 def clear_folder(path):

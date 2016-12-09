@@ -1,5 +1,8 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
+"""entry script for all runs.
+"""
+# TODO: add a new script dedicate for command line interaction.
 from __future__ import absolute_import, division, print_function
 import sys
 import numpy as np

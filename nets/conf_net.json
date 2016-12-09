@@ -1,0 +1,112 @@
+{
+    "eps": {
+        "helpdoc": "max tolerance",
+        "type": "float",
+        "value": 1e-05
+    },
+    "grad_clip": {
+        "helpdoc": "gradient clipping coefficient",
+        "type": "int",
+        "value": 100
+    },
+    "hidden_layer": {
+        "helpdoc": "number of hidden layer",
+        "type": "int",
+        "value": 10
+    },
+    "hidden_units": {
+        "helpdoc": "# of hidden units",
+        "type": "int",
+        "value": 64
+    },
+    "is_restore": {
+        "helpdoc": "restore flag",
+        "type": "bool",
+        "value": false
+    },
+    "is_train": {
+        "helpdoc": "train flag",
+        "type": "bool",
+        "value": true
+    },
+    "leak_ratio": {
+        "helpdoc": "leak ReLU slope",
+        "type": "float",
+        "value": null
+    },
+    "lr_decay_factor": {
+        "helpdoc": "learning rate decay factor",
+        "type": "float",
+        "value": 0.6
+    },
+    "lr_decay_steps": {
+        "helpdoc": "learning rate decay steps",
+        "type": "int",
+        "value": 1000
+    },
+    "lr_init": {
+        "helpdoc": "initial learning rate",
+        "type": "float",
+        "value": 0.0001
+    },
+    "conf_batch": {
+        "helpdoc": "batch shape conf file",
+        "type": "string",
+        "value": null
+    },
+    "conf_infer": {
+        "helpdoc": "infer conf file",
+        "type": "string",
+        "value": null
+    },
+    "conf_special": {
+        "helpdoc": "Config file for specific net.",
+        "type": "string",
+        "value": null
+    },
+    "conf_test": {
+        "helpdoc": "test conf file",
+        "type": "string",
+        "value": null
+    },
+    "conf_train": {
+        "helpdoc": "train conf file",
+        "type": "string",
+        "value": null
+    },
+    "path_save": {
+        "helpdoc": "save path",
+        "type": "string",
+        "value": "."
+    },
+    "path_summary_test": {
+        "helpdoc": "summary folder",
+        "type": "string",
+        "value": "./summary_test"
+    },
+    "path_summary_train": {
+        "helpdoc": "summary folder",
+        "type": "string",
+        "value": "./summary_train"
+    },
+    "net_name": {
+        "helpdoc": "net name",
+        "type": "string",
+        "value": "SuperNet2"
+    },    
+    "run_steps": {
+        "helpdoc": "# of steps",
+        "type": "int",
+        "value": 10000
+    },
+    "run_task": {
+        "helpdoc": "task name",
+        "type": "string",
+        "value": "train_SR_sino"
+    },
+    "weight_decay": {
+        "helpdoc": "weight decay coefficient",
+        "type": "float",
+        "value": 0.0001
+    }
+}

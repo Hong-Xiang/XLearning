@@ -22,13 +22,22 @@ import itertools
 
 
 def label_name(data_name, case_digit=None, label_prefix=None):
-    prefix, id, suffix = utg.seperate_file_name(data_name)
+    """Get filename of label to a data name.
+    :param data_name:   data filename
+    :param case_digit:  number of digits for case. default = None
+                        e.g. dataSSSDDDDDD.xxx will share label000DDDDDD.xxx as
+                        label file with case_digit = 6.
+    :param label_prefix:prefix of label filename. default is same prefix as 
+                        data file.
+    :return:            label filename
+    """
+    prefix, id_, suffix = utg.seperate_file_name(data_name)
     if case_digit is not None:
-        id = str(id)
-        id = id[:-case_digit]
-        id = int(id)
+        id_ = str(id_)
+        id_ = id_[:-case_digit]
+        id_ = int(id_)
     if label_prefix is None:
-        label_prefix = 'label'
+        label_prefix = prefix
     output = utg.form_file_name(label_prefix, id, suffix)
     return output
 
@@ -330,17 +339,17 @@ class DataSetSRInfer(object):
         sr_patch_shape = patches[0].shape
         margin0 = list(
             map(lambda x: (x[0] - x[1]) / 2, zip(self._patch_shape, sr_patch_shape)))
-        
+
         margin1 = list(
             map(lambda x: (x[0] - x[1]) / 2, zip(self._patch_shape, sr_patch_shape)))
         margin1_last = list(map(lambda x: (
             x[1] - x[0] % x[1]) % x[1], zip(self._image.shape, self._patch_shape)))
         margin1 = list(map(lambda x: x[0] + x[1], zip(margin1, margin1_last)))
 
-        margin0 = list(map(int, margin0))        
+        margin0 = list(map(int, margin0))
         margin1 = list(map(int, margin1))
         # margin0 = [0, 0, 0, 0]
-        # margin1 = [0, 0, 51, 0]        
+        # margin1 = [0, 0, 51, 0]
         patches = self._result
         for i in xrange(self._n_patch):
             patches[i] += self._means[i]

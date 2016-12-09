@@ -2,7 +2,9 @@
     "dataset_type": "infer",
     "path_input": "/home/hongxwing/Workspace/test",
     "filename_input": "img000000001.npy",
-    "need_gray": true,
+    "prefix": "img",    
+    "is_one_file": false,
+    "is_need_gray": true,
     "batch_size": 64,
     "patch_shape": [
         1,

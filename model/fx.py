@@ -1,3 +1,5 @@
+"""net for infer f(x) with given x in R^1
+"""
 from __future__ import absolute_import, division, print_function
 from six.moves import xrange
 import tensorflow as tf
@@ -8,10 +10,12 @@ from xlearn.nets.model import TFNet
 FLAGS = tf.app.flags.FLAGS
 
 
-class NetOneOverX(TFNet):
+class NetFx(TFNet):
+    """Net to infer a function to x
+    """
 
     def __init__(self, batch_size, varscope=tf.get_variable_scope()):
-        super(NetOneOverX, self).__init__(varscope)
+        super(NetFx, self).__init__(varscope)
         self._batch_size = batch_size
         self._input = layer.inputs([self._batch_size, 1])
         self._label = layer.labels([self._batch_size, 1])

@@ -1,5 +1,5 @@
 """
-MNIST nets.
+Super resolution nets.
 
 Subnets must have following methods:
 output = infer(input[s])
