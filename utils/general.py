@@ -86,11 +86,13 @@ def label_name(data_name, case_digit=None, label_prefix=None):
 #     return
 
 
-def merge_settings(settings=None, filenames=None, **kwargs):
+def merge_settings(settings=None, filenames=None, default_settings=None, **kwargs):
     """Merge settings from multiple file and args into one
     """
     if settings is None:
         settings = {}
+    if default_settings is not None:
+        settings.update(default_settings)
     if filenames is None:
         filenames = ()
     if not isinstance(filenames, (list, tuple)):
@@ -98,7 +100,9 @@ def merge_settings(settings=None, filenames=None, **kwargs):
     for filename in filenames:
         with open(filename, 'r') as file_conf:
             tmp = json.load(file_conf)
+            tmp = dict(filter(lambda x: x[1] is not None, tmp.items()))
             settings.update(tmp)
-    settings.update(kwargs)
+    filted_kwargs = dict(filter(lambda x: x[1] is not None, kwargs.items()))
+    settings.update(filted_kwargs)
 
     return settings

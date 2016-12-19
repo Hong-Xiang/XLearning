@@ -1,47 +1,130 @@
 """base class of datasets
 """
-from abc import ABCMeta, abstractmethod
-import json
+import logging
 import numpy as np
 import xlearn.utils.general as utg
 import xlearn.utils.xpipes as utp
 
 
-class DataSet(metaclass=ABCMeta):
+class DataSet(object):
     """Base class of all dataset classes.
     """
 
+    # def __init__(self, filenames=None, **kwargs):
     def __init__(self, filenames=None, **kwargs):
-        super(DataSet, self).__init__()
-        self._paras = utg.merge_settings(filenames=filenames, **kwargs)
+        """Initialization of DataSet class.
+
+        This base class handles reading parameters, epoch updates and batch
+        generation. Inherence class should implement following method:
+
+        Parameters:
+        Required:
+            None
+        Optional:
+            _set_paras_default(self): set default paras, for self._paras only
+
+            _gather_paras_common(self): for all dataset types
+            _gather_paras_train(self):
+            _gather_paras_test(self):
+            _gather_paras_infer(self):
+            _gather_paras_special(self): other paras
+
+            _prepare(self): called after all paras getted, before batch generation
+
+        Direct refernce to self._para outside self._gather_paras(conf_type)
+        is *NOT* allowed.
+
+        Parameter setting order:
+            file[0] < file[1] < ... < file[-1] < kwargs
+            not None paramters will be overwritten.
+
+        Batch generation:
+        Required:
+            _sample(self)
+
+        Optional:
+            _padding(self)
+            _triger_stop_iteration(self):
+                By default, it will return self._padding()
+                Returns: [1, *], [1, *] tensor
+
+            _batch_start(self)
+            _batch_end(self)
+        """
+        print("base init called.")
+        # self._paras = {}
+        # # set default parameters
+        # self._paras = utg.merge_settings(
+        #     self._paras, **self._set_paras_default())
+        # # load parameters from configure files
+        # if filenames is None:
+        #     filenames = []
+        # for filename in filenames:
+        #     self._paras = self._load_conf_file(filename)
+
+        # # set paramters directly from kwargs
+        # self._paras = utg.merge_settings(self._paras, **kwargs)
+        self._paras = utg.merge_settings(
+            filenames=filenames, default_settings=self._get_default_paras(), **kwargs)
         self._dataset_type = self._paras['dataset_type']
-        self._gather_paras("common")
-        self._gather_paras(self._dataset_type)
+
+        # gather all needed parameters
+        self._get_paras()
+        logging.getLogger(__name__).debug("DataSetBase __init__")
+        logging.getLogger(__name__).debug(self._print_paras())
 
         self._prepare()
 
-    def _gather_paras(self, dataset_type):
+    def _get_default_paras(self):
+        paras_def = {}
+        paras_def.update({'is_shuffle': False})
+        paras_def.update({'is_pad': True})
+        paras_def.update({'is_cache': False})
+        paras_def.update({'epoch_max': -1})
+        return paras_def
+
+    def _get_paras(self):
+        self._gather_paras_common()
+        if self._dataset_type == "train":
+            self._gather_paras_train()
+        if self._dataset_type == "test":
+            self._gather_paras_test()
+        if self._dataset_type == "infer":
+            self._gather_paras_infer()
+        self._gather_paras_special()
+
+    def _print_paras(self):
+        # return json.dumps(self._paras, sort_keys=True, indent=4,
+                        #   separators=(',', ': '))
+        # return self._paras
+        dic_sorted = sorted(self._paras.items(), key=lambda t: t[0])
+        fmt = r"{0}: {1},"
+        msg = 'DataSet Settings:\n' + \
+            '\n'.join([fmt.format(item[0], item[1]) for item in dic_sorted])
+        return msg
+
+    def _gather_paras_common(self):
         """Gather parameters from self._paras to shortcuts like self._batch_size.
         """
-        if dataset_type == "common":
-            self._batch_size = self._paras['batch_size']
-            self._shape_i = self._paras['shape_i']
-            if self._shape_i[0] != 1:
-                raise ValueError(utg.errmsg(
-                    self._shape_i[0], 1, msg="Invalid first dimension of shape_i, "))
-            self._shape_o = self._paras['shape_o']
-            if self._shape_o[0] != 1:
-                raise ValueError(utg.errmsg(
-                    self._shape_o[0], 1, msg="Invalid first dimension of shape_i, "))
-            self._is_pad = self._paras['is_pad']
-            self._is_cache = self._paras['is_cache']
-            self._epoch_max = self._paras['epoch_max']
+        self._batch_size = self._paras['batch_size']
+        self._shape_i = self._paras['shape_i']
+        self._shape_o = self._paras['shape_o']
+        self._is_pad = self._paras['is_pad']
+        self._is_cache = self._paras['is_cache']
+        self._epoch_max = self._paras['epoch_max']
+        self._is_shuffle = self._paras['is_shuffle']
 
-            self._is_shuffle = None
-            if 'is_shuffle' in self._paras:
-                self._is_shuffle = self._paras['is_shuffle']
-            if self._is_shuffle is None:
-                self._is_shuffle = self._is_train_or_test
+    def _gather_paras_train(self):
+        pass
+
+    def _gather_paras_test(self):
+        pass
+
+    def _gather_paras_infer(self):
+        pass
+
+    def _gather_paras_special(self):
+        pass
 
     def _prepare(self):
         """Prepare work before dataset is ready to use.
@@ -49,6 +132,12 @@ class DataSet(metaclass=ABCMeta):
         self._epoch = utp.Counter(max_state=self._epoch_max)
 
     def _next_epoch(self):
+        """prepare for next epoch
+        Args:
+        Returns:
+        Raises:
+            StopIteration: epoch_max reached, or not yet for next epoch.
+        """
         next(self._epoch.out)
 
     def _batch_start(self):
@@ -61,39 +150,60 @@ class DataSet(metaclass=ABCMeta):
         """
         pass
 
+    def _is_train_or_test(self):
+        return self._dataset_type == "train" or self._dataset_type == "test"
+
+    def _triger_stop_iteration(self):
+        """called when self._sample() raise a StopIteration Exception.
+        """
+        try:
+            self._next_epoch()
+        except StopIteration:
+            return self._padding()
+        return self._sample()
+
+    def _padding(self):
+        """padding batch data when used up all datas and a batch is not finished
+        Args:
+        Returns:
+            if self._is_pad:
+                [1, shape_i], [1, shape_o] padding tensor
+            or
+                None, None
+        Raises:
+        """
+        if not self._is_pad:
+            return None, None
+        else:
+            return self._sample()
+
+    def _sample(self):
+        """Returns two tensors of shape [1, shape_i] and [1, shape_o]
+        """
+        return np.zeros(self._shape_i), np.zeros(self._shape_o)
+
     def next_batch(self):
         """Returns next batch of current dataset.
         """
 
         self._batch_start()
 
-        if self._is_train_or_test or self._is_cache:
-            tensor_data = np.zeros(self._shape_i)
-            tensor_label = np.zeros(self._shape_o)
-            for i in range(self.batch_size):
-                try:
-                    data, label = self._single_sample()
-                except StopIteration:
-                    data, label = self._triger_stop_iteration()
-                if data is None:
-                    tensor_data = tensor_data[:i]
-                    tensor_label = tensor_label[:i]
-                    break
-                else:
-                    tensor_data[i, :] = data
-                    tensor_label[i, :] = label
-        else:
-            tensor_data = np.zeros(self._shape_i)
-            for i in range(self.batch_size):
-                try:
-                    data = self._single_sample()
-                except StopIteration:
-                    data = self._triger_stop_iteration()
-                if data is None:
-                    tensor_data = tensor_data[:i]
-                    break
-                else:
-                    tensor_data[i, :] = data
+        data_shape = [self.batch_size] + list(self._shape_i)
+        label_shape = [self.batch_size] + list(self._shape_o)
+        tensor_data = np.zeros(data_shape)
+        tensor_label = np.zeros(label_shape)
+        for i in range(self.batch_size):
+            try:
+                data, label = self._sample()
+            except StopIteration:
+                data, label = self._triger_stop_iteration()
+            if data is None:
+                tensor_data = tensor_data[:i]
+                tensor_label = tensor_label[:i]
+                break
+            else:
+                tensor_data[i, :] = data
+                tensor_label[i, :] = label
 
         self._batch_end()
 
@@ -102,38 +212,10 @@ class DataSet(metaclass=ABCMeta):
         else:
             return tensor_data
 
-    def _is_train_or_test(self):
-        return self._dataset_type == "train" or self._dataset_type == "test"
-
-    def _triger_stop_iteration(self):
-        """called when self._single_sample() raise a StopIteration Exception.
-        """
-        return self._padding()
-
-    def _padding(self):
-        """padding batch data when used up all datas and a batch is not finished
-        """
-        if not self._is_pad:
-            if self._is_train_or_test:
-                return None, None
-            else:
-                return None
-        else:
-            return self._single_sample()
-
-    @abstractmethod
-    def _single_sample(self):
-        """Returns a tensor of shape [1, *] or tuple ([1, *], [1, *])
-        """
-        if self._is_train_or_test:
-            return np.zeros(self._shape_i), np.zeros(self._shape_o)
-        else:
-            return np.zeros(self._shape_i)
-
     def print_paras(self):
         """Print all config parameters.
         """
-        print(self._paras)
+        print(self._print_paras)
 
     @property
     def batch_size(self):
@@ -156,7 +238,7 @@ class DataSet(metaclass=ABCMeta):
 
     @property
     def epoch_max(self):
-        """Maximum epoch"""
+        """maximum epoch"""
         return self._epoch.max_state
 
     @property

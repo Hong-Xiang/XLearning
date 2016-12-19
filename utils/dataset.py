@@ -183,11 +183,9 @@ def raw2npy(folder_name, shape, prefix, **kwargs):
         id1 = None
     if id1 is None:
         id1 = len(files)
-
     ids = list(xrange(int(id0), int(id1) + 1))
     for file in files:
         fullname = os.path.join(path, file)
-        print("processing: {}.".format(fullname))
         if os.path.isdir(fullname):
             continue
         prefix_f, id_f, suffix_f = utg.seperate_file_name(file)
@@ -197,10 +195,14 @@ def raw2npy(folder_name, shape, prefix, **kwargs):
             continue
         if id_f not in ids:
             continue
+        print("processing: {}.".format(fullname))
+        if shape is None:
+            raise ValueError('shape is not defined.')
+
         height = shape[0]
         width = shape[1]
         frame = shape[2]
-        pixel = height * width * frame
+        pixel = height * width * frame        
         data = np.zeros([pixel])
         with open(fullname) as f:
             bindata = f.read()
@@ -215,7 +217,7 @@ def raw2npy(folder_name, shape, prefix, **kwargs):
                     data2[j, i, k] = data[idf]
         filename = utg.form_file_name(prefix_f, id_f, 'npy')
         fullname = os.path.join(folder_name, filename)
-        np.save(fullname, data2)
+        np.save(fullname, data2)        
 
 
 def proj2sino(folder, prefix_old, prefix_new, id0, id1, folder_out=None):

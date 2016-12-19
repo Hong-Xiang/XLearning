@@ -20,7 +20,7 @@ import xlearn.utils.tensor as ut
 
 FLAGS = tf.app.flags.FLAGS
 DEFAULT_CONF_JSON = os.getenv(
-    'DEFAULT_NET_CONF', "/home/hongxwing/Workspace/xlearn/nets/net_conf.json")
+    'DEFAULT_NET_CONF', "/home/hongxwing/Workspace/xlearn/nets/conf_net.json")
 
 
 def def_flag(var_type, name, value, helpdoc=None):
@@ -46,40 +46,12 @@ def define_flags(conf_file_name=DEFAULT_CONF_JSON):
     with open(conf_file_name, "r") as conf:
         args = json.load(conf)
     for item in args:
-        def_flag(item['type'], item['name'], item['value'], item['helpdoc'])
+        flag_type = args[item]['type']
+        flag_name = item
+        flag_value = args[item]['value']
+        flag_help = args[item]['helpdoc']
+        def_flag(flag_type, flag_name, flag_value, flag_help)
     def_flag('string', 'conf_file', conf_file_name, "net conf file.")
-    # flag.DEFINE_float("weight_decay", 0.0001,
-    #                   "Weight decay coefficient.")
-    # flag.DEFINE_float("eps", 1e-5,
-    #                   "Weight decay coefficient.")
-    # flag.DEFINE_integer("batch_size", 64, "Batch size.")
-    # flag.DEFINE_integer("hidden_units", 64, "# of hidden units.")
-    # flag.DEFINE_float("lr_init", None, "Initial learning rate.")
-    # flag.DEFINE_string("save_dir", '.', "saving path.")
-    # flag.DEFINE_string("save_path", 'netsave', "saving path.")
-    # flag.DEFINE_string("summary_dir", '.', "summary path.")
-    # flag.DEFINE_integer("lr_decay_steps", 1000, "decay steps.")
-    # flag.DEFINE_float("lr_decay_factor", 0.6,
-    #                   "learing rate decay factor.")
-    # flag.DEFINE_integer("height", 11, "patch_height")
-    # flag.DEFINE_integer("width", 11, "patch_width")
-    # flag.DEFINE_integer("down_ratio", 3, "down_sample_ratio")
-    # flag.DEFINE_integer("patch_per_file", 32, "patches per file.")
-    # flag.DEFINE_string("train_path", None, "train data path.")
-    # flag.DEFINE_string("test_path", None, "test data path.")
-    # flag.DEFINE_string("infer_path", '.', "infer data path.")
-    # flag.DEFINE_string("infer_file", None, "infer file name.")
-    # flag.DEFINE_string("prefix", None, "prefix of data files.")
-    # flag.DEFINE_float("leak_ratio", None, "lrelu constant.")
-    # flag.DEFINE_integer("hidden_layer", 10, "hidden layers")
-    # flag.DEFINE_string("task", None, "test task.")
-    # flag.DEFINE_string("grad_clip", 100, "maximum gradient value.")
-    # flag.DEFINE_boolean("restore", False, "restore variables.")
-    # flag.DEFINE_integer("steps", 1000, "train steps.")
-    # flag.DEFINE_boolean("is_train", True, "flag of is training.")
-    # flag.DEFINE_boolean("only_down_width", False,
-    #                     "flag of only downsample width")
-
 
 def before_net_definition():
     zeroinit = tf.constant_initializer(0.0)
@@ -172,70 +144,6 @@ class NetManager(object):
     @property
     def sess(self):
         return self._sess
-
-    # def infer(self, tensor, new_shape):
-    #     """
-    #     infer high resolution image using net.
-    #     net needs to be initalized.
-    #     """
-    #     patch_list = []
-    #     # TODO: Change to new implementation of patch_generator
-    #     for patch in ut.patch_generator_tensor(tensor,
-    #                                            [FLAGS.height, FLAGS.width],
-    #                                            [FLAGS.stride_v, FLAGS.stride_h],
-    #                                            None,
-    #                                            False):
-    #         patch_list.append(patch)
-
-    #     high_resolution_list = []
-
-    #     idt = FLAGS.batch_size
-    #     while idt < len(patch_list):
-    #         tensor = ut.merge_patch_list(
-    #             patch_list[idt - FLAGS.batch_size:idt])
-    #         tensor_res = np.zeros(tensor.shape)
-    #         high_resolution_image = self._sess.run(self._net.infer,
-    # feed_dict={self._net.inputs: tensor})
-
-    #         for i in xrange(high_resolution_image.shape[0]):
-    #             patch = high_resolution_image[i, :, :, 0]
-    #             patch = np.reshape(patch, [1, FLAGS.valid_h, FLAGS.valid_w, 1])
-    #             high_resolution_list.append(patch)
-    #         idt += FLAGS.batch_size
-
-    #     if idt > len(patch_list):
-    #         idt -= FLAGS.batch_size
-    #         tensor_raw = ut.merge_patch_list(patch_list[idt:])
-    #         tensor = np.zeros([FLAGS.batch_size, tensor_raw.shape[
-    #                           1], tensor_raw.shape[2], 1])
-    #         for i in xrange(tensor_raw.shape[0]):
-    #             tensor[i, :, :, 0] = tensor_raw[i, :, :, 0]
-    #         tensor_res = np.zeros(tensor.shape)
-    #         high_resolution_image = self._sess.run(self._net.infer,
-    # feed_dict={self._net.inputs: tensor})
-
-    #         for i in xrange(tensor_raw.shape[0]):
-    #             patch = high_resolution_image[i, :, :, 0]
-    #             patch = np.reshape(patch, [1, FLAGS.valid_h, FLAGS.valid_w, 1])
-    #             high_resolution_list.append(patch)
-
-    #     high_resolution_list_correct = []
-    #     for patch in high_resolution_list:
-    #         patch_padding = np.zeros([1, FLAGS.height, FLAGS.width, 1])
-    #         patch_padding[0,
-    #                       FLAGS.valid_h:FLAGS.valid_h + FLAGS.valid_y,
-    #                       FLAGS.valid_w:FLAGS.valid_w + FLAGS.valid_x,
-    #                       0] = patch[0, FLAGS.valid_y, FLAGS.valid_x, 0]
-    #         high_resolution_list_correct.append(patch_padding)
-
-    #     image_h = ut.patches_recon_tensor(high_resolution_list,
-    #                                       new_shape,
-    #                                       [FLAGS.height, FLAGS.width],
-    #                                       [FLAGS.stride_v, FLAGS.stride_h],
-    #                                       [FLAGS.valid_h, FLAGS.valid_w],
-    #                                       [0, 0])
-    #     return image_h
-
 
 class TFNet(object):
 

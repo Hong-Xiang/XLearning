@@ -7,89 +7,144 @@ Created on 2016-11-03 10:20:52
 
 General image inputer
 """
-from __future__ import absolute_import, division, print_function
 import os
-import itertools
 import json
 import numpy as np
 
-from six.moves import xrange
-import xlearn.utils.xpipes as utp
-import xlearn.utils.tensor as utt
 import xlearn.utils.general as utg
+import xlearn.utils.tensor as utt
 import xlearn.utils.image as uti
-import itertools
+import xlearn.utils.xpipes as utp
+
+import xlearn.reader.base
 
 
-def label_name(data_name, case_digit=None, label_prefix=None):
-    """Get filename of label to a data name.
-    :param data_name:   data filename
-    :param case_digit:  number of digits for case. default = None
-                        e.g. dataSSSDDDDDD.xxx will share label000DDDDDD.xxx as
-                        label file with case_digit = 6.
-    :param label_prefix:prefix of label filename. default is same prefix as 
-                        data file.
-    :return:            label filename
+class DataSetSuperResolution(xlearn.reader.base.DataSet):
+    """DataSet for image super resolution
+    Generate downsampled low resolution image as data
+    Generate high resolution image as label
+
+    Multiple input mode is supported:
+    1.  is_single:
+        True: only one image is provided, dataset will perform downsample;
+        False: two files are provided
+    2.  is_patch:
+        True: a full image is provided, dataset will perform patch generation;
+        False: patches are provided, no patch generation.
+
+    Reconstruction routine:
+    Requires:
+        is_patch == False
+        is_recon == True
+    Dataset will generate pathches from one image, wait for respond tensor,
+    and try to combine them into a large image.
+
+    Args [DEFAULT]:
+    -   is_single ['True']: dataset mode
+    -   path_data: path of data
+    -   prefix_data ['img']: prefix of data
     """
-    prefix, id_, suffix = utg.seperate_file_name(data_name)
-    if case_digit is not None:
-        id_ = str(id_)
-        id_ = id_[:-case_digit]
-        id_ = int(id_)
-    if label_prefix is None:
-        label_prefix = prefix
-    output = utg.form_file_name(label_prefix, id, suffix)
-    return output
 
+    def __init__(self, filenames=None, **kwargs):
+        super(DataSetSuperResolution, self).__init__(filenames, **kwargs)
 
-def config_file_generator(conf_file,
-                          path_data, prefix_data,
-                          path_label, prefix_label,
-                          patch_shape,
-                          strides,
-                          batch_size,
-                          same_file_data_label=False,
-                          single_file=False,
-                          filename=None,
-                          n_patch_per_file=None,
-                          down_sample_ratio=1,
-                          ids=None,
-                          padding=False,
-                          dataset_type='test',
-                          down_sample_method='fixed',
-                          random_shuffle=False,
-                          mean=1,
-                          std=128,
-                          **kwargs):
-    """generate config .JSON file."""
-    data = dict()
-    data.update({'path_data': path_data})
-    data.update({'prefix_data': prefix_data})
-    data.update({'path_label': path_label})
-    data.update({'prefix_label': prefix_label})
-    data.update({'patch_shape': patch_shape})
-    data.update({'strides': strides})
-    data.update({'batch_size': batch_size})
-    data.update({'same_file_data_label': same_file_data_label})
-    data.update({'single_file': single_file})
-    data.update({'filename': filename})
-    data.update({'n_patches': n_patch_per_file})
-    data.update({'down_sample_ratio': down_sample_ratio})
-    data.update({'ids': ids})
-    data.update({'padding': padding})
-    data.update({'dataset_type': dataset_type})
-    data.update({'down_sample_method': down_sample_method})
-    data.update({'random_shuffle': random_shuffle})
-    data.update({'need_gray': True})
-    data.update({'check_all': False})
-    data.update({'mean': mean})
-    data.update({'std': std})
-    data.update(kwargs)
-    with open(conf_file, 'w') as fp:
-        json.dump(data, fp, sort_keys=True, indent=4, separators=(',', ': '))
+    def _gather_paras(self, conf_type):
+        super(DataSetSuperResolution, self)._gather_paras(conf_type)
+        if conf_type == "default":
+            self._prefix_data = 'img'
+        if conf_type == "special":
+            # file settings:
+            self._is_single = self._paras['is_single']
+            self._is_recon = self._paras['is_recon']
+            self._path_data = self._paras['path_data']
+            if self._paras['prefix_data'] is not None:
+                self._prefix_data = self._paras['prefix_data']
+            
+            if self._mode == 'single':
+
+            else:
+                self._path_label = self._paras['path_label']
+                self._prefix_lable = self._paras['prefix_label']
+            self._ids = self._paras['ids']
+            self._is_multi_channel = self._paras['is_multi_channel']
+
+            # down sample paras:
+            self._patch_shape = self._paras['patch_shape']
+            self._ratio = self._paras['down_sample_ratio']
+            self._strides = self._paras['strides']
+            self._padding = self._paras['padding']
+
+            # sample threshold paras:
+            self._nzratio = self._paras['nzratio']
+            self._eps = self._paras['eps']
+
+            # post processing paras:
+            self._std = self._paras['std']
+            self._mean = self._paras['mean']
+
+    def _prepare(self):
+        self._data_filename_iter = utp.FileNameLooper(self._path_data,
+                                                      prefix=self._prefix_data,
+                                                      random_shuffle=self._is_shuffle,
+                                                      ids=self._ids)
+        if self._is_same_filename:
+            self._data_image = utp.NPYReaderSingle(self._data_filename_iter)
+            self._data_image_copyer = utp.Copyer(
+                self._data_image, copy_number=2)
+            self._data_tensor = utp.TensorFormater(self._data_image_copyer)
+            self._label_tensor = utp.TensorFormater(self._data_image_copyer)
+        else:
+            self._data_filename_copyer = utp.Copyer(
+                self._data_filename_iter, copy_number=2)
+            if paras['same_file_data_label']:
+                self._label_filename = utp.Pipe(self._data_filename_copyer)
+            else:
+                self._label_filename = utp.LabelFinder(
+                    self._data_filename_copyer, label_name)
+            self._data_filename = utp.Pipe(self._data_filename_copyer)
+            self._data_image = utp.NPYReaderSingle(self._data_filename)
+            self._label_image = utp.NPYReaderSingle(self._label_filename)
+            self._data_tensor = utp.TensorFormater(self._data_image)
+            self._label_tensor = utp.TensorFormater(self._label_image)
+        if paras['need_gray']:
+            self._data_gray = utp.ImageGrayer(self._data_tensor)
+            self._label_gray = utp.ImageGrayer(self._label_tensor)
+            self._merge = utp.Pipe([self._data_gray, self._label_gray])
+            self._stacker = utp.TensorStacker(self._merge)
+        else:
+            self._merge = utp.Pipe([self._data_tensor, self._label_tensor])
+            self._stacker = utp.TensorStacker(self._merge)
+        self._tensor = utp.TensorFormater(self._stacker)
+        patch_shape = paras['patch_shape']
+        patch_shape_2 = patch_shape[:]
+        patch_shape_2[0] = 2
+
+        self._patch_generator = utp.PatchGenerator(self._tensor,
+                                                   shape=patch_shape_2,
+                                                   n_patches=paras[
+                                                       'n_patches'],
+                                                   strides=paras[
+                                                       'strides'],
+                                                   random_gen=paras[
+                                                       'random_shuffle'],
+                                                   check_all=paras['check_all'])
+
+        self._buffer = utp.Buffer(self._patch_generator)
+
+        self._slicer = utp.TensorSlicer(self._buffer, patch_shape)
+
+        self._buffer2 = utp.Buffer(self._slicer)
+
+        self._hr_patch_gen = utp.TensorFormater(self._buffer2)
+
+        self._down_sample = utp.DownSampler(
+            self._buffer2, self._ratio, method=paras['down_sample_method'])
+
+        self._lr_patch_gen = utp.TensorFormater(self._down_sample)
 
 
 class DataSetSR(object):
+    raise DeprecationWarning
     """
     A general super resolution net.
     Args:

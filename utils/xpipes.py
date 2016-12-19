@@ -96,7 +96,7 @@ class Pipe(object):
         else:
             results = []
             for pipe in self._branches:
-                results.append(pipe.out.next())
+                results.append(next(pipe.out))
             return results
 
     def _process(self):
@@ -405,7 +405,10 @@ class LabelFinder(SingleInput):
         super(LabelFinder, self).__init__(
             input_, name=name, is_seal=is_seal)
         if conf_file is None:
-            self._label_foo = label_foo
+            if label_foo is None:
+                self._label_foo = lambda x: x
+            else:
+                self._label_foo = label_foo
             self._use_file = False
         else:
             with open(conf_file) as cfile:
@@ -418,6 +421,20 @@ class LabelFinder(SingleInput):
             return self._pair_dict[data_filename]
         else:
             return self._label_foo(data_filename)
+
+
+class PathAdder(SingleInput):
+    """Remove current path and add a new path to filename
+    """
+    def __init__(self, input_, path, name="PathAdder", is_seal=False):
+        super(PathAdder, self).__init__(input_, name=name, is_seal=is_seal)
+        self._path = path
+
+    def _process(self):
+        filename = self._gather_f()
+        basename = os.path.basename(filename)
+        filefull = os.path.join(self._path, basename)
+        return filefull
 
 
 class FileNameLooper(Pipe):

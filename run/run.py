@@ -15,7 +15,7 @@ import os
 
 from xlearn.model.supernet import *
 from xlearn.nets.model import NetManager
-from xlearn.reader.oneoverx import DataSetOneOverX
+from xlearn.reader.fx import DataSetFx
 from xlearn.reader.srinput import DataSetSR
 from xlearn.reader.srinput import DataSetSRInfer
 
@@ -62,8 +62,8 @@ def check_dataset(dataset, n_show=4):
 def train_one_over_x(argv):
     """learn: y = 1/x
     """
-    data_set = DataSetOneOverX(batch_size=FLAGS.batch_size)
-    net = xlearn.model.oneoverx.NetOneOverX(batch_size=FLAGS.batch_size)
+    data_set = DataSetFx(batch_size=FLAGS.batch_size)
+    net = xlearn.model.fx.NetFx(batch_size=FLAGS.batch_size)
     manager = NetManager(net)
     n_step = FLAGS.steps
     for i in range(1, n_step + 1):

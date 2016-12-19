@@ -1,0 +1,20 @@
+{
+    "batch_size": 64,
+    "check_all": false,
+    "dataset_type": "train",
+    "ids": null,
+    "mean": 1,
+    "n_patches": null,
+    "is_need_gray": true,
+    "is_pad": false,
+    "path_data": null,
+    "path_label": null,
+    "prefix_data": "img",
+    "prefix_label": "img",
+    "random_shuffle": true,
+    "same_file_data_label": true,
+    "single_file": false,
+    "std": 128,    
+    "eps": 1e-5,
+    "nzratio": 0.3
+}

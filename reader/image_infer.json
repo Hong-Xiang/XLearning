@@ -1,0 +1,11 @@
+{
+    "dataset_type": "infer",
+    "path_input": null,
+    "prefix": "img",
+    "is_need_gray": true,
+    "batch_size": 64,
+    "down_sample_padding": false,
+    "mean": 1,
+    "std": 128,
+    "path_output": "/home/hongxwing/Workspace/test"
+}

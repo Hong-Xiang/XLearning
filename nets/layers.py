@@ -137,8 +137,12 @@ def lrelu(features, name=None):
     return tensor
 
 
-def activation(tensor_input, activation_function=None, varscope=tf.get_variable_scope(), name='activation'):
+def activation(input_, *args, activation_function=None, varscope=None, name=None):
     """Warp of activation functions"""
+    if name is None:
+        name = 'activation'
+    if varscope is None:
+        varscope = tf.get_variable_scope()
     if activation_function is None:
         if FLAGS.activation_function == "rrelu":
             activation_function = rrelu
@@ -151,9 +155,15 @@ def activation(tensor_input, activation_function=None, varscope=tf.get_variable_
         else:
             activation_function = tf.nn.relu
     if activation_function is tf.nn.relu:
-        tensor = tf.nn.relu(tensor_input, name)
+        tensor = tf.nn.relu(input_, name)
+    if activation_function is tf.nn.elu:
+        tensor = tf.nn.elu(input_, name)
     if activation_function is lrelu:
-        tensor = lrelu(tensor_input, name)
+        tensor = lrelu(input_, name)
+    if activation_function is rrelu:
+        tensor = rrelu(input_, name)
+    if activation is max_out:
+        tensor = max_out(input_, args[0])
     return tensor
 
 
@@ -295,7 +305,8 @@ def batch_norm(input_, name=None, use_local_stat=None, is_train=None, decay=None
         batch_var = tf.identity(batch_var, name="batch_var")
         ema = tf.train.ExponentialMovingAverage(
             decay=decay, name='exp_moving_average')
-        ema_apply_op = ema.apply([batch_mean, batch_var]) # operators to apply ema
+        # operators to apply ema
+        ema_apply_op = ema.apply([batch_mean, batch_var])
         ema_mean = ema.average(batch_mean)  # variable to store mean
         ema_var = ema.average(batch_var)  # operators to store var
         tf.add_to_collection('MOVING_AVERAGE_VARIABLES', ema_mean)
@@ -408,7 +419,7 @@ def l2_ave_loss(inference_image, reference_image, name="loss_layer"):
         loss = tf.nn.l2_loss(
             inference_image - reference_image, name=scope + name)
         shape = inference_image.get_shape().as_list()
-        n_ele = shape[0] * shape[1] * shape[2] *shape[3]
+        n_ele = shape[0] * shape[1] * shape[2] * shape[3]
         ave_loss = loss / n_ele
         tf.add_to_collection('losses', ave_loss)
     return loss
@@ -428,7 +439,7 @@ def psnr_loss(inference_tensor, reference_tensor, name="loss_layer"):
 def loss_summation(name="total_loss", norm_batch=True, noramlization=1):
     with tf.name_scope(name) as scope:
         loss_list = tf.get_collection('losses')
-        loss = tf.add_n(loss_list, name=scope + 'summation')            
+        loss = tf.add_n(loss_list, name=scope + 'summation')
     return loss
 
 
