@@ -1,9 +1,10 @@
 """
 General tiny help routines.
 """
-from __future__ import absolute_import, division, print_function
+import os
 import re
 import json
+import logging
 import numpy as np
 
 
@@ -89,6 +90,7 @@ def label_name(data_name, case_digit=None, label_prefix=None):
 def merge_settings(settings=None, filenames=None, default_settings=None, **kwargs):
     """Merge settings from multiple file and args into one
     """
+    logging.getLogger(__name__).debug("filenames:{}".format(filenames))
     if settings is None:
         settings = {}
 
@@ -96,10 +98,11 @@ def merge_settings(settings=None, filenames=None, default_settings=None, **kwarg
         settings.update(default_settings)
 
     if filenames is None:
-        filenames = ()
+        filenames = ()    
     if not isinstance(filenames, (list, tuple)):
-        filenames = (filenames)
+        filenames = (filenames,)    
     for filename in filenames:
+        filename = os.path.abspath(filename)
         with open(filename, 'r') as file_conf:
             tmp = json.load(file_conf)
             tmp = dict(filter(lambda x: x[1] is not None, tmp.items()))

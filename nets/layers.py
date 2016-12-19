@@ -1,6 +1,3 @@
-from __future__ import absolute_import, division, print_function
-
-from six.moves import xrange
 import tensorflow as tf
 import numpy as np
 import xlearn.utils.general as utg
@@ -57,7 +54,7 @@ def _moving_average_variable(name, shape, scope=None):
     with tf.variable_scope(scope):
         var = tf.get_variable(name, shape, initializer=initer,
                               dtype=dtype, trainable=False)
-    ema = tf.train.ExponentialMovingAverage(decay=FLAGS.bn_decay)
+    ema = tf.train.ExponentialMovingAverage(decay=FLAGS.ema_decay)
     average_op = ema.apply([var])
     return ema, average_op
 
@@ -144,15 +141,18 @@ def activation(input_, *args, activation_function=None, varscope=None, name=None
     if varscope is None:
         varscope = tf.get_variable_scope()
     if activation_function is None:
-        if FLAGS.activation_function == "rrelu":
-            activation_function = rrelu
-        elif FLAGS.activation_function == "lrelu":
-            activation_function = lrelu
-        elif FLAGS.activation_function == "max_out":
-            activation_function = max_out
-        elif FLAGS.activation_function == "elu":
-            activation_function = tf.nn.elu
-        else:
+        try:
+            if FLAGS.activation_function == "rrelu":
+                activation_function = rrelu
+            elif FLAGS.activation_function == "lrelu":
+                activation_function = lrelu
+            elif FLAGS.activation_function == "max_out":
+                activation_function = max_out
+            elif FLAGS.activation_function == "elu":
+                activation_function = tf.nn.elu
+            else:
+                activation_function = tf.nn.relu
+        except AttributeError:
             activation_function = tf.nn.relu
     if activation_function is tf.nn.relu:
         tensor = tf.nn.relu(input_, name)
@@ -180,7 +180,7 @@ def matmul_bias(input_,
 
     """
     with tf.name_scope(name) as scope:
-        weights = _weight_variable_with_decay('weights',
+        weights = _weight_variable_with_decay(scope + 'weights',
                                               shape=shape,
                                               ncolumn=shape[0],
                                               wd=FLAGS.weight_decay)
@@ -195,7 +195,9 @@ def full_connect(input_,
                  shape,
                  name='full_connect',
                  activation_function=None,
-                 varscope=tf.get_variable_scope()):
+                 varscope=None):
+    if varscope is None:
+        varscope = tf.get_variable_scope()
     with tf.name_scope(name) as scope:
         z = matmul_bias(input_, shape)
         output = activation(
@@ -281,7 +283,7 @@ def batch_norm(input_, name=None, use_local_stat=None, is_train=None, decay=None
 
     input_shape = input_.get_shape()
     n_param = input_shape[-1:]
-    axis = list(xrange(len(input_shape) - 1))
+    axis = list(range(len(input_shape) - 1))
 
     if len(input_shape) not in [2, 4]:
         raise TypeError(
@@ -488,8 +490,8 @@ def predict_accuracy(inference, reference, name='predic_accuracy'):
 
 
 def dropout(input_, keep_prob, name='dropout'):
-    with tf.name_scope(name) as scope:
-        output = tf.nn.dropout(input_, keep_prob)
+    with tf.name_scope(name):
+        output = tf.nn.dropout(input_, keep_prob, name=name)
     return output
 
 

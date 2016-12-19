@@ -1,5 +1,6 @@
 {
-    "batch_size": 128,
+    "dataset_type": "train",
+    "batch_size": 512,
     "xmin": 1,
     "xmax": 10
 }

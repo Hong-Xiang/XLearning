@@ -6,8 +6,7 @@ output = infer(input[s])
 output = loss(input[s], lable[s])
 variable_list = variables([flags])
 """
-from __future__ import absolute_import, division, print_function
-from six.moves import xrange
+import logging
 import tensorflow as tf
 import xlearn.nets.layers as layer
 import xlearn.nets.model as model
@@ -18,57 +17,58 @@ ACTIVITION_FUNCTION = tf.nn.relu
 
 
 class SuperNetInterp(TFNet):
+    """Interpolation 'net'
+    """
 
-    def __init__(self, name="SuperNetInterp", varscope=tf.get_variable_scope()):
-        super(SuperNetInterp, self).__init__(varscope=varscope)
-        self._name = name
-        self._ratio = FLAGS.down_ratio
+    def __init__(self, filenames=None, name="SuperNetInterp", varscope=None, **kwargs):
+        super(SuperNetInterp, self).__init__(
+            filenames=filenames, name=name, varscope=varscope, **kwargs)
         print("=" * 8 + "SuperNet." + name + " Constructed." + "=" * 8)
         self._input = layer.inputs([None,
                                     FLAGS.height,
                                     FLAGS.width,
                                     1],
                                    "input_low_res")
-        self._width_only = FLAGS.only_down_width
-        high_shape = self._high_shape()
         self._infer = tf.image.resize_images(self._input,
-                                             high_shape[0],
-                                             high_shape[1])
+                                             [self._high_shape[0],
+                                              self._high_shape[1]])
 
-    def _high_shape(self):
-        if self._width_only:
-            high_shape = [FLAGS.height, FLAGS.width * self._ratio]
-        else:
-            high_shape = [FLAGS.height * self._ratio,
-                          FLAGS.width * self._ratio]
-        return high_shape
+    def _gather_paras(self):
+        self._batch_size = self._paras['batch_size']
+        self._down_sample_ratio = self._paras['down_sample_ratio']
+        self._shape_i = self._paras['shape_i']
+        self._shape_o = self._paras['shape_o']
+        self._high_shape = [self._shape_o[0], self._shape_o[1]]
+        self._low_shape = [self._shape_i[0], self._shape_i[1]]
 
 
 class SuperNetBase(TFNet):
+    """Base net of super resolution nets
+    """
 
     def __init__(self,
+                 filenames=None,
                  name='SuperNetBase',
-                 varscope=tf.get_variable_scope()):
-        super(SuperNetBase, self).__init__(varscope=varscope)
-        self._name = name
-        self._ratio = FLAGS.down_ratio
-        print("=" * 8 + "SuperNet." + name + " Constructed." + "=" * 8)
+                 varscope=tf.get_variable_scope(),
+                 **kwargs):
+        super(SuperNetBase, self).__init__(
+            filenames=filenames, name=name, varscope=varscope, **kwargs)
+        logging.getLogger(__name__).info(
+            "=" * 8 + "SuperNet." + name + " Constructed." + "=" * 8)
         self._input = layer.inputs([None,
-                                    FLAGS.height,
-                                    FLAGS.width,
+                                    self._shape_low[0],
+                                    self._shape_low[1],
                                     1],
                                    "input_low_res")
-        self._width_only = FLAGS.only_down_width
-        high_shape = self._high_shape()
         self._label = layer.labels([None,
-                                    high_shape[0],
-                                    high_shape[1],
+                                    self._shape_high[0],
+                                    self._shape_high[1],
                                     1],
                                    "input_high_res")
         with tf.name_scope('interpolation'):
             self._interp = tf.image.resize_images(self._input,
-                                                  high_shape[0],
-                                                  high_shape[1])
+                                                  [self._shape_high[0],
+                                                   self._shape_high[1]])
         with tf.name_scope('residual_reference'):
             self._residual_reference = tf.sub(self._label, self._interp,
                                               name='sub')
@@ -81,15 +81,19 @@ class SuperNetBase(TFNet):
         self._train = layer.trainstep_clip(
             self._loss, self._learn_rate, self._global_step)
         self._add_summary()
-        self._print_flags()
+        self._flags()
 
-    def _high_shape(self):
-        if self._width_only:
-            high_shape = [FLAGS.height, FLAGS.width * self._ratio]
-        else:
-            high_shape = [FLAGS.height * self._ratio,
-                          FLAGS.width * self._ratio]
-        return high_shape
+    def _gather_paras(self):
+        self._batch_size = self._paras['batch_size']
+        self._down_sample_ratio = self._paras['down_sample_ratio']
+        self._shape_i = self._paras['shape_i']
+        self._shape_o = self._paras['shape_o']
+        self._shape_high = [self._shape_o[0], self._shape_o[1]]
+        self._shape_low = [self._shape_i[0], self._shape_i[1]]
+        self._shape_batch_high = [self.batch_size,
+                                  self.height_high, self.width_high, 0]
+        self._shape_batch_low = [self.batch_size,
+                                 self.height_low, self.width_low, 0]
 
     def _net_definition(self):
         with tf.name_scope('residual_inference'):
@@ -99,10 +103,11 @@ class SuperNetBase(TFNet):
             self._residual_inference = tf.add(self._interp, self._residual_inference,
                                               name='add')
 
-    def _print_flags(self):
-        print("=" * 6 + "Net flags:" + "=" * 6)
-        print("FLAGS.height\t", FLAGS.height)
-        print("FLAGS.width\t", FLAGS.width)
+    def _flags(self):
+        infos = ''
+        infos = infos + "=" * 6 + "Net flags:" + "=" * 6
+        infos += "FLAGS.height\t{}\n".format(FLAGS.height)
+        infos += "FLAGS.width\t{}".format(FLAGS.width)
         print("FLAGS.hidden_units\t", FLAGS.hidden_units)
         print("FLAGS.hidden_layer\t", FLAGS.hidden_layer)
 
@@ -117,6 +122,26 @@ class SuperNetBase(TFNet):
         tf.image_summary('inference', self._infer)
         tf.image_summary('interp_result', self._interp)
 
+    @property
+    def height_high(self):
+        return self._shape_high[0]
+
+    @property
+    def width_high(self):
+        return self._shape_high[1]
+
+    @property
+    def height_low(self):
+        return self._shape_low[0]
+
+    @property
+    def width_low(self):
+        return self._shape_low[1]
+
+    @property
+    def batch_size(self):
+        return self._batch_size
+
 
 class SuperNet0(SuperNetBase):
     """
@@ -124,10 +149,14 @@ class SuperNet0(SuperNetBase):
     """
 
     def __init__(self,
+                 filenames=None,
                  name='SuperNet0',
-                 varscope=tf.get_variable_scope()):
-        super(SuperNet0, self).__init__(name=name,
-                                        varscope=varscope)
+                 varscope=tf.get_variable_scope(),
+                 **kwargs):
+        super(SuperNet0, self).__init__(filenames=filenames,
+                                        name=name,
+                                        varscope=varscope,
+                                        **kwargs)
 
     def _net_definition(self):
         # self._batch_size = tf.get_shape(self._input)[0]
@@ -143,7 +172,7 @@ class SuperNet0(SuperNetBase):
                                                          padding='SAME', name='residual_inference')
 
         # self._psnr = layer.psnr_loss(self._residual_inference, self._residual_reference, name='psnr_loss')
-        self._l2_loss = layer.psnr_loss(
+        loss = layer.psnr_loss(
             self._residual_inference, self._residual_reference, name='l2_loss')
 
         self._infer = tf.add(
@@ -156,9 +185,14 @@ class SuperNet1(SuperNetBase):
     """
 
     def __init__(self,
+                 filenames=None,
                  name='SuperNet1',
-                 varscope=tf.get_variable_scope()):
-        super(SuperNet1, self).__init__(varscope=varscope)
+                 varscope=None,
+                 **kwargs):
+        super(SuperNet1, self).__init__(filenames=filenames,
+                                        name=name,
+                                        varscope=varscope,
+                                        **kwargs)
 
     def _net_definition(self):
         conv0 = layer.conv_activate(self._interp, [5, 5, 1, 128],
@@ -206,9 +240,14 @@ class SuperNet2(SuperNetBase):
     """
 
     def __init__(self,
+                 filenames=None,
                  name='SuperNet2',
-                 varscope=tf.get_variable_scope()):
-        super(SuperNet2, self).__init__(name=name, varscope=varscope)
+                 varscope=tf.get_variable_scope(),
+                 **kwargs):
+        super(SuperNet2, self).__init__(filenams=filenames,
+                                        name=name,
+                                        varscope=varscope,
+                                        **kwargs)
 
     def _net_definition(self):
         filter_shape = [3, 3, FLAGS.hidden_units, FLAGS.hidden_units]
@@ -217,7 +256,7 @@ class SuperNet2(SuperNetBase):
                                    padding='SAME', name='conv_init',
                                    activation_function=ACTIVITION_FUNCTION)
         self._midops.append(conv)
-        for i in xrange(FLAGS.hidden_layer):
+        for i in range(FLAGS.hidden_layer):
             conv = layer.conv_activate(conv, filter_shape,
                                        padding='SAME', name='conv%d' % (i + 1),
                                        activation_function=ACTIVITION_FUNCTION)
@@ -227,8 +266,8 @@ class SuperNet2(SuperNetBase):
                                                          padding='SAME', name='residual_inference')
 
         # self._psnr = layer.psnr_loss(self._residual_inference, self._residual_reference, name='psnr_loss')
-        self._l2_loss = layer.ave_l2_loss(self._residual_inference,
-                                      self._residual_reference, name='l2_loss')
+        self._l2_loss = layer.l2_ave_loss(self._residual_inference,
+                                          self._residual_reference, name='l2_loss')
 
         with tf.name_scope('inference'):
             self._infer = tf.add(self._interp,
@@ -241,12 +280,17 @@ class SuperNetCrop(SuperNetBase):
     """
 
     def __init__(self,
+                 filenames=None,
                  name='SuperNetCrop',
-                 varscope=tf.get_variable_scope()):
-        super(SuperNetCrop, self).__init__(varscope=varscope)
+                 varscope=None,
+                 **kwargs):
+        super(SuperNetCrop, self).__init__(filenames=filenames,
+                                           name=name,
+                                           varscope=varscope,
+                                           **kwargs)
 
     def _net_definition(self):
-        preshape = self._high_shape()
+        preshape = self._shape_high
         postshape = [preshape[0] - FLAGS.hidden_layer *
                      2, preshape[1] - FLAGS.hidden_layer * 2]
 
@@ -262,7 +306,7 @@ class SuperNetCrop(SuperNetBase):
                                    padding='VALID', name='conv_init',
                                    activation_function=ACTIVITION_FUNCTION)
         self._midop.append(conv)
-        for i in xrange(FLAGS.hidden_layer - 3):
+        for i in range(FLAGS.hidden_layer - 3):
             conv = layer.conv_activate(conv, filter_shape,
                                        padding='VALID', name='conv%d' % (i + 1),
                                        activation_function=ACTIVITION_FUNCTION)
@@ -294,140 +338,3 @@ class SuperNetCrop(SuperNetBase):
         tf.image_summary('inference', self._infer)
         tf.image_summary('interp_crop', self._interp_crop)
         tf.image_summary('high_crop', self._high_crop)
-
-
-# class SuperNet(TFNet):
-#     """Super resolution net
-#     """
-#     def __init__(self):
-#         self._low_res_images = layer.input_layer([None,
-#                                                   FLAGS.height,
-#                                                   FLAGS.width,
-#                                                   1],
-#                                                  "input_low_res")
-
-#         self._high_res_images = layer.label_layer([None,
-#                                                   FLAGS.height,
-#                                                   FLAGS.width,
-#                                                   1],
-#                                                   "input_high_res")
-
-#         self._residual_cropped = layer.crop_layer(self._residual_full,
-#                                                   [FLAGS.valid_h,
-#                                                    FLAGS.valid_w],
-#                                                   [FLAGS.valid_y,
-#                                                    FLAGS.valid_x],
-#                                                   name='crop_residual')
-
-
-#         self._low_res_cropped = layer.crop_layer(self._low_res_images,
-#                                                  [FLAGS.valid_h,
-#                                                   FLAGS.valid_w],
-#                                                  [FLAGS.valid_y,
-#                                                   FLAGS.valid_x],
-#                                                  'crop_low_resolution')
-
-#         self._high_res_cropped = tf.add(self._low_res_cropped,
-#                                         self._residual_cropped,
-#                                         "label_high_res")
-
-#         self._residual_inference = self._net_definition_deep_conv()
-
-#         # self._residual_inference = self._net_definition_2016()
-
-#         self._loss = layer.l2_loss_layer(self._residual_cropped,
-#                                          self._residual_inference,
-#                                          name="loss")
-
-#         self._inference_image = tf.add(self._low_res_cropped,
-#                                        self._residual_inference,
-#                                        name="image_inference")
-
-#         # Decay the learning rate exponentially based on the number of steps.
-#         with tf.name_scope("train") as scope:
-#             learn_rate = tf.train.exponential_decay(FLAGS.learning_rate_init,
-#                                                     self._global_step,
-#                                                     FLAGS.decay_steps,
-#                                                     FLAGS.learning_rate_decay_factor,
-#                                                     staircase=True,
-#                                                     name=scope+'/learning_rate')
-
-#             tf.scalar_summary("learning rate", learn_rate)
-
-#             self._train_step = tf.train.AdamOptimizer(learn_rate).minimize(self._loss,
-#                                                                            self._global_step,
-# name=scope+'/train_step')
-
-#             #self._train_step = tf.train.GradientDescentOptimizer(lr).minimize(loss,global_step=step)
-
-#         tf.image_summary('input_low', self._low_res_cropped)
-#         tf.image_summary('label_high', self._high_res_cropped)
-#         tf.image_summary('residual_reference', self._residual_cropped)
-#         tf.image_summary('residual_inference', self._residual_inference)
-#         tf.image_summary('inference', self._inference_image)
-
-
-#     @property
-#     def inference(self):
-#         return self._inference_image
-
-#     @property
-#     def residual_inference(self):
-#         return self._residual_inference
-
-#     @property
-#     def residual(self):
-#         return self._residual_full
-
-#     @property
-#     def loss(self):
-#         return self._loss
-
-#     @property
-#     def low_tensor(self):
-#         return self._low_res_images
-
-#     @property
-#     def high_tensor(self):
-#         return self._high_res_cropped
-
-#     @property
-#     def train_step(self):
-#         return self._train_step
-
-
-#     def _net_definition_2016(self):
-#         k1 = 9
-#         k2 = 5
-#         n_channel_1 = 64
-#         n_channel_2 = 32
-#         conv1 = layer.conv_layer(self._low_res_images, [k1, k1, 1, n_channel_1], name="conv1")
-#         conv2 = layer.conv_layer(conv1, [1, 1, n_channel_1, n_channel_2], name="full_connect")
-#         residual_inference = layer.output_layer(conv2,
-#                                                 [k2, k2, n_channel_2, 1],
-#                                                 padding="VALID",
-#                                                 name="output")
-#         return residual_inference
-
-#     def _net_definition_deep_conv(self):
-#         n_channel = 128
-#         kernel_shape = [3, 3, n_channel, n_channel]
-#         conv1 = layer.conv_layer(self._low_res_images, [5, 5, 1, n_channel], name="conv_feature_1")
-#         conv2 = layer.conv_layer(conv1, kernel_shape, name="conv_feature_2")
-#         conv3 = layer.conv_layer(conv2, kernel_shape, name="conv_feature_3")
-#         conv4 = layer.conv_layer(conv3, kernel_shape, name="conv_feature_4")
-#         conv5 = layer.conv_layer(conv4, kernel_shape, name="conv_feature_5")
-#         conv6 = layer.conv_layer(conv5, kernel_shape, name="conv_feature_6")
-#         # conv7 = layer.conv_layer(conv6, kernel_shape, name="conv_feature_7")
-#         # conv8 = layer.conv_layer(conv7, kernel_shape, name="conv_feature_8")
-#         conv9 = layer.conv_layer(conv6, kernel_shape, name="full_connect")
-#         conv10 = layer.conv_layer(conv9, kernel_shape, name="conv_recon_9")
-#         conv11 = layer.conv_layer(conv10, kernel_shape, name="conv_recon_10")
-#         conv12 = layer.conv_layer(conv11, kernel_shape, name="conv_recon_11")
-#         conv13 = layer.conv_layer(conv12, kernel_shape, name="conv_recon_12")
-
-
-#         residual_inference = layer.output_layer(conv13,
-#                                                 [1, 1, n_channel, 1],
-#                                                 name="output")
-#         return residual_inference

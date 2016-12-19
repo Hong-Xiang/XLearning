@@ -8,12 +8,12 @@ output = loss(input[s], lable[s])
 # TODO: Add support for:
 # variable_list = variables([flags])
 
-from __future__ import absolute_import, division, print_function
 import os
 import json
+import logging
 import numpy as np
-from six.moves import xrange
 import tensorflow as tf
+import xlearn.utils.general as utg
 import xlearn.nets.layers as layer
 import xlearn.utils.tensor as ut
 
@@ -40,18 +40,28 @@ def def_flag(var_type, name, value, helpdoc=None):
         flag.DEFINE_boolean(name, value, helpdoc)
 
 
-def define_flags(conf_file_name=DEFAULT_CONF_JSON):
+def define_flags(filenames=None, **kwargs):
+    """define FLAGS from JSON files
+    """
+    if filenames is None:
+        filenames = [DEFAULT_CONF_JSON]
     flag = tf.app.flags
-    print("Load tf.app.flags config file: ", conf_file_name)
-    with open(conf_file_name, "r") as conf:
-        args = json.load(conf)
+    logging.getLogger(__name__).info("Load tf.app.flags config file: {}".format(filenames))
+    args = utg.merge_settings(filenames=filenames, **kwargs)
     for item in args:
+        if not isinstance(args[item], dict):
+            continue
+        if 'helpdoc' not in args[item]:
+            continue
         flag_type = args[item]['type']
         flag_name = item
         flag_value = args[item]['value']
         flag_help = args[item]['helpdoc']
         def_flag(flag_type, flag_name, flag_value, flag_help)
-    def_flag('string', 'conf_file', conf_file_name, "net conf file.")
+    try:
+        FLAGS.activation_function
+    except AttributeError:
+        def_flag("string", "activation_function", "relu", "default activation.")
 
 def before_net_definition():
     zeroinit = tf.constant_initializer(0.0)
@@ -93,21 +103,22 @@ class NetManager(object):
     def __init__(self, net, varnames=None):
         self._net = net
         self._summary = tf.merge_all_summaries()
-        self._sess = tf.Session(
-            config=tf.ConfigProto(log_device_placement=True))
-        init_op = tf.initialize_all_variables()
+        # self._sess = tf.Session(
+        # config=tf.ConfigProto(log_device_placement=True))
+        self._sess = tf.Session()
+        init_op = tf.global_variables_initializer()
         self._sess.run(init_op)
         self._train_writer = tf.train.SummaryWriter(
-            FLAGS.train_summary_dir, self._sess.graph)
+            FLAGS.path_summary_train, self._sess.graph)
         self._test_writer = tf.train.SummaryWriter(
-            FLAGS.test_summary_dir, self._sess.graph)
+            FLAGS.path_summary_test, self._sess.graph)
 
         if varnames is None:
-            self._saver = tf.train.Saver(tf.all_variables())
+            self._saver = tf.train.Saver(tf.global_variables())
         else:
             self._saver = tf.train.Saver(varnames)
-        if FLAGS.restore:
-            print("restoring variables.")
+        if FLAGS.is_restore:
+            logging.getLogger(__name__).info("Restoring Variables...")
             self.restore()
 
     def run(self, tensor_list, feed_dict):
@@ -145,11 +156,15 @@ class NetManager(object):
     def sess(self):
         return self._sess
 
+
 class TFNet(object):
 
-    def __init__(self, varscope=tf.get_variable_scope()):
+    def __init__(self, filenames=None, name='TFNet', varscope=None, **kwargs):
+        self._name = name
+        self._paras = utg.merge_settings(filenames=filenames, **kwargs)
+        if varscope is None:
+            varscope = tf.get_variable_scope()
         self._var_scope = varscope
-        self._summary_writer = None
         self._input = None
         self._label = None
         self._infer = None
@@ -166,6 +181,14 @@ class TFNet(object):
                                                       staircase=True,
                                                       name='learning_rate')
         tf.scalar_summary("learn_rate", self._learn_rate)
+        self._gather_paras()
+        self._prepare()        
+
+    def _gather_paras(self):
+        pass
+
+    def _prepare(self):
+        pass
 
     def _net_definition(self):
         pass
@@ -192,10 +215,6 @@ class TFNet(object):
     @property
     def train(self):
         return self._train
-
-    @property
-    def summary_writer(self):
-        return self._summary_writer
 
     @property
     def learn_rate(self):
