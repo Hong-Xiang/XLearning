@@ -6,6 +6,18 @@ import xlearn.utils.general as utg
 import xlearn.utils.xpipes as utp
 
 
+class EndEpoch(StopIteration):
+    pass
+
+
+class NoMoreEpoch(StopIteration):
+    pass
+
+
+class NotYetEpoch(StopIteration):
+    pass
+
+
 class DataSet(object):
     """Base class of all dataset classes.
     """
@@ -34,24 +46,19 @@ class DataSet(object):
         Direct refernce to self._para outside self._gather_paras(conf_type)
         is *NOT* allowed.
 
-        Parameter setting order:
-            file[0] < file[1] < ... < file[-1] < kwargs
-            not None paramters will be overwritten.
-
         Batch generation:
         Required:
             _sample(self)
-
+                Returns: [1, *], [1, *] tensors
         Optional:
             _padding(self)
-            _triger_stop_iteration(self):
+            _end_of_epoch(self):
                 By default, it will return self._padding()
-                Returns: [1, *], [1, *] tensor
+                Returns: [1, *], [1, *] tensors
 
             _batch_start(self)
             _batch_end(self)
         """
-        print("base init called.")
         # self._paras = {}
         # # set default parameters
         # self._paras = utg.merge_settings(
@@ -76,11 +83,12 @@ class DataSet(object):
         self._prepare()
 
     def _get_default_paras(self):
-        paras_def = {}
-        paras_def.update({'is_shuffle': False})
-        paras_def.update({'is_pad': True})
-        paras_def.update({'is_cache': False})
-        paras_def.update({'epoch_max': -1})
+        paras_def = {
+            'is_shuffle': False,
+            'is_pad': True,
+            'is_cache': False,
+            'epoch_max': -1
+        }
         return paras_def
 
     def _get_paras(self):
@@ -109,6 +117,10 @@ class DataSet(object):
         self._batch_size = self._paras['batch_size']
         self._shape_i = self._paras['shape_i']
         self._shape_o = self._paras['shape_o']
+        self._shape_sample_i = [1] + list(self._shape_i)
+        self._shape_sample_o = [1] + list(self._shape_o)
+        self._shape_batch_i = [self._batch_size] + list(self._shape_i)
+        self._shape_batch_o = [self._batch_size] + list(self._shape_o)
         self._is_pad = self._paras['is_pad']
         self._is_cache = self._paras['is_cache']
         self._epoch_max = self._paras['epoch_max']
@@ -136,7 +148,8 @@ class DataSet(object):
         Args:
         Returns:
         Raises:
-            StopIteration: epoch_max reached, or not yet for next epoch.
+            NoMoreEpoch: epoch_max reached
+            NoYetEpoch: not yet for next epoch.
         """
         next(self._epoch.out)
 
@@ -153,14 +166,14 @@ class DataSet(object):
     def _is_train_or_test(self):
         return self._dataset_type == "train" or self._dataset_type == "test"
 
-    def _triger_stop_iteration(self):
-        """called when self._sample() raise a StopIteration Exception.
+    def _end_of_epoch(self):
+        """called when self._sample() raise a EndEpoch exception.
         """
         try:
             self._next_epoch()
-        except StopIteration:
+            return self._sample()
+        except (NoMoreEpoch, NotYetEpoch):
             return self._padding()
-        return self._sample()
 
     def _padding(self):
         """padding batch data when used up all datas and a batch is not finished
@@ -175,12 +188,12 @@ class DataSet(object):
         if not self._is_pad:
             return None, None
         else:
-            return self._sample()
+            return np.zeros(self._shape_sample_i), np.zeros(self._shape_sample_o)
 
     def _sample(self):
         """Returns two tensors of shape [1, shape_i] and [1, shape_o]
         """
-        return np.zeros(self._shape_i), np.zeros(self._shape_o)
+        return np.zeros(self._shape_sample_i), np.zeros(self._shape_sample_o)
 
     def next_batch(self):
         """Returns next batch of current dataset.
@@ -195,8 +208,8 @@ class DataSet(object):
         for i in range(self.batch_size):
             try:
                 data, label = self._sample()
-            except StopIteration:
-                data, label = self._triger_stop_iteration()
+            except EndEpoch:
+                data, label = self._end_of_epoch()
             if data is None:
                 tensor_data = tensor_data[:i]
                 tensor_label = tensor_label[:i]

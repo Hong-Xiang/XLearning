@@ -662,6 +662,7 @@ class TensorStacker(SingleInput):
         oldshape = tensor_list[0].shape
         oldshape = list(oldshape)
         n_tensor = len(tensor_list)
+
         if oldshape[0] == 1:
             oldshape = oldshape[1:]
         newshape = [n_tensor] + oldshape
@@ -671,7 +672,7 @@ class TensorStacker(SingleInput):
             ind = [i]
             for j in xrange(dim):
                 ind.append(slice(0, oldshape[j]))
-            output[ind] = tensor_list[i]
+            output[ind] = tensor_list[i]        
         return output
 
 

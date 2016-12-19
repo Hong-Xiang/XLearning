@@ -180,7 +180,7 @@ def matmul_bias(input_,
 
     """
     with tf.name_scope(name) as scope:
-        weights = _weight_variable_with_decay(scope + 'weights',
+        weights = _weight_variable_with_decay('weights',
                                               shape=shape,
                                               ncolumn=shape[0],
                                               wd=FLAGS.weight_decay)

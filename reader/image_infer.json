@@ -3,9 +3,16 @@
     "path_input": null,
     "prefix": "img",
     "is_need_gray": true,
+    "is_save": false,
+    "is_check_all": true,
     "batch_size": 64,
+    "is_lock": true,
     "down_sample_padding": false,
     "mean": 1,
     "std": 128,
-    "path_output": "/home/hongxwing/Workspace/test"
+    "path_data": "/home/hongxwing/Workspace/Datas/nature_image_special/",
+    "path_output": "/home/hongxwing/Workspace/test",
+    "nzratio": 0.0,
+    "eps": 1e-5,
+    "is_norm": true
 }

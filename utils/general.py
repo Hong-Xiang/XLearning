@@ -91,8 +91,10 @@ def merge_settings(settings=None, filenames=None, default_settings=None, **kwarg
     """
     if settings is None:
         settings = {}
+
     if default_settings is not None:
         settings.update(default_settings)
+
     if filenames is None:
         filenames = ()
     if not isinstance(filenames, (list, tuple)):
@@ -102,7 +104,9 @@ def merge_settings(settings=None, filenames=None, default_settings=None, **kwarg
             tmp = json.load(file_conf)
             tmp = dict(filter(lambda x: x[1] is not None, tmp.items()))
             settings.update(tmp)
+
     filted_kwargs = dict(filter(lambda x: x[1] is not None, kwargs.items()))
+
     settings.update(filted_kwargs)
 
     return settings
