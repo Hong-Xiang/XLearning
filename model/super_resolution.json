@@ -1,12 +1,12 @@
 {
     "shape_i": [        
-        64,
-        64,
+        155,
+        31,
         1
     ],
     "shape_o": [    
-        128,
-        128,
+        155,
+        155,
         1
     ],
     "strides": [        
@@ -16,8 +16,8 @@
     ],
     "down_sample_method": "fixed",
     "down_sample_ratio": [        
-        2,
-        2,
+        1,
+        5,
         1
     ],
     "down_sample_is_pad": false

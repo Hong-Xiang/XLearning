@@ -160,6 +160,7 @@ class NetManager(object):
 class TFNet(object):
 
     def __init__(self, filenames=None, name='TFNet', varscope=None, **kwargs):
+        logging.getLogger(__name__).debug('filenames:{}'.format(filenames))
         self._name = name
         self._paras = utg.merge_settings(filenames=filenames, **kwargs)
         if varscope is None:

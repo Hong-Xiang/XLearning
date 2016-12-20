@@ -98,11 +98,13 @@ def merge_settings(settings=None, filenames=None, default_settings=None, **kwarg
         settings.update(default_settings)
 
     if filenames is None:
-        filenames = ()    
+        filenames = ()
     if not isinstance(filenames, (list, tuple)):
-        filenames = (filenames,)    
+        filenames = (filenames,)
     for filename in filenames:
         filename = os.path.abspath(filename)
+        if not os.path.isfile(filename):
+            continue
         with open(filename, 'r') as file_conf:
             tmp = json.load(file_conf)
             tmp = dict(filter(lambda x: x[1] is not None, tmp.items()))

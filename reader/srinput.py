@@ -194,6 +194,9 @@ class DataSetSuperResolution(xlearn.reader.base.DataSet):
         return data, label
 
     def _end_of_epoch(self):
+        super(DataSetSuperResolution, self)._end_of_epoch()
+        if not self._is_lock:
+            return self._sample()
         if self._is_next_file:
             filename = next(self._filename_iter.out)
             self._image = np.array(np.load(filename))

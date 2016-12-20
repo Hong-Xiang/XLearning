@@ -3,7 +3,6 @@
 """entry script for all runs.
 """
 # TODO: add a new script dedicate for command line interaction.
-from __future__ import absolute_import, division, print_function
 import sys
 import numpy as np
 import tensorflow as tf
@@ -24,23 +23,23 @@ import xlearn.utils.tensor as utt
 FLAGS = tf.app.flags.FLAGS
 
 
-def construct_net():
+def construct_net(filenames=None, **kwargs):    
     if FLAGS.net_name == "SuperNetInterp":
-        net = xlearn.model.supernet.SuperNetInterp()
+        net = xlearn.model.supernet.SuperNetInterp(filenames=filenames,**kwargs)
     if FLAGS.net_name == "SuperNetCrop":
-        net = xlearn.model.supernet.SuperNetCrop()
+        net = xlearn.model.supernet.SuperNetCrop(filenames=filenames,**kwargs)
     if FLAGS.net_name == "SuperNet0":
-        net = xlearn.model.supernet.SuperNet0()
+        net = xlearn.model.supernet.SuperNet0(filenames=filenames,**kwargs)
     if FLAGS.net_name == "SuperNet1":
-        net = xlearn.model.supernet.SuperNet1()
+        net = xlearn.model.supernet.SuperNet1(filenames=filenames,**kwargs)
     if FLAGS.net_name == "SuperNet2":
-        net = xlearn.model.supernet.SuperNet2()
+        net = xlearn.model.supernet.SuperNet2(filenames=filenames,**kwargs)
     return net
 
 
-def construct_dataset(conf_file):
+def construct_dataset(filenames=None, **kwargs):
     if FLAGS.run_task == "train_SR_sino" or FLAGS.run_task == "train_SR_nature":
-        data_set = DataSetSuperResolution(conf=conf_file)
+        data_set = DataSetSuperResolution(filenames,**kwargs)
     # if FLAGS.task == "infer_SR_Sino":
     #     data_set = DataSetSRInfer(conf_file)
     return data_set
@@ -63,7 +62,9 @@ def train_fx(argv):
     """
     data_set = DataSetFx(filenames=argv[2:])
     net = xlearn.model.fx.NetFx(filenames=argv[2:])
+
     manager = NetManager(net)
+    
     n_step = FLAGS.run_steps
     for i in range(1, n_step + 1):
         x, y = data_set.next_batch()
@@ -85,11 +86,11 @@ def train_fx(argv):
     # save test result with x and y
     x = np.linspace(1, 10, num=512)
     x = np.reshape(x, [512, 1])
-    y_ = manager.run([net.infer], feed_dict={net.inputs: x})    
+    y_ = manager.run([net.infer], feed_dict={net.inputs: x})
     y_ = y_[0]
     np.save('oneoverx.npy', [x, y_])
 
-#TODO: Implement infer
+# TODO: Implement infer
 # def infer_SR_Sino(argv):
 #     dataset_infer = DataSetSRInfer(FLAGS.infer_conf)
 #     infer_path = dataset_infer.path_infer
@@ -123,8 +124,8 @@ def train_fx(argv):
 def train_SR_sino(argv):
     """train super resolution net on sinogram 2d data.
     """
-    train_set = construct_dataset(FLAGS.train_conf)
-    test_set = construct_dataset(FLAGS.test_conf)
+    train_set = construct_dataset(filenames=argv[2:])
+    test_set = construct_dataset(filenames=argv[2:])
     # check_dataset(train_set)
     # check_dataset(test_set)
     # return None
@@ -132,7 +133,7 @@ def train_SR_sino(argv):
     manager = NetManager(net)
     test_loss = []
     n_step = FLAGS.steps
-    saver = tf.train.Saver(tf.all_variables())
+    saver = tf.train.Saver(tf.global_variables())
     for i in range(1, n_step + 1):
         data, label = train_set.next_batch()
         [loss_train, _, lr] = manager.run([net.loss, net.train, net.learn_rate],
@@ -161,18 +162,23 @@ def train_SR_sino(argv):
 
 
 def train_SR_nature(argv):
-    train_set = construct_dataset(FLAGS.train_conf)
-    test_set = construct_dataset(FLAGS.test_conf)
+    train_files = [argv[2], argv[3]]
+    test_files = [argv[2], argv[4]]
+    train_set = construct_dataset(filenames=train_files)
+    test_set = construct_dataset(filenames=test_files)
     # check_dataset(train_set)
     # check_dataset(test_set)
     # return None
-
-    net = construct_net()
+    net_files = argv[1:]    
+    net = construct_net(filenames=net_files)    
+    logging.debug('net constructed.')
     manager = NetManager(net)
-
-    n_step = FLAGS.steps
+    logging.debug('manager constructed.')
+    n_step = FLAGS.run_steps
+    
     for i in range(1, n_step + 1):
         data, label = train_set.next_batch()
+        logging.debug('data label got.')
         [loss_train, _, lr] = manager.run([net.loss, net.train, net.learn_rate],
                                           feed_dict={net.inputs: data, net.label: label})
         if i % 10 == 0:
@@ -208,7 +214,7 @@ def main(argv):
     #     infer_SR_Sino(argv)
 
 
-if __name__ == '__main__':    
+if __name__ == '__main__':
     xlearn.nets.model.define_flags(sys.argv[1])
     xlearn.nets.model.before_net_definition()
     tf.app.run()

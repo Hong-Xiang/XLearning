@@ -51,10 +51,12 @@ class SuperNetBase(TFNet):
                  name='SuperNetBase',
                  varscope=tf.get_variable_scope(),
                  **kwargs):
+        logging.getLogger(__name__).debug(
+            'SuperNetBase: filenames:{}'.format(filenames))
         super(SuperNetBase, self).__init__(
             filenames=filenames, name=name, varscope=varscope, **kwargs)
         logging.getLogger(__name__).info(
-            "=" * 8 + "SuperNet." + name + " Constructed." + "=" * 8)
+            "=" * 8 + "SuperNet." + name + " Constructing." + "=" * 8)
         self._input = layer.inputs([None,
                                     self._shape_low[0],
                                     self._shape_low[1],
@@ -81,7 +83,9 @@ class SuperNetBase(TFNet):
         self._train = layer.trainstep_clip(
             self._loss, self._learn_rate, self._global_step)
         self._add_summary()
-        self._flags()
+        logging.getLogger(__name__).info(
+            "=" * 8 + "SuperNet." + name + " Constructed." + "=" * 8)
+        logging.getLogger(__name__).info(self._flags())
 
     def _gather_paras(self):
         self._batch_size = self._paras['batch_size']
@@ -105,11 +109,14 @@ class SuperNetBase(TFNet):
 
     def _flags(self):
         infos = ''
-        infos = infos + "=" * 6 + "Net flags:" + "=" * 6
-        infos += "FLAGS.height\t{}\n".format(FLAGS.height)
-        infos += "FLAGS.width\t{}".format(FLAGS.width)
-        print("FLAGS.hidden_units\t", FLAGS.hidden_units)
-        print("FLAGS.hidden_layer\t", FLAGS.hidden_layer)
+        infos = infos + "=" * 6 + "Net flags:" + "=" * 6 + "\n"
+        infos += "height_high\t{}\n".format(self.height_high)
+        infos += "width_high\t{}\n".format(self.width_high)
+        infos += "height_low\t{}\n".format(self.height_low)
+        infos += "width_low\t{}\n".format(self.width_low)
+        infos += "FLAGS.hidden_units\t{}\n".format(FLAGS.hidden_units)
+        infos += "FLAGS.hidden_layer\t{}".format(FLAGS.hidden_layer)
+        return infos
 
     def _add_summary(self):
         model.scalar_summary(self._loss)
@@ -172,7 +179,7 @@ class SuperNet0(SuperNetBase):
                                                          padding='SAME', name='residual_inference')
 
         # self._psnr = layer.psnr_loss(self._residual_inference, self._residual_reference, name='psnr_loss')
-        loss = layer.psnr_loss(
+        loss = layer.l2_loss(
             self._residual_inference, self._residual_reference, name='l2_loss')
 
         self._infer = tf.add(
@@ -244,7 +251,9 @@ class SuperNet2(SuperNetBase):
                  name='SuperNet2',
                  varscope=tf.get_variable_scope(),
                  **kwargs):
-        super(SuperNet2, self).__init__(filenams=filenames,
+        logging.getLogger(__name__).debug(
+            'SuperNet2: filenames:{}'.format(filenames))
+        super(SuperNet2, self).__init__(filenames=filenames,
                                         name=name,
                                         varscope=varscope,
                                         **kwargs)
@@ -266,8 +275,8 @@ class SuperNet2(SuperNetBase):
                                                          padding='SAME', name='residual_inference')
 
         # self._psnr = layer.psnr_loss(self._residual_inference, self._residual_reference, name='psnr_loss')
-        self._l2_loss = layer.l2_ave_loss(self._residual_inference,
-                                          self._residual_reference, name='l2_loss')
+        self._l2_loss = layer.l2_loss(self._residual_inference,
+                                      self._residual_reference, name='l2_loss')
 
         with tf.name_scope('inference'):
             self._infer = tf.add(self._interp,

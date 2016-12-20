@@ -92,17 +92,17 @@
     "net_name": {
         "helpdoc": "net name",
         "type": "string",
-        "value": "SuperNet2"
+        "value": "SuperNet0"
     },    
     "run_steps": {
         "helpdoc": "# of steps",
         "type": "int",
-        "value": 2000
+        "value": 5000
     },
     "run_task": {
         "helpdoc": "task name",
         "type": "string",
-        "value": "train_fx"
+        "value": "train_SR_nature"
     },
     "weight_decay": {
         "helpdoc": "weight decay coefficient",
