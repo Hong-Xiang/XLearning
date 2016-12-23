@@ -33,7 +33,9 @@ IMAGE_SUFFIX = ['png', 'jpg']
 
 def rename(source, prefix=None, suffix=None, recurrent=False, no_action=False, force=False):
     """Rename all files in a folder, reform prefixes, with filter using suffix.
-    Only files with form: name[.suffix] will be checked.
+    Only rename files with form: name[.suffix].
+    If prefix is given, then performing prefix changing task. All files are
+    suppoosed to be in standard name form.
     If prefix is None, a random prefix will be added.
     """
     folder_name = source
@@ -69,7 +71,10 @@ def rename(source, prefix=None, suffix=None, recurrent=False, no_action=False, f
         pipe_random_prefix = utp.RandomPrefix()
         for file_old in files:
             prefix = next(pipe_random_prefix.out)
-            file_new = prefix + file_old
+            if suffix is '':
+                file_new = prefix
+            else:
+                file_new = prefix + '.' + suffix
             full_old = os.path.join(folder_name, file_old)
             full_new = os.path.join(folder_name, file_new)
             if no_action:
@@ -202,7 +207,7 @@ def raw2npy(folder_name, shape, prefix, **kwargs):
         height = shape[0]
         width = shape[1]
         frame = shape[2]
-        pixel = height * width * frame        
+        pixel = height * width * frame
         data = np.zeros([pixel])
         with open(fullname) as f:
             bindata = f.read()
@@ -217,7 +222,7 @@ def raw2npy(folder_name, shape, prefix, **kwargs):
                     data2[j, i, k] = data[idf]
         filename = utg.form_file_name(prefix_f, id_f, 'npy')
         fullname = os.path.join(folder_name, filename)
-        np.save(fullname, data2)        
+        np.save(fullname, data2)
 
 
 def proj2sino(folder, prefix_old, prefix_new, id0, id1, folder_out=None):
@@ -302,6 +307,31 @@ def print_std_filename(file):
     print("+STD:{}".format(name_std))
 
 
+def shuffle(source, target, prefix=None, suffix=None, no_action=False):
+    print("Shuffle data filenames.")
+    if isinstance(source, (list, tuple)):
+        map(lambda folder: shuffle(folder, target,
+                                   prefix, suffix, no_action), source)
+        return None
+    if source == target:
+        raise ValueError("source and targe can not be same.")
+    source = os.path.abspath(source)
+    all_file = os.listdir(source)
+    all_file_full = list(
+        map(lambda file_: os.path.join(source, file_), all_file))
+    files, dirs = utg.filename_filter(all_file_full, prefix, suffix)
+    totalfiles = len(files)
+    ids = list(range(totalfiles))
+    random.shuffle(ids)
+    for filename in files:
+        file_new = utg.form_file_name(prefix, ids.pop(), suffix)
+        filefull = os.path.join(target, file_new)
+        if no_action:
+            print("RENAME {0} to {1}.".format(filename, filefull))
+        else:
+            shutil.move(filename, filefull)
+
+
 def merge(source, target, random_rename=True, copy_file=False, no_action=False, recurrent=False, prefix=None, suffix=None):
     print("merge tool called on {0}".format(source))
     if random_rename:
@@ -364,6 +394,10 @@ def main(argv):
                         action='store_true',
                         default=False,
                         help='merge multiple folders.')
+    parser.add_argument('--shuffle',
+                        action='store_true',
+                        default=False,
+                        help='shuffle data file ids.')
     parser.add_argument('--img2jpg',
                         action='store_true',
                         default=False,
@@ -454,6 +488,10 @@ def main(argv):
     if args.merge:
         merge(args.source, args.target, args.random_rename, args.copy_file,
               args.no_action, args.recurrent, args.prefix, args.suffix)
+
+    if args.shuffle:
+        shuffle(args.source, args.target, args.prefix,
+                args.suffix, args.no_action)
 
     if args.pad_sino:
         pad_sino(args.source, args.target, args.prefix, args.pwx, args.pwy)

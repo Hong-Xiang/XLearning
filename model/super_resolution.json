@@ -1,24 +1,29 @@
 {
     "shape_i": [        
-        155,
-        31,
+        33,
+        33,
         1
     ],
     "shape_o": [    
-        155,
-        155,
+        99,
+        99,
         1
     ],
     "strides": [        
-        10,
-        10,
+        20,
+        20,
         1
     ],
     "down_sample_method": "fixed",
     "down_sample_ratio": [        
-        1,
-        5,
+        3,
+        3,
         1
     ],
-    "down_sample_is_pad": false
+    "down_sample_is_pad": false,
+    "is_norm": true,
+    "is_gamma": false,
+    "mean": 1,
+    "std": 128,
+    "gamma_r": 0.3
 }

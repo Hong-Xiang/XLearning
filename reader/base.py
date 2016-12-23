@@ -10,11 +10,11 @@ class EndEpoch(StopIteration):
     pass
 
 
-class NoMoreEpoch(StopIteration):
+class EndSingleFile(StopIteration):
     pass
 
 
-class NotYetEpoch(StopIteration):
+class NoMoreEpoch(StopIteration):
     pass
 
 
@@ -28,10 +28,10 @@ class DataSet(object):
 
         This base class handles reading parameters, epoch updates and batch
         generation. Inherence class should implement following method:
+        Args:
+            filenames: A list of str, configure .JSON files.
+            kwargs: directly input settings.
 
-        Parameters:
-        Required:
-            None
         Optional:
             _set_paras_default(self): set default paras, for self._paras only
 
@@ -59,34 +59,25 @@ class DataSet(object):
             _batch_start(self)
             _batch_end(self)
         """
-        # self._paras = {}
-        # # set default parameters
-        # self._paras = utg.merge_settings(
-        #     self._paras, **self._set_paras_default())
-        # # load parameters from configure files
-        # if filenames is None:
-        #     filenames = []
-        # for filename in filenames:
-        #     self._paras = self._load_conf_file(filename)
-
-        # # set paramters directly from kwargs
-        # self._paras = utg.merge_settings(self._paras, **kwargs)
         self._paras = utg.merge_settings(
             filenames=filenames, default_settings=self._get_default_paras(), **kwargs)
+        # logging.getLogger(__name__).debug("Dataset input paras:")
+        # logging.getLogger(__name__).debug(self._paras)
         self._dataset_type = self._paras['dataset_type']
 
         # gather all needed parameters
         self._get_paras()
-        logging.getLogger(__name__).debug("DataSetBase __init__")
-        logging.getLogger(__name__).debug(self._print_paras())
-
         self._prepare()
+        logging.getLogger(__name__).debug(
+            "DataSet end of __init__, para_string():")
+        logging.getLogger(__name__).debug(self._para_string())
 
     def _get_default_paras(self):
         paras_def = {
             'is_shuffle': False,
             'is_pad': True,
             'is_cache': False,
+            'is_lock': False,
             'epoch_max': -1
         }
         return paras_def
@@ -101,9 +92,12 @@ class DataSet(object):
             self._gather_paras_infer()
         self._gather_paras_special()
 
-    def _print_paras(self):
+    def _para_string(self):
+        """Report all paras in a well formated string.
+        May override to report used paras only.
+        """
         # return json.dumps(self._paras, sort_keys=True, indent=4,
-                        #   separators=(',', ': '))
+        #   separators=(',', ': '))
         # return self._paras
         dic_sorted = sorted(self._paras.items(), key=lambda t: t[0])
         fmt = r"{0}: {1},"
@@ -114,6 +108,8 @@ class DataSet(object):
     def _gather_paras_common(self):
         """Gather parameters from self._paras to shortcuts like self._batch_size.
         """
+
+        # Input/Ouput tensor shapes
         self._batch_size = self._paras['batch_size']
         self._shape_i = self._paras['shape_i']
         self._shape_o = self._paras['shape_o']
@@ -121,10 +117,18 @@ class DataSet(object):
         self._shape_sample_o = [1] + list(self._shape_o)
         self._shape_batch_i = [self._batch_size] + list(self._shape_i)
         self._shape_batch_o = [self._batch_size] + list(self._shape_o)
-        self._is_pad = self._paras['is_pad']
-        self._is_cache = self._paras['is_cache']
-        self._epoch_max = self._paras['epoch_max']
+
         self._is_shuffle = self._paras['is_shuffle']
+        self._epoch_max = self._paras['epoch_max']
+
+        # Padding
+        self._is_pad = self._paras['is_pad']
+
+        # cache flag
+        self._is_cache = self._paras['is_cache']
+
+        # Dataset based on files
+        self._is_lock = self._paras['is_lock']
 
     def _gather_paras_train(self):
         pass
@@ -143,37 +147,100 @@ class DataSet(object):
         """
         self._epoch = utp.Counter(max_state=self._epoch_max)
 
+        # No more epoch flag is set to False only once here. When it is True,
+        # Calling batch_start() will raise StopIteration exception.
+        self._is_next_epoch = True
+        self._is_next_epoch_to_be_true = False
+        self._is_no_more_epoch = False
+
+        # Work with self._is_lock, when self._is_next_file is False, Calling
+        # _end_of_sinle_file() will results _padding(), otherwise it will load
+        # next file and return sample()
+
+        self._is_next_file = True
+        self._is_next_file_to_be_true = False
+        self._is_no_more_sample = False
+
     def _next_epoch(self):
         """prepare for next epoch
+        If this method returns None, _sample() should work properly.
+        If is_next_epoch is True, calling this will add one to epoch counter.
         Args:
+            None
         Returns:
+            None
         Raises:
             NoMoreEpoch: epoch_max reached
-            NoYetEpoch: not yet for next epoch.
+                - padding current batch
+                - calling batch_start() will raise StopIteration
         """
-        next(self._epoch.out)
+        try:
+            next(self._epoch.out)
+        except StopIteration:
+            raise NoMoreEpoch
+
+    def __end_of_epoch(self):
+        """called when self._sample() or self._next_file() raise a EndEpoch
+        exception.
+        Raises:
+            ValueError : the new epoch is empty.
+        """
+        if self._is_next_epoch:
+            try:
+                self._next_epoch()
+                return self._sample()
+            except EndSingleFile:
+                raise ValueError("Empty epoch.")
+            except NoMoreEpoch:
+                self._is_no_more_epoch = True
+                return self._padding()
+        else:
+            return self._padding()
+
+    def _next_file(self):
+        """prepare for next file
+        Raises:
+            EndEpoch
+        """
+        pass
+
+    def __end_of_single_file(self):
+        """called when self._sample() raise a EndSingleFile exception
+        """
+        self._is_no_more_sample = True
+        if self._is_next_file:
+            try:
+                self._next_file()
+                self._is_no_more_sample = False
+                return self._sample()
+            except EndEpoch:
+                self.__end_of_epoch()
+        else:
+            return self._padding()
 
     def _batch_start(self):
         """Called at start of next_batch()
+        Raises:
+            StopIteration
         """
-        pass
+        if self._is_no_more_sample:
+            raise StopIteration
+        if self._is_no_more_epoch:
+            raise StopIteration
 
     def _batch_end(self):
         """Called at end of next_batch()
         """
-        pass
+        self._is_batch_end = True
+        if self._is_next_file_to_be_true:
+            self._is_next_file = True
+            self._is_next_file_to_be_true = False
+        if self._is_next_epoch_to_be_true:
+            self._is_next_epoch = True
+            self._is_next_epoch_to_be_true = False
 
     def _is_train_or_test(self):
         return self._dataset_type == "train" or self._dataset_type == "test"
-
-    def _end_of_epoch(self):
-        """called when self._sample() raise a EndEpoch exception.
-        """
-        try:
-            self._next_epoch()
-            return self._sample()
-        except (NoMoreEpoch, NotYetEpoch):
-            return self._padding()
 
     def _padding(self):
         """padding batch data when used up all datas and a batch is not finished
@@ -209,7 +276,9 @@ class DataSet(object):
             try:
                 data, label = self._sample()
             except EndEpoch:
-                data, label = self._end_of_epoch()
+                data, label = self.__end_of_epoch()
+            except EndSingleFile:
+                data, label = self.__end_of_single_file()
             if data is None:
                 tensor_data = tensor_data[:i]
                 tensor_label = tensor_label[:i]
@@ -228,7 +297,7 @@ class DataSet(object):
     def print_paras(self):
         """Print all config parameters.
         """
-        print(self._print_paras)
+        print(self._para_string())
 
     @property
     def batch_size(self):

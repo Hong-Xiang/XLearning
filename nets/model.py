@@ -46,7 +46,8 @@ def define_flags(filenames=None, **kwargs):
     if filenames is None:
         filenames = [DEFAULT_CONF_JSON]
     flag = tf.app.flags
-    logging.getLogger(__name__).info("Load tf.app.flags config file: {}".format(filenames))
+    logging.getLogger(__name__).info(
+        "Load tf.app.flags config file: {}".format(filenames))
     args = utg.merge_settings(filenames=filenames, **kwargs)
     for item in args:
         if not isinstance(args[item], dict):
@@ -61,7 +62,8 @@ def define_flags(filenames=None, **kwargs):
     try:
         FLAGS.activation_function
     except AttributeError:
-        def_flag("string", "activation_function", "relu", "default activation.")
+        def_flag("string", "activation_function", "elu", "default activation.")
+
 
 def before_net_definition():
     zeroinit = tf.constant_initializer(0.0)
@@ -79,7 +81,7 @@ def scalar_summary(x):
     :return: nothing
     """
     tensor_name = x.op.name
-    tf.scalar_summary(tensor_name, x)
+    tf.summary.scalar(tensor_name, x)
 
 
 def activation_summary(x):
@@ -92,8 +94,8 @@ def activation_summary(x):
       nothing
     """
     tensor_name = x.op.name
-    tf.histogram_summary(tensor_name + '/activations', x)
-    tf.scalar_summary(tensor_name + '/sparsity', tf.nn.zero_fraction(x))
+    tf.summary.histogram(tensor_name + '/activations', x)
+    tf.summary.scalar(tensor_name + '/sparsity', tf.nn.zero_fraction(x))
 
 
 class NetManager(object):
@@ -102,15 +104,15 @@ class NetManager(object):
 
     def __init__(self, net, varnames=None):
         self._net = net
-        self._summary = tf.merge_all_summaries()
+        self._summary = tf.summary.merge_all()
         # self._sess = tf.Session(
         # config=tf.ConfigProto(log_device_placement=True))
         self._sess = tf.Session()
         init_op = tf.global_variables_initializer()
         self._sess.run(init_op)
-        self._train_writer = tf.train.SummaryWriter(
+        self._train_writer = tf.summary.FileWriter(
             FLAGS.path_summary_train, self._sess.graph)
-        self._test_writer = tf.train.SummaryWriter(
+        self._test_writer = tf.summary.FileWriter(
             FLAGS.path_summary_test, self._sess.graph)
 
         if varnames is None:
@@ -135,13 +137,15 @@ class NetManager(object):
 
     def save(self, step=None):
         if step is None:
-            self._saver.save(self._sess, FLAGS.save_dir + '-' + FLAGS.task)
+            self._saver.save(self._sess, FLAGS.path_save + '-' + FLAGS.task)
         else:
-            self._saver.save(self._sess, FLAGS.save_dir +
+            self._saver.save(self._sess, FLAGS.path_save +
                              '-' + FLAGS.task, step)
 
     def restore(self):
-        ckfile = os.path.join(FLAGS.save_dir, 'checkpoint')
+        if self._net.is_skip_restore:
+            return
+        ckfile = os.path.join(FLAGS.path_save, 'checkpoint')
         with open(ckfile) as ckpf:
             for line in ckpf:
                 (key, value) = line.split()
@@ -149,7 +153,7 @@ class NetManager(object):
                     save_path = value
                     break
         save_path = save_path[1:-1]
-        save_path = os.path.join(FLAGS.save_dir, save_path)
+        save_path = os.path.join(FLAGS.path_save, save_path)
         self._saver.restore(self._sess, save_path)
 
     @property
@@ -181,14 +185,18 @@ class TFNet(object):
                                                       FLAGS.lr_decay_factor,
                                                       staircase=True,
                                                       name='learning_rate')
-        tf.scalar_summary("learn_rate", self._learn_rate)
+        tf.summary.scalar("learn_rate", self._learn_rate)
         self._gather_paras()
-        self._prepare()        
+        self._prepare()
+        logging.getLogger(__name__).debug(
+            "TFNet end of __init__, para_string():")
+        logging.getLogger(__name__).debug(self._para_string())
 
     def _gather_paras(self):
         pass
 
     def _prepare(self):
+        self._is_skip_restore = False
         pass
 
     def _net_definition(self):
@@ -196,6 +204,13 @@ class TFNet(object):
 
     def global_step(self, sess):
         return sess.run(self._global_step)
+
+    def _para_string(self):
+        dic_sorted = sorted(self._paras.items(), key=lambda t: t[0])
+        fmt = r"{0}: {1},"
+        msg = 'DataSet Settings:\n' + \
+            '\n'.join([fmt.format(item[0], item[1]) for item in dic_sorted])
+        return msg
 
     @property
     def infer(self):
@@ -220,3 +235,7 @@ class TFNet(object):
     @property
     def learn_rate(self):
         return self._learn_rate
+
+    @property
+    def is_skip_restore(self):
+        return self._is_skip_restore

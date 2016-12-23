@@ -1,18 +1,46 @@
 {
     "dataset_type": "infer",
-    "path_input": null,
+    "batch_size": 128,    
     "prefix": "img",
     "is_need_gray": true,
     "is_save": false,
-    "is_check_all": true,
-    "batch_size": 64,
+    "is_check_all": true,    
     "is_lock": true,
-    "down_sample_padding": false,
-    "mean": 1,
-    "std": 128,
-    "path_data": "/home/hongxwing/Workspace/Datas/nature_image_special/",
-    "path_output": "/home/hongxwing/Workspace/test",
+    "is_norm": true,
+    "is_gamma": false,
+    "path_data": "/home/hongxwing/Workspace/test/data",
+    "path_output": "/home/hongxwing/Workspace/test/result",
     "nzratio": 0.0,
-    "eps": 1e-5,
-    "is_norm": true
+    "eps": 1e-5,        
+    "infer_margin0":[
+        0,
+        0,
+        0,
+        0
+    ],
+    "infer_margin1":[
+        0,
+        0,
+        0,
+        0
+    ],
+    "infer_offset0":[
+        0,
+        0,
+        0,
+        0
+    ],
+    "infer_offset1":[
+        0,
+        0,
+        0,
+        0
+    ],
+    "infer_shape":[
+        1,
+        512,
+        512,
+        1
+    ],
+    "epoch_max": -1
 }

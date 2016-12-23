@@ -85,10 +85,9 @@ class DataSetSuperResolution(xlearn.reader.base.DataSet):
         self._is_need_gray = self._paras['is_need_gray']
 
         # patch generation paras:
-        if 'n_patches' in self._paras:
+        self._n_patches = None
+        if 'n_patches' in self._paras and self._dataset_type != "infer":
             self._n_patches = self._paras['n_patches']
-        else:
-            self._n_patches = None
         self._is_patch = self._paras['is_patch']
         self._is_check_all = self._paras['is_check_all']
         self._is_lock = self._paras['is_lock']
@@ -108,6 +107,8 @@ class DataSetSuperResolution(xlearn.reader.base.DataSet):
         self._std = self._paras['std']
         self._mean = self._paras['mean']
         self._is_norm = self._paras['is_norm']
+        self._is_gamma = self._paras['is_gamma']
+        self._gamma_r = self._paras['gamma_r']
 
     def _prepare(self):
         super(DataSetSuperResolution, self)._prepare()
@@ -125,10 +126,8 @@ class DataSetSuperResolution(xlearn.reader.base.DataSet):
                                                      ids=self._ids,
                                                      max_epoch=1)
             data_filename_iter = utp.Inputer()
-            self._testo = data_filename_iter
             self._filename_inputer = data_filename_iter
             self._is_next_file = True
-
         if self._is_single:
             data_image = utp.NPYReaderSingle(data_filename_iter)
             data_image_copyer = utp.Copyer(data_image, copy_number=2)
@@ -150,6 +149,7 @@ class DataSetSuperResolution(xlearn.reader.base.DataSet):
         else:
             data_full = data_tensor
             label_full = label_tensor
+
         merge = utp.Pipe([data_full, label_full])
         stacker = utp.TensorStacker(merge)
         multi_tensor = utp.TensorFormater(stacker)
@@ -168,9 +168,11 @@ class DataSetSuperResolution(xlearn.reader.base.DataSet):
         down_sample = utp.DownSampler(
             buffer_hl, self._down_sample_ratio, method=self._down_sample_method)
         self._data = utp.TensorFormater(down_sample)
+        self._testo = self._filename_iter
 
     def test_debug(self):
         return next(self._testo.out)
+        pass
 
     def _sample(self):
         try:
@@ -179,33 +181,40 @@ class DataSetSuperResolution(xlearn.reader.base.DataSet):
             data = np.reshape(data, self._shape_sample_i)
             label = np.reshape(label, self._shape_sample_o)
             if self._is_norm:
-                stdv = np.std(data)
-                if stdv > self._eps:
-                    data /= stdv
-                    label /= stdv
-                meanv = np.mean(data)
-                data -= meanv
-                label -= meanv
+                # stdv = np.std(data)
+                # if stdv > self._eps:
+                #     data /= stdv
+                #     label /= stdv
+                # meanv = np.mean(data)
+                # data -= meanv
+                # label -= meanv
+                data /= self._std
+                label /= self._std
+                data -= self._mean
+                label -= self._mean
+                if self._is_gamma:
+                    data = np.power(data, self._gamma_r)
+                    label = np.power(label, self._gamma_r)
+        except StopIteration:
+            if self._is_lock:
+                raise xlearn.reader.base.EndSingleFile
+            else:
+                raise xlearn.reader.base.EndEpoch
             cepoch = self._filename_iter.epoch
             while cepoch > self.epoch:
                 self._next_epoch()
-        except StopIteration:
-            raise xlearn.reader.base.EndEpoch
         return data, label
 
-    def _end_of_epoch(self):
-        super(DataSetSuperResolution, self)._end_of_epoch()
-        if not self._is_lock:
-            return self._sample()
-        if self._is_next_file:
+    def _next_file(self):        
+        try:
+            super(DataSetSuperResolution, self)._next_file()
             filename = next(self._filename_iter.out)
-            self._image = np.array(np.load(filename))
-            logging.getLogger(__name__).debug("processing: " + filename)
-            self._filename_inputer.insert(filename)
-            self._is_next_file = False
-            return self._sample()
-        else:
-            return self._padding()
+        except StopIteration:            
+            raise xlearn.reader.base.EndEpoch
+        self._image = np.array(np.load(filename))
+        logging.getLogger(__name__).debug("processing: " + filename)
+        self._filename_inputer.insert(filename)
+        self._is_next_file = False
 
     def free_lock(self):
         self._is_next_file = True
@@ -234,12 +243,84 @@ class DataSetSuperResolution(xlearn.reader.base.DataSet):
     def is_next_file(self):
         return self._is_next_file
 
+    @property
+    def n_files(self):
+        return self._filename_iter.n_files
+
+    @property
+    def is_lock(self):
+        return self._is_lock
+
+    @property
+    def last_file(self):
+        return self._filename_iter.last_name
+
+
 class ImageReconstructer(object):
+
     def __init__(self, filenames=None, **kwargs):
         self._paras = utg.merge_settings(filenames=filenames, **kwargs)
+        self._buffer = []
+        self._margin0 = self._paras['infer_margin0']
+        self._margin1 = self._paras['infer_margin1']
+        self._offset0 = self._paras['infer_offset0']
+        self._offset1 = self._paras['infer_offset1']
+        self._is_norm = self._paras['is_norm']
+        self._is_gamma = self._paras['is_gamma']
+        self._gamma_r = self._paras['gamma_r']
+        self._mean = self._paras['mean']
+        self._std = self._paras['std']
+        self._shape = self._paras['infer_shape']
+        self._strides = self._paras['strides']
+        if len(self._strides) < len(self._margin0):
+            self._strides = [1] + list(self._strides)
+        self._recon = None
+        self._path_output = self._paras['path_output']
+        logging.getLogger(__name__).debug(
+            "ImageReconstructer end of __init__, para_string():")
+        logging.getLogger(__name__).debug(self._para_string())
 
+    def add_result(self, input_):
+        """Add infer result to buffer
+        """
+        n_batch = input_.shape[0]        
+        for i in range(n_batch):
+            tmp = input_[i, :]
+            tmp = np.reshape(
+                tmp, [1, input_.shape[1], input_.shape[2], input_.shape[3]])
+            if self._is_norm:
+                if self._is_gamma:
+                    tmp = np.power(tmp, -self._gamma_r)
+                tmp += self._mean
+                tmp *= self._std
+            self._buffer.append(tmp)
 
+    def shape_set(self, shape):
+        self._shape = shape
 
+    def reconstruction(self):
+        """Reconstruct image from infered patches.
+        """
+        patches = self._buffer
+        output = utt.combine_tensor_list(patches, shape=self._shape,
+                                         strides=self._strides,
+                                         margin0=self._margin0,
+                                         margin1=self._margin1,
+                                         check_all=True)
+        self._recon = output
+        self._buffer = []
+        return output
+
+    def _para_string(self):
+        dic_sorted = sorted(self._paras.items(), key=lambda t: t[0])
+        fmt = r"{0}: {1},"
+        msg = 'DataSet Settings:\n' + \
+            '\n'.join([fmt.format(item[0], item[1]) for item in dic_sorted])
+        return msg
+
+    @property
+    def path_output(self):
+        return self._path_output
 # class DataSetSR(object):
 #     # raise DeprecationWarning
 #     """
@@ -490,7 +571,8 @@ class ImageReconstructer(object):
 #         patches = self._result[:self._n_patch]
 #         sr_patch_shape = patches[0].shape
 #         margin0 = list(
-#             map(lambda x: (x[0] - x[1]) / 2, zip(self._patch_shape, sr_patch_shape)))
+# map(lambda x: (x[0] - x[1]) / 2, zip(self._patch_shape,
+# sr_patch_shape)))
 
 #         margin1 = list(
 #             map(lambda x: (x[0] - x[1]) / 2, zip(self._patch_shape, sr_patch_shape)))

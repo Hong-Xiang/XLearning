@@ -115,3 +115,20 @@ def merge_settings(settings=None, filenames=None, default_settings=None, **kwarg
     settings.update(filted_kwargs)
 
     return settings
+
+
+def filename_filter(filenames, prefix, suffix):
+    dirs = []
+    files = []
+    for filename in filenames:
+        path_full = os.path.abspath(filename)
+        if os.path.isdir(filename):
+            dirs.append(path_full)
+        if os.path.isfile(path_full):
+            filename_tail = os.path.basename(path_full)
+            prefix, id, suffix = seperate_file_name(filename_tail)
+            if prefix is None:
+                continue
+            else:
+                files.append(path_full)
+    return files, dirs

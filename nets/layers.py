@@ -151,9 +151,9 @@ def activation(input_, *args, activation_function=None, varscope=None, name=None
             elif FLAGS.activation_function == "elu":
                 activation_function = tf.nn.elu
             else:
-                activation_function = tf.nn.relu
+                activation_function = tf.nn.elu
         except AttributeError:
-            activation_function = tf.nn.relu
+            activation_function = tf.nn.elu
     if activation_function is tf.nn.relu:
         tensor = tf.nn.relu(input_, name)
     if activation_function is tf.nn.elu:

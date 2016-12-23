@@ -3,6 +3,7 @@
 """entry script for all runs.
 """
 # TODO: add a new script dedicate for command line interaction.
+import matplotlib.pyplot as plt
 import sys
 import numpy as np
 import tensorflow as tf
@@ -16,30 +17,33 @@ from xlearn.model.supernet import *
 from xlearn.nets.model import NetManager
 from xlearn.reader.fx import DataSetFx
 from xlearn.reader.srinput import DataSetSuperResolution
+import xlearn.reader.srinput
 
 import xlearn.utils.image as uti
 import xlearn.utils.tensor as utt
+import xlearn.utils.general as utg
 
 FLAGS = tf.app.flags.FLAGS
 
 
-def construct_net(filenames=None, **kwargs):    
+def construct_net(filenames=None, **kwargs):
     if FLAGS.net_name == "SuperNetInterp":
-        net = xlearn.model.supernet.SuperNetInterp(filenames=filenames,**kwargs)
+        net = xlearn.model.supernet.SuperNetInterp(
+            filenames=filenames, **kwargs)
     if FLAGS.net_name == "SuperNetCrop":
-        net = xlearn.model.supernet.SuperNetCrop(filenames=filenames,**kwargs)
+        net = xlearn.model.supernet.SuperNetCrop(filenames=filenames, **kwargs)
     if FLAGS.net_name == "SuperNet0":
-        net = xlearn.model.supernet.SuperNet0(filenames=filenames,**kwargs)
+        net = xlearn.model.supernet.SuperNet0(filenames=filenames, **kwargs)
     if FLAGS.net_name == "SuperNet1":
-        net = xlearn.model.supernet.SuperNet1(filenames=filenames,**kwargs)
+        net = xlearn.model.supernet.SuperNet1(filenames=filenames, **kwargs)
     if FLAGS.net_name == "SuperNet2":
-        net = xlearn.model.supernet.SuperNet2(filenames=filenames,**kwargs)
+        net = xlearn.model.supernet.SuperNet2(filenames=filenames, **kwargs)
     return net
 
 
 def construct_dataset(filenames=None, **kwargs):
     if FLAGS.run_task == "train_SR_sino" or FLAGS.run_task == "train_SR_nature":
-        data_set = DataSetSuperResolution(filenames,**kwargs)
+        data_set = DataSetSuperResolution(filenames, **kwargs)
     # if FLAGS.task == "infer_SR_Sino":
     #     data_set = DataSetSRInfer(conf_file)
     return data_set
@@ -64,7 +68,7 @@ def train_fx(argv):
     net = xlearn.model.fx.NetFx(filenames=argv[2:])
 
     manager = NetManager(net)
-    
+
     n_step = FLAGS.run_steps
     for i in range(1, n_step + 1):
         x, y = data_set.next_batch()
@@ -90,49 +94,47 @@ def train_fx(argv):
     y_ = y_[0]
     np.save('oneoverx.npy', [x, y_])
 
-# TODO: Implement infer
-# def infer_SR_Sino(argv):
-#     dataset_infer = DataSetSRInfer(FLAGS.infer_conf)
-#     infer_path = dataset_infer.path_infer
-#     net = construct_net()
-#     manager = NetManager(net)
-#     manager.restore()
-#     pipe_file = utp.FileNameLooper(infer_path, prefix='sino')
-#     for input_file in pipe_file.out:
-#         print("processing {0}...".format(input_file))
-#         dataset_infer.load_new_file(input_file)
-#         input_file = os.path.basename(input_file)
-#         for i in xrange(dataset_infer.n_batch):
-#             low_sr = dataset_infer.next_batch()
-#             result = manager.run(net.infer, feed_dict={net.inputs: low_sr})
-#             dataset_infer.add_result(result)
-#         dataset_infer.form_image()
-#         image_orginal = dataset_infer.image
-#         image_superre = dataset_infer.recon
-#         output_name = 'sr' + input_file
-#         input_name = 'or' + input_file
-#         fullnameo = os.path.join(dataset_infer.path_output, output_name)
-#         fullnamei = os.path.join(dataset_infer.path_output, input_name)
-#         np.save(fullnameo, image_superre)
-#         np.save(fullnamei, image_orginal)
 
-    # image_orginal = uti.image_formater(image_orginal)
+def infer_SR_sino(argv):
+    dataset_infer = DataSetSuperResolution(argv[2:])
+    dataset_infer.free_lock()
+    datarecon = xlearn.reader.srinput.ImageReconstructer(argv[2:])
+    net = construct_net(filenames=argv[1:])
+    manager = NetManager(net)
+    manager.restore()
+    for i in range(dataset_infer.n_files):
+        print("Processing {0} of {1} files...".format(
+            i, dataset_infer.n_files))
+        dataset_infer.free_lock()
+        while True:
+            try:
+                low_sr, _ = dataset_infer.next_batch()
+                result = manager.run(net.infer, feed_dict={net.inputs: low_sr})
+                np.save('lowsr.npy', low_sr)
+                np.save('res.npy', result)
+                datarecon.add_result(result)                
+            except StopIteration:
+                break
 
-    # image_superre = uti.image_formater(image_superre)
+        input_file = os.path.basename(dataset_infer.last_file)
+        image = datarecon.reconstruction()
+        output_file = os.path.join(datarecon.path_output, input_file)
+        np.save(output_file, image)
 
 
 def train_SR_sino(argv):
     """train super resolution net on sinogram 2d data.
     """
-    train_set = construct_dataset(filenames=argv[2:])
-    test_set = construct_dataset(filenames=argv[2:])
-    # check_dataset(train_set)
-    # check_dataset(test_set)
-    # return None
-    net = construct_net()
+    train_files = [argv[2], argv[3]]
+    test_files = [argv[2], argv[4]]
+    train_set = construct_dataset(filenames=train_files)
+    test_set = construct_dataset(filenames=test_files)
+    net_files = argv[1:]
+    net = construct_net(filenames=net_files)
+    logging.debug('net constructed.')
     manager = NetManager(net)
-    test_loss = []
-    n_step = FLAGS.steps
+    logging.debug('manager constructed.')
+    n_step = FLAGS.run_steps
     saver = tf.train.Saver(tf.global_variables())
     for i in range(1, n_step + 1):
         data, label = train_set.next_batch()
@@ -154,10 +156,10 @@ def train_SR_sino(argv):
                                                  net.label: label_test})
             print('step={0:5d},\t test loss={1:0.3f}.'.format(i, loss_test))
         if i % 1000 == 0:
-            path = saver.save(manager.sess, FLAGS.save_path, i)
+            path = saver.save(manager.sess, FLAGS.path_save, i)
     # manager.save()
-    np.save('test_loss.npy', np.array(test_loss))
-    path = saver.save(manager.sess, FLAGS.save_path, FLAGS.steps)
+    # np.save('test_loss.npy', np.array(test_loss))
+    path = saver.save(manager.sess, FLAGS.path_save, FLAGS.run_steps)
     print("net variables saved to: " + path + '.')
 
 
@@ -166,16 +168,12 @@ def train_SR_nature(argv):
     test_files = [argv[2], argv[4]]
     train_set = construct_dataset(filenames=train_files)
     test_set = construct_dataset(filenames=test_files)
-    # check_dataset(train_set)
-    # check_dataset(test_set)
-    # return None
-    net_files = argv[1:]    
-    net = construct_net(filenames=net_files)    
+    net_files = argv[1:]
+    net = construct_net(filenames=net_files)
     logging.debug('net constructed.')
     manager = NetManager(net)
     logging.debug('manager constructed.')
     n_step = FLAGS.run_steps
-    
     for i in range(1, n_step + 1):
         data, label = train_set.next_batch()
         logging.debug('data label got.')
@@ -199,7 +197,7 @@ def train_SR_nature(argv):
     # manager.save()
 
     saver = tf.train.Saver(tf.all_variables())
-    path = saver.save(manager.sess, FLAGS.save_path, FLAGS.steps)
+    path = saver.save(manager.sess, FLAGS.path_save, FLAGS.run_steps)
     print(path)
 
 
@@ -210,8 +208,8 @@ def main(argv):
         train_SR_nature(argv)
     if FLAGS.run_task == "train_SR_sino":
         train_SR_sino(argv)
-    # if FLAGS.task == "infer_SR_sino":
-    #     infer_SR_Sino(argv)
+    if FLAGS.run_task == "infer_SR_sino":
+        infer_SR_sino(argv)
 
 
 if __name__ == '__main__':

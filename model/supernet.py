@@ -13,7 +13,7 @@ import xlearn.nets.model as model
 from xlearn.nets.model import TFNet
 
 FLAGS = tf.app.flags.FLAGS
-ACTIVITION_FUNCTION = tf.nn.relu
+ACTIVITION_FUNCTION = tf.nn.elu
 
 
 class SuperNetInterp(TFNet):
@@ -23,10 +23,11 @@ class SuperNetInterp(TFNet):
     def __init__(self, filenames=None, name="SuperNetInterp", varscope=None, **kwargs):
         super(SuperNetInterp, self).__init__(
             filenames=filenames, name=name, varscope=varscope, **kwargs)
+        self._is_skip_restore = True
         print("=" * 8 + "SuperNet." + name + " Constructed." + "=" * 8)
         self._input = layer.inputs([None,
-                                    FLAGS.height,
-                                    FLAGS.width,
+                                    self._low_shape[0],
+                                    self._low_shape[1],
                                     1],
                                    "input_low_res")
         self._infer = tf.image.resize_images(self._input,
@@ -122,12 +123,12 @@ class SuperNetBase(TFNet):
         model.scalar_summary(self._loss)
         for opt in self._midops:
             model.activation_summary(opt)
-        tf.image_summary('input_low', self._input)
-        tf.image_summary('label_high', self._label)
-        tf.image_summary('residual_inference', self._residual_inference)
-        tf.image_summary('residual_reference', self._residual_reference)
-        tf.image_summary('inference', self._infer)
-        tf.image_summary('interp_result', self._interp)
+        tf.summary.image('input_low', self._input)
+        tf.summary.image('label_high', self._label)
+        tf.summary.image('residual_inference', self._residual_inference)
+        tf.summary.image('residual_reference', self._residual_reference)
+        tf.summary.image('inference', self._infer)
+        tf.summary.image('interp_result', self._interp)
 
     @property
     def height_high(self):
@@ -340,10 +341,10 @@ class SuperNetCrop(SuperNetBase):
         model.scalar_summary(self._loss)
         for opt in self._midops:
             model.activation_summary(opt)
-        tf.image_summary('input_low', self._input)
-        tf.image_summary('label_high', self._label)
-        tf.image_summary('residual_inference', self._residual_inference)
-        tf.image_summary('residual_reference', self._residual_crop)
-        tf.image_summary('inference', self._infer)
-        tf.image_summary('interp_crop', self._interp_crop)
-        tf.image_summary('high_crop', self._high_crop)
+        tf.summary.image('input_low', self._input)
+        tf.summary.image('label_high', self._label)
+        tf.summary.image('residual_inference', self._residual_inference)
+        tf.summary.image('residual_reference', self._residual_crop)
+        tf.summary.image('inference', self._infer)
+        tf.summary.image('interp_crop', self._interp_crop)
+        tf.summary.image('high_crop', self._high_crop)

@@ -28,6 +28,8 @@ class DataSetFx(DataSet):
         paras_def.update({'func': lambda x: 1 / x})
         paras_def.update({'xmin': 1})
         paras_def.update({'xmax': 10})
+        paras_def.update({'is_possion': False})
+        paras_def.update({'c': 1.0})
         return paras_def
 
     def _gather_paras_common(self):
@@ -35,11 +37,15 @@ class DataSetFx(DataSet):
         self._xmin = self._paras['xmin']
         self._xmax = self._paras['xmax']
         self._func = self._paras['func']
+        self._c = self._paras['c']
+        self._is_possion = self._paras['is_possion']
 
     def _sample(self):
         x_in = np.random.sample(size=[1, 1]) * \
             (self._xmax - self._xmin) + self._xmin
-        y_out = self._func(x_in)
+        y_out = self._func(self._c * x_in)
+        if self._is_possion:
+            y_out = np.random.poisson(lam=y_out, size=[1, 1])
         return x_in, y_out
 
     @property

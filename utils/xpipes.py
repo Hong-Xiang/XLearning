@@ -390,8 +390,12 @@ class RandomPrefix(Pipe):
             self._prefix = prefix
         time_str_list = list(str(time.time()))
         time_str_list.remove('.')
-        self._prefix += ''.join(time_str_list[-2:])
-        self._prefix += '%08d' % random.randint(0, 99999999)
+        randstr = ''.join(time_str_list[-2:])
+        randstr += '%08d' % random.randint(0, 99999999)
+        in_letter = []
+        for c in randstr:
+            in_letter.append(chr(ord(c)+49))
+        self._prefix += ''.join(in_letter)
         self._counter = Counter()
 
     def _pump(self):
@@ -480,6 +484,7 @@ class FileNameLooper(Pipe):
 
         self._is_random = random_shuffle
         self._new_epoch()
+        self._cache = None
 
     def _new_epoch(self):
         next(self._epoch_counter.out)
@@ -493,6 +498,7 @@ class FileNameLooper(Pipe):
         filename = self._file_names[self._fid_counter.state]
         next(self._fid_counter.out)
         fullname = os.path.join(self._path, filename)
+        self._cache = fullname
         return fullname
 
     @property
@@ -506,6 +512,10 @@ class FileNameLooper(Pipe):
     @property
     def max_epoch(self):
         return self._epoch_counter.max_state
+
+    @property
+    def last_name(self):
+        return self._cache
 
 
 class NPYReaderSingle(SingleInput):
@@ -550,6 +560,7 @@ class FolderReader(Pipe):
                                                random_shuffle=random_shuffle,
                                                suffix=suffix)
         self._shape = None
+        
 
     def _pump(self):
         filename = next(self._filename_looper.out)

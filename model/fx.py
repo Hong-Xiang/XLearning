@@ -9,6 +9,7 @@ from xlearn.nets.model import TFNet
 
 FLAGS = tf.app.flags.FLAGS
 
+
 class NetFx(TFNet):
     """Net to infer a function to x
     """
@@ -26,13 +27,48 @@ class NetFx(TFNet):
         hidden = layer.full_connect(
             self._input, [1, FLAGS.hidden_units], name='hidden0')
         self._midops = []
-        for i in range(1, FLAGS.hidden_layer + 1):            
+        for i in range(1, FLAGS.hidden_layer + 1):
             hidden = layer.matmul_bias(
-                hidden, [FLAGS.hidden_units, FLAGS.hidden_units], name='hidden%d'%i)
+                hidden, [FLAGS.hidden_units, FLAGS.hidden_units], name='hidden%d' % i)
             # hidden = layer.batch_norm(hidden)
             hidden = layer.activation(hidden)
             self._midops.append(hidden)
 
+        self._infer = layer.matmul_bias(
+            hidden, [FLAGS.hidden_units, 1], name='infer')
+        self._loss = layer.l2_loss(self._infer, self._label)
+        self._train = layer.trainstep(
+            self._loss, self._learn_rate, self._global_step)
+
+    def _add_summary(self):
+        model.scalar_summary(self._loss)
+        for op in self._midops:
+            model.activation_summary(op)
+
+
+class NetFxNoise(TFNet):
+    """Net to infer a function to x
+    """
+
+    def __init__(self, filenames=None, name='FxNet', varscope=None, **kwargs):
+        super(NetFxNoise, self).__init__(filenames=filenames,
+                                    name=name, varscope=varscope, **kwargs)
+        self._batch_size = self._paras['batch_size']
+        self._input = layer.inputs([self._batch_size, 1])
+        self._label = layer.labels([self._batch_size, 1])
+        self._net_definition()
+        self._add_summary()
+
+    def _net_definition(self):
+        hidden = layer.full_connect(
+            self._input, [1, FLAGS.hidden_units], name='hidden0')
+        self._midops = []
+        for i in range(1, FLAGS.hidden_layer + 1):
+            hidden = layer.matmul_bias(
+                hidden, [FLAGS.hidden_units, FLAGS.hidden_units], name='hidden%d' % i)
+            # hidden = layer.batch_norm(hidden)
+            hidden = layer.activation(hidden)
+            self._midops.append(hidden)                
         self._infer = layer.matmul_bias(
             hidden, [FLAGS.hidden_units, 1], name='infer')
         self._loss = layer.l2_loss(self._infer, self._label)
