@@ -18,10 +18,12 @@ class DataSetFx(DataSet):
                                         is_pad=True,
                                         is_cache=True,
                                         epoch_max=None,
+                                        func=func
                                         **kwargs)
 
         if batch_size is not None:
             self._batch_size = batch_size
+        
 
     def _get_default_paras(self):
         paras_def = super(DataSetFx, self)._get_default_paras()
