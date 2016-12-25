@@ -12,6 +12,7 @@
     "path_label": null,
     "prefix_data": "img",
     "prefix_label": "img",
+    "norm_method": "patch",
     "is_shuffle": true,
     "is_single": true,    
     "eps": 1e-5,

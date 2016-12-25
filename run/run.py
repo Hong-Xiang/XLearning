@@ -41,14 +41,6 @@ def construct_net(filenames=None, **kwargs):
     return net
 
 
-def construct_dataset(filenames=None, **kwargs):
-    if FLAGS.run_task == "train_SR_sino" or FLAGS.run_task == "train_SR_nature":
-        data_set = DataSetSuperResolution(filenames, **kwargs)
-    # if FLAGS.task == "infer_SR_Sino":
-    #     data_set = DataSetSRInfer(conf_file)
-    return data_set
-
-
 def check_dataset(dataset, n_show=4):
     data, label = dataset.next_batch()
     for i in range(n_show):
@@ -62,7 +54,7 @@ def check_dataset(dataset, n_show=4):
 
 
 def train_fx(argv):
-    """learn: y = 1/x
+    """learn: y = 1/x or general fx
     """
     data_set = DataSetFx(filenames=argv[2:])
     net = xlearn.model.fx.NetFx(filenames=argv[2:])
@@ -90,12 +82,13 @@ def train_fx(argv):
     # save test result with x and y
     x = np.linspace(1, 10, num=512)
     x = np.reshape(x, [512, 1])
-    y_ = manager.run([net.infer], feed_dict={net.inputs: x})
-    y_ = y_[0]
+    y_ = manager.run(net.infer, feed_dict={net.inputs: x})
     np.save('oneoverx.npy', [x, y_])
 
 
-def infer_SR_sino(argv):
+def infer_super_resolution(argv):
+    """inference with super resolution net
+    """
     dataset_infer = DataSetSuperResolution(argv[2:])
     dataset_infer.free_lock()
     datarecon = xlearn.reader.srinput.ImageReconstructer(argv[2:])
@@ -110,9 +103,11 @@ def infer_SR_sino(argv):
             try:
                 low_sr, _ = dataset_infer.next_batch()
                 result = manager.run(net.infer, feed_dict={net.inputs: low_sr})
-                np.save('lowsr.npy', low_sr)
-                np.save('res.npy', result)
-                datarecon.add_result(result)                
+                if dataset_infer.norm_method == "patch":
+                    means, stds = dataset_infer.moments()
+                    datarecon.add_result(result, means=means, stds=stds)
+                else:
+                    datarecon.add_result(result)
             except StopIteration:
                 break
 
@@ -122,13 +117,13 @@ def infer_SR_sino(argv):
         np.save(output_file, image)
 
 
-def train_SR_sino(argv):
-    """train super resolution net on sinogram 2d data.
+def train_super_resolution(argv):
+    """train super resolution net
     """
     train_files = [argv[2], argv[3]]
     test_files = [argv[2], argv[4]]
-    train_set = construct_dataset(filenames=train_files)
-    test_set = construct_dataset(filenames=test_files)
+    train_set = DataSetSuperResolution(filenames=train_files)
+    test_set = DataSetSuperResolution(filenames=test_files)
     net_files = argv[1:]
     net = construct_net(filenames=net_files)
     logging.debug('net constructed.')
@@ -157,59 +152,21 @@ def train_SR_sino(argv):
             print('step={0:5d},\t test loss={1:0.3f}.'.format(i, loss_test))
         if i % 1000 == 0:
             path = saver.save(manager.sess, FLAGS.path_save, i)
-    # manager.save()
+    manager.save()
     # np.save('test_loss.npy', np.array(test_loss))
-    path = saver.save(manager.sess, FLAGS.path_save, FLAGS.run_steps)
+    # path = saver.save(manager.sess, FLAGS.path_save, FLAGS.run_steps)
     print("net variables saved to: " + path + '.')
-
-
-def train_SR_nature(argv):
-    train_files = [argv[2], argv[3]]
-    test_files = [argv[2], argv[4]]
-    train_set = construct_dataset(filenames=train_files)
-    test_set = construct_dataset(filenames=test_files)
-    net_files = argv[1:]
-    net = construct_net(filenames=net_files)
-    logging.debug('net constructed.')
-    manager = NetManager(net)
-    logging.debug('manager constructed.')
-    n_step = FLAGS.run_steps
-    for i in range(1, n_step + 1):
-        data, label = train_set.next_batch()
-        logging.debug('data label got.')
-        [loss_train, _, lr] = manager.run([net.loss, net.train, net.learn_rate],
-                                          feed_dict={net.inputs: data, net.label: label})
-        if i % 10 == 0:
-            print('step={0:5d},\tlr={2:.3E},\t loss={1:0.3f}.'.format(
-                i, loss_train, lr))
-        if i % 20 == 0:
-            manager.write_summary(
-                feed_dict={net.inputs: data, net.label: label})
-            data_test, label_test = test_set.next_batch()
-            manager.write_summary(
-                feed_dict={net.inputs: data_test, net.label: label_test}, is_test=True)
-        if i % 50 == 0:
-            data_test, label_test = test_set.next_batch()
-            [loss_test] = manager.run([net.loss],
-                                      feed_dict={net.inputs: data_test,
-                                                 net.label: label_test})
-            print('step={0:5d},\t test loss={1:0.3f}.'.format(i, loss_test))
-    # manager.save()
-
-    saver = tf.train.Saver(tf.all_variables())
-    path = saver.save(manager.sess, FLAGS.path_save, FLAGS.run_steps)
-    print(path)
 
 
 def main(argv):
     if FLAGS.run_task == "train_fx":
         train_fx(argv)
-    if FLAGS.run_task == "train_SR_nature":
-        train_SR_nature(argv)
-    if FLAGS.run_task == "train_SR_sino":
-        train_SR_sino(argv)
-    if FLAGS.run_task == "infer_SR_sino":
-        infer_SR_sino(argv)
+    elif FLAGS.run_task == "train_super_resolution":
+        train_super_resolution(argv)
+    elif FLAGS.run_task == "infer_super_resolution":
+        infer_super_resolution(argv)
+    else:
+        raise ValueError("Unkown task.")
 
 
 if __name__ == '__main__':

@@ -137,10 +137,11 @@ class NetManager(object):
 
     def save(self, step=None):
         if step is None:
-            self._saver.save(self._sess, FLAGS.path_save + '-' + FLAGS.task)
+            self._saver.save(self._sess, FLAGS.path_save + '-' +
+                             FLAGS.run_task + '-', global_step=net.global_step(self._sess))
         else:
             self._saver.save(self._sess, FLAGS.path_save +
-                             '-' + FLAGS.task, step)
+                             '-' + FLAGS.run_task, step)
 
     def restore(self):
         if self._net.is_skip_restore:

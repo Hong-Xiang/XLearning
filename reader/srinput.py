@@ -109,6 +109,8 @@ class DataSetSuperResolution(xlearn.reader.base.DataSet):
         self._is_norm = self._paras['is_norm']
         self._is_gamma = self._paras['is_gamma']
         self._gamma_r = self._paras['gamma_r']
+        self._norm_method = self._paras['norm_method']
+        self._nzratio = self._paras['nzratio']
 
     def _prepare(self):
         super(DataSetSuperResolution, self)._prepare()
@@ -169,29 +171,47 @@ class DataSetSuperResolution(xlearn.reader.base.DataSet):
             buffer_hl, self._down_sample_ratio, method=self._down_sample_method)
         self._data = utp.TensorFormater(down_sample)
         self._testo = self._filename_iter
+        self._means = []
+        self._stds = []
 
     def test_debug(self):
         return next(self._testo.out)
         pass
 
+    def _batch_start(self):
+        super(DataSetSuperResolution, self)._batch_start()
+        self._means = []
+        self._stds = []
+
     def _sample(self):
-        try:
-            data = next(self._data.out)
-            label = next(self._label.out)
+        try:            
+            while True:
+                data = next(self._data.out)
+                label = next(self._label.out)
+                total_pixel = np.size(data)
+                total_nonez = np.count_nonzero(data)
+                nnz_ratio = np.float(total_nonez) / np.float(total_pixel)
+                if nnz_ratio >= self._nzratio:
+                    break
             data = np.reshape(data, self._shape_sample_i)
             label = np.reshape(label, self._shape_sample_o)
             if self._is_norm:
-                # stdv = np.std(data)
-                # if stdv > self._eps:
-                #     data /= stdv
-                #     label /= stdv
-                # meanv = np.mean(data)
-                # data -= meanv
-                # label -= meanv
-                data /= self._std
-                label /= self._std
-                data -= self._mean
-                label -= self._mean
+                if self._norm_method == "global":
+                    data /= self._std
+                    label /= self._std
+                    data -= self._mean
+                    label -= self._mean
+                elif self._norm_method == "patch":
+                    stdv = np.std(data)
+                    if stdv > self._eps:
+                        data /= stdv
+                        label /= stdv
+                    meanv = np.mean(data)
+                    data -= meanv
+                    label -= meanv
+                    self._means.append(meanv)
+                    self._stds.append(stdv)
+
                 if self._is_gamma:
                     data = np.power(data, self._gamma_r)
                     label = np.power(label, self._gamma_r)
@@ -205,11 +225,11 @@ class DataSetSuperResolution(xlearn.reader.base.DataSet):
                 self._next_epoch()
         return data, label
 
-    def _next_file(self):        
+    def _next_file(self):
         try:
             super(DataSetSuperResolution, self)._next_file()
             filename = next(self._filename_iter.out)
-        except StopIteration:            
+        except StopIteration:
             raise xlearn.reader.base.EndEpoch
         self._image = np.array(np.load(filename))
         logging.getLogger(__name__).debug("processing: " + filename)
@@ -218,6 +238,9 @@ class DataSetSuperResolution(xlearn.reader.base.DataSet):
 
     def free_lock(self):
         self._is_next_file = True
+
+    def moments(self):
+        return self._means, self._stds
 
     @property
     def height_low(self):
@@ -254,6 +277,10 @@ class DataSetSuperResolution(xlearn.reader.base.DataSet):
     @property
     def last_file(self):
         return self._filename_iter.last_name
+    
+    @property
+    def norm_method(self):
+        return self._norm_method
 
 
 class ImageReconstructer(object):
@@ -279,11 +306,12 @@ class ImageReconstructer(object):
         logging.getLogger(__name__).debug(
             "ImageReconstructer end of __init__, para_string():")
         logging.getLogger(__name__).debug(self._para_string())
+        self._norm_method = self._paras['norm_method']
 
-    def add_result(self, input_):
+    def add_result(self, input_, means=None, stds=None):
         """Add infer result to buffer
         """
-        n_batch = input_.shape[0]        
+        n_batch = input_.shape[0]
         for i in range(n_batch):
             tmp = input_[i, :]
             tmp = np.reshape(
@@ -291,8 +319,12 @@ class ImageReconstructer(object):
             if self._is_norm:
                 if self._is_gamma:
                     tmp = np.power(tmp, -self._gamma_r)
-                tmp += self._mean
-                tmp *= self._std
+                if self._norm_method == "global":
+                    tmp += self._mean
+                    tmp *= self._std
+                elif self._norm_method == "patch":
+                    tmp += means[i]
+                    tmp *= stds[i]
             self._buffer.append(tmp)
 
     def shape_set(self, shape):

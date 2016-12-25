@@ -8,6 +8,8 @@
     "is_lock": true,
     "is_norm": true,
     "is_gamma": false,
+    "gamma_r": 0.3,
+    "norm_method": "patch",
     "path_data": "/home/hongxwing/Workspace/test/data",
     "path_output": "/home/hongxwing/Workspace/test/result",
     "nzratio": 0.0,
