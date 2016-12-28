@@ -512,3 +512,37 @@ def trainstep_clip(loss, learn_rate, global_step, name='trainstep_clip'):
         opt.apply_gradients(clipped_grad_vars)
         train_op = opt.minimize(loss, global_step, name=name)
     return train_op
+
+def __loopops(k, p, l):
+    shape_in = k.get_shape().as_list()
+    knew = k + 1
+    pnew = p * tf.random_uniform(shape=shape_in)
+    kres = tf.select(p < l, k, knew)
+    return kres, pnew, l
+
+def possion_layer(input_, name="possion_layer"):
+    shape_in = input_.get_shape().as_list()
+    k0v = np.zeros(shape=shape_in)
+    with tf.name_scope(name) as scope:
+        l = tf.exp(-input_)
+        k0 = tf.constant(k0v, name='k0', dtype=tf.float32)
+        k = tf.get_variable(name=scope+'k', shape=shape_in, initializer=tf.constant_initializer(0))
+        p = tf.get_variable(name=scope+'p', shape=shape_in, initializer=tf.constant_initializer(1))
+        o = k - 1
+        init_sample = tf.Variable.assign(k, k0)
+        k_i, p_i, l_i = tf.tuple([k, p, l], control_inputs=[init_sample])
+        k, p, l = tf.while_loop(lambda kk, pp, ll: tf.reduce_any(pp > ll), __loopops, (k_i, p_i, l_i))
+    o = k - 1
+    return o
+
+def histogram(input_, value_min, value_max, nbins=None, name="histogram"):
+    return tf.histogram_fixed_width(input_, [value_min, value_max], nbins, name=name)
+
+
+def gaussian_loss(mu, sigma, sample, name="gaussian_loss"):
+    q = tf.contrib.distributions.Normal(mu, sigma)
+    log_p = q.log_prob
+    elbo = tf.contrib.bayesflow.entropy.elbo_ratio(log_p, q, sample)
+    loss = tf.reduce_sum(elbo)
+    tf.add_to_collection('losses', loss)
+    return loss

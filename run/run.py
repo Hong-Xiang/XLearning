@@ -38,6 +38,10 @@ def construct_net(filenames=None, **kwargs):
         net = xlearn.model.supernet.SuperNet1(filenames=filenames, **kwargs)
     if FLAGS.net_name == "SuperNet2":
         net = xlearn.model.supernet.SuperNet2(filenames=filenames, **kwargs)
+    if FLAGS.net_name == "NetFx":
+        net = xlearn.model.fx.NetFx(filenames=filenames, **kwargs)
+    if FLAGS.net_name == "NetFxNoise":
+        net = xlearn.model.fx.NetFxNoise(filenames=filenames, **kwargs)
     return net
 
 
@@ -56,33 +60,33 @@ def check_dataset(dataset, n_show=4):
 def train_fx(argv):
     """learn: y = 1/x or general fx
     """
-    data_set = DataSetFx(filenames=argv[2:])
+    data_set = DataSetFx(filenames=argv[2:], func=lambda x: 1 / x)
     net = xlearn.model.fx.NetFx(filenames=argv[2:])
-
     manager = NetManager(net)
 
     n_step = FLAGS.run_steps
     for i in range(1, n_step + 1):
         x, y = data_set.next_batch()
         [loss_train, _, lr] = manager.run([net.loss, net.train, net.learn_rate],
-                                          feed_dict={net.inputs: x, net.label: y})
+                                          feed_dict={net.inputs: x, net.label: y, net.keep_prob: 0.5})
         if i % 10 == 0:
             print('step={0:5d},\tlr={2:.3E},\t loss={1:4E}.'.format(
                 i, loss_train, lr))
         if i % 20 == 0:
             manager.write_summary(
-                feed_dict={net.inputs: x, net.label: y})
+                feed_dict={net.inputs: x, net.label: y, net.keep_prob: 0.5})
         if i % 50 == 0:
             x, y = data_set.next_batch()
             [loss_test] = manager.run([net.loss],
                                       feed_dict={net.inputs: x,
-                                                 net.label: y})
+                                                 net.label: y,
+                                                 net.keep_prob: 0.5})
             print('step={0:5d},\t test loss={1:4E}.'.format(i, loss_test))
 
     # save test result with x and y
-    x = np.linspace(1, 10, num=512)
-    x = np.reshape(x, [512, 1])
-    y_ = manager.run(net.infer, feed_dict={net.inputs: x})
+    x = np.linspace(data_set.xmin, data_set.xmax, num=data_set.batch_size)
+    x = np.reshape(x, [data_set.batch_size, 1])
+    y_ = manager.run(net.infer, feed_dict={net.inputs: x, net.keep_prob: 1.0})
     np.save('oneoverx.npy', [x, y_])
 
 
