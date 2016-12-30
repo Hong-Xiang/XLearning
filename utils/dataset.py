@@ -266,10 +266,11 @@ def pad_sino(source, target, prefix, pwx, pwy):
     pipe_runner.run()
 
 
-def combine_infer(source, target, prefix, pwx, pwy):
+def combine_infer(source, target, prefix, pwx, pwy):    
     if isinstance(source, (list, tuple)):
-        source = source[0]
+        source = source[0]    
     source = os.path.abspath(source)
+    print("COMBINE INFER IN:",source)
     files = os.listdir(source)
     filesfull = []
     for file_ in files:

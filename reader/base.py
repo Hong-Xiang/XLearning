@@ -17,6 +17,8 @@ class EndSingleFile(StopIteration):
 class NoMoreEpoch(StopIteration):
     pass
 
+class NoMoreSample(StopIteration):
+    pass
 
 class DataSet(object):
     """Base class of all dataset classes.
@@ -224,9 +226,9 @@ class DataSet(object):
             StopIteration
         """
         if self._is_no_more_sample:
-            raise StopIteration
+            raise NoMoreSample
         if self._is_no_more_epoch:
-            raise StopIteration
+            raise NoMoreEpoch
 
     def _batch_end(self):
         """Called at end of next_batch()

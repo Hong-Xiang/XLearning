@@ -112,7 +112,9 @@ def infer_super_resolution(argv):
                     datarecon.add_result(result, means=means, stds=stds)
                 else:
                     datarecon.add_result(result)
-            except StopIteration:
+            except xlearn.reader.base.NoMoreEpoch:                
+                break
+            except xlearn.reader.base.NoMoreSample:                
                 break
 
         input_file = os.path.basename(dataset_infer.last_file)

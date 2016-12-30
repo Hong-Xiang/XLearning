@@ -184,7 +184,7 @@ class DataSetSuperResolution(xlearn.reader.base.DataSet):
         self._stds = []
 
     def _sample(self):
-        try:            
+        try:
             while True:
                 data = next(self._data.out)
                 label = next(self._label.out)
@@ -206,12 +206,13 @@ class DataSetSuperResolution(xlearn.reader.base.DataSet):
                     if stdv > self._eps:
                         data /= stdv
                         label /= stdv
+                    else:
+                        stdv = 1.0
                     meanv = np.mean(data)
                     data -= meanv
                     label -= meanv
                     self._means.append(meanv)
                     self._stds.append(stdv)
-
                 if self._is_gamma:
                     data = np.power(data, self._gamma_r)
                     label = np.power(label, self._gamma_r)
@@ -238,8 +239,12 @@ class DataSetSuperResolution(xlearn.reader.base.DataSet):
 
     def free_lock(self):
         self._is_next_file = True
+        self._is_no_more_sample = False
 
     def moments(self):
+        while len(self._means) < self.batch_size:
+            self._means.append(0.0)
+            self._stds.append(1.0)
         return self._means, self._stds
 
     @property
@@ -277,7 +282,7 @@ class DataSetSuperResolution(xlearn.reader.base.DataSet):
     @property
     def last_file(self):
         return self._filename_iter.last_name
-    
+
     @property
     def norm_method(self):
         return self._norm_method
@@ -333,8 +338,7 @@ class ImageReconstructer(object):
     def reconstruction(self):
         """Reconstruct image from infered patches.
         """
-        patches = self._buffer
-        output = utt.combine_tensor_list(patches, shape=self._shape,
+        output = utt.combine_tensor_list(self._buffer, shape=self._shape,
                                          strides=self._strides,
                                          margin0=self._margin0,
                                          margin1=self._margin1,
