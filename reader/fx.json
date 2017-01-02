@@ -1,8 +1,12 @@
 {
     "dataset_type": "train",
     "batch_size": 512,
-    "xmin": 1,
-    "xmax": 10,
-    "c": 0.01,
-    "is_possion": true
+    "xmin": -1.0,
+    "xmax": 1.0,
+    "c": 3.1415926,
+    "is_possion": false,
+    "is_gaussian": false,
+    "is_uniform": false,
+    "func_name": "sin",
+    "input_dim": [1]
 }
