@@ -76,6 +76,9 @@ class DataSetFx(DataSet):
             y = y + np.random.uniform(-self._noise_scale, +self._noise_scale,y.shape)
         return x_in, y
 
+    def __next__(self):
+        return self._sample
+
     @property
     def func(self):
         """funtion to x"""
