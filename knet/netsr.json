@@ -1,5 +1,9 @@
 {
-    "channels":[
-
-    ]    
+    "lr_init": 1e-4,
+    "loss": "mse",
+    "metrics": "mse",
+    "n_upscale": 1,
+    "n_residual": 3,
+    "loss": "mse",
+    "metrics": ["mse"]
 }

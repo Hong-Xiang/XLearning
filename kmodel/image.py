@@ -22,3 +22,13 @@ def upscale_block(input_, r, id):
     x = Convolution2D(128, 3, 3, border_mode='same', name='sr_res_filter1_%d' % id)(x)
     x = LeakyReLU(alpha=0.3, name='sr_res_up_lr_%d_1_2' % id)(x)
     return x
+
+def conv_seq(input_, channels, kxs, kys, id=0, activation='elu'):
+    n_conv = len(channels)
+    x = input_
+    for i in range(n_conv):
+        x = Convolution2D(channels[i], kxs[i], kys[
+                          i], border_mode='same', name='seq_conv_conv_%d_%d' % (id, i))(x)
+        x = BatchNormalization(name='seq_conv_bn_%d_%d' % (id, i))(x)
+        x = LeakyReLU(alpha=0.25, name="seq_conv_activation_%d_%d" % (id, i))(x)    
+    return x

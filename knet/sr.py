@@ -21,22 +21,25 @@ class KNetSR(KNet):
         self.init = None
         self.n_residual = self._settings['n_residual']
 
-    def _def_model(self):
+    def _define_model(self):
         ip_lr = Input(
             shape=(self.shape_i[0], self.shape_i[1], 1), name='img_lr')
         ip_hr = Input(
             shape=(self.shape_o[0], self.shape_o[1], 1), name='img_hr')
+        x = UpSampling2D(size=(1, 3))(ip_lr)
         x = Convolution2D(64, 5, 5, border_mode='same',
-                          name='sr_res_conv1', init=self.init)
+                          name='sr_res_conv1')(x)
         x = BatchNormalization(name='sr_res_bn_1')(x)
         x = LeakyReLU(name='sr_res_lr1')(x)
-        for i in range(self.n_residual):
-            x = kmi.residual_block(x, 3, 3, 3, i)
-        for i in range(self.n_upscale):
-            x = kmi.upscale_block(x, 3, i)
+        # for i in range(self.n_residual):
+        #     x = kmi.residual_block(x, [64]*3, [3]*3, [3]*3, i)
+        # for i in range(self.n_upscale):
+        #     x = kmi.upscale_block(x, 3, i)
+
+        x = kmi.conv_seq(x, [64] * 10, [3] * 10, [3] * 10, 0)
         x = Convolution2D(1, 5, 5, activation='tanh',
                           border_mode='same', name='sr_res_conv_final')(x)
-        return x
+        self._model = Model(input=ip_lr, output=x)
 
-    def _def_optimizer(self):
+    def _define_optimizer(self):
         self._optim = Adam(self._lr)

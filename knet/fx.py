@@ -19,5 +19,5 @@ class KNetFx(KNet):
         model = Model(input_, output, name='fx_model')
         self._model = model
 
-    def _def_optimizer(self):
+    def _define_optimizer(self):
         self._optim = Adam(self._lr)

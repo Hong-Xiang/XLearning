@@ -64,6 +64,9 @@ class DataSetSuperResolution(xlearn.reader.base.DataSet):
         })
         return default_paras
 
+    def __next__(self):
+        return self.next_batch()
+
     def _gather_paras_common(self):
         super(DataSetSuperResolution, self)._gather_paras_common()
 

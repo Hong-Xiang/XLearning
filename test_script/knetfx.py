@@ -11,8 +11,8 @@ def main(argv):
     net = KNetFx(filenames=['./fx.json', './net.json'])
     net.define_net()
     data_gen = dataset
-    # net.model.fit(x, y, nb_epoch=10, batch_size=1024)
-    net.model.fit_generator(data_gen, nb_epoch=10, batch_size=1024)
+    net.model.fit(x, y, nb_epoch=10, batch_size=1024, callbacks=net.callbacks)
+    # net.model.fit_generator(data_gen, nb_epoch=10, batch_size=1024, callbacks=net.callbacks)
     x_test = np.linspace(-1, 1, 256)
     y_pred = net.model.predict(x_test)
     if len(argv) == 1:

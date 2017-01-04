@@ -22,7 +22,7 @@ class KNet(object):
         # settings
         # general:
         self._activation = self._settings.get('activation', 'relu')
-        self._hiddens = self._settings['hiddens']
+        self._hiddens = self._settings.get('hiddens', [])
         self._is_dropout = self._settings.get('is_dropout', False)
         self.batch_size = self._settings.get('batch_size', 128)
 
@@ -38,14 +38,14 @@ class KNet(object):
         """ define model """
         pass
 
-    def _def_optimizer(self):
+    def _define_optimizer(self):
         """ optimizer """
         pass
 
     def define_net(self):
         """ Compile the model"""
         self._define_model()
-        self._def_optimizer()
+        self._define_optimizer()
         self._model.compile(optimizer=self._optim,
                             loss=self._loss, metrics=self._metrics)
         self._model.summary()

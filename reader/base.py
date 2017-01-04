@@ -296,6 +296,9 @@ class DataSet(object):
         else:
             return tensor_data
 
+    def __next__(self):
+        return self.next_batch()
+
     def print_paras(self):
         """Print all config parameters.
         """
