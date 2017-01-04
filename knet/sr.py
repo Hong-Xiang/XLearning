@@ -20,6 +20,8 @@ class KNetSR(KNet):
         self.n_upscale = self._settings['n_upscale']
         self.init = None
         self.n_residual = self._settings['n_residual']
+        self.n_hidden = self._settings['n_hidden']
+        self.n_layer = self._settings['n_layer']
 
     def _define_model(self):
         ip_lr = Input(
@@ -36,7 +38,7 @@ class KNetSR(KNet):
         # for i in range(self.n_upscale):
         #     x = kmi.upscale_block(x, 3, i)
 
-        x = kmi.conv_seq(x, [64] * 10, [3] * 10, [3] * 10, 0)
+        x = kmi.conv_seq(x, [self.n_hidden] * self.n_layer, [3] * self.n_layer, [3] * self.n_layer, 0)
         x = Convolution2D(1, 5, 5, activation='tanh',
                           border_mode='same', name='sr_res_conv_final')(x)
         self._model = Model(input=ip_lr, output=x)
