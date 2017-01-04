@@ -16,5 +16,5 @@
     "is_shuffle": true,
     "is_single": true,    
     "eps": 1e-5,
-    "nzratio": 0.3
+    "nzratio": 0.0
 }

@@ -1,5 +1,5 @@
 {
-    "lr_init": 1e-4,
+    "lr_init": 1e-3,
     "loss": "mse",
     "metrics": "mse",
     "n_upscale": 1,
