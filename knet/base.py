@@ -4,7 +4,7 @@
 import xlearn.utils.general as utg
 from keras.optimizers import Adam
 from keras.callbacks import TensorBoard
-
+from keras.models import Model
 
 class KNet(object):
     """Base class for keras nets.
@@ -41,6 +41,9 @@ class KNet(object):
     def _define_optimizer(self):
         """ optimizer """
         pass
+
+    def load_weights(self, filepath):
+        self._model.load_weights(filepath, by_name=True)
 
     def define_net(self):
         """ Compile the model"""
