@@ -1,10 +1,14 @@
 """Base class for keras based models.
 """
+# TODO: Add restore
+# TODO: Add partial restore
 
 import xlearn.utils.general as utg
 from keras.optimizers import Adam
-from keras.callbacks import TensorBoard
-from keras.models import Model
+from keras.callbacks import TensorBoard, ReduceLROnPlateau, ModelCheckpoint
+from keras.models import Model, Sequential
+from keras import backend as K
+
 
 class KNet(object):
     """Base class for keras nets.
@@ -24,15 +28,16 @@ class KNet(object):
         self._activation = self._settings.get('activation', 'relu')
         self._hiddens = self._settings.get('hiddens', [])
         self._is_dropout = self._settings.get('is_dropout', False)
-        self.batch_size = self._settings.get('batch_size', 128)
+        self._batch_size = self._settings.get('batch_size', 128)
+        self._architecture = self._settings.get('architescture', 'default')
+        self._optimizer_name = self._settings.get('optimizer', 'Adam')
 
         # learning rate:
         self._lr = self._settings['lr_init']
-        self._lr_is_decay = self._settings.get('lr_is_decay', False)
 
         # loss:
         self._loss = self._settings['loss']
-        self._metrics = self._settings['metrics']
+        self._metrics = self._settings.get('metrics', None)
 
     def _define_model(self):
         """ define model """
@@ -40,9 +45,11 @@ class KNet(object):
 
     def _define_optimizer(self):
         """ optimizer """
-        pass
+        if self._optimizer_name == "Adam":
+            self._optim = Adam(self._lr)
 
     def load_weights(self, filepath):
+        """ load weight from file """
         self._model.load_weights(filepath, by_name=True)
 
     def define_net(self):
@@ -52,8 +59,14 @@ class KNet(object):
         self._model.compile(optimizer=self._optim,
                             loss=self._loss, metrics=self._metrics)
         self._model.summary()
-        tsb = TensorBoard(write_graph=True, write_images=True)
+        ckp = ModelCheckpoint("./save", monitor='loss', verbose=0,
+                              save_best_only=False, save_weights_only=False, mode='auto', period=10)
+        tsb = TensorBoard(write_graph=False, write_images=True)
+        reduce_lr = ReduceLROnPlateau(monitor='val_loss', factor=0.1,
+                                      patience=10, min_lr=1e-8)
         self._callbacks.append(tsb)
+        self._callbacks.append(reduce_lr)
+        self._callbacks.append(ckp)
 
     @property
     def model(self):
@@ -64,3 +77,8 @@ class KNet(object):
     def callbacks(self):
         """ call back list"""
         return self._callbacks
+
+    @property
+    def lr(self):
+        """ initial learning rate """
+        return K.get_value(self.model.optimizer.lr)

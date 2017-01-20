@@ -4,8 +4,7 @@ from keras.models import Model
 from keras.layers import Input, Dense
 from keras.optimizers import Nadam, Adam
 from xlearn.knet.base import KNet
-import xlearn.kmodel.dense as kmden
-
+from ..kmodel.dense import denses
 
 class KNetFx(KNet):
 
@@ -14,7 +13,7 @@ class KNetFx(KNet):
 
     def _define_model(self):
         input_ = Input(shape=(1, ))
-        m_dense = kmden.dense(input_, self._hiddens, self._is_dropout)
+        m_dense = kmden.(input_, self._hiddens, self._is_dropout)
         output = Dense(1)(m_dense)
         model = Model(input_, output, name='fx_model')
         self._model = model
