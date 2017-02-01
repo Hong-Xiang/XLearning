@@ -6,6 +6,7 @@ import re
 import json
 import logging
 import numpy as np
+from functools import wraps
 
 
 def unpack_list_nd(input_, item_type=None, keep_types=(str, np.ndarray)):
@@ -85,6 +86,15 @@ def label_name(data_name, case_digit=None, label_prefix=None):
 # def valid_filename_form():
 #     output = r"\w+\d[16].\w"
 #     return
+
+
+def with_file_config(func):
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        sets = merge_settings(settings=kwargs.pop('settings', None), filenames=kwargs.pop(
+            'filenames', None), default_settings=kwargs.pop('default_settings', None))
+        return func(*args, **kwargs, settings=sets)
+    return wrapper
 
 
 def merge_settings(settings=None, filenames=None, default_settings=None, **kwargs):
