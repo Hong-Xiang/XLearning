@@ -6,7 +6,7 @@ NORMAL_ACTIVATIONS = ['softmax', 'softplus', 'relu',
                       'tanh', 'sigmoid', 'hard_sigmoid', 'linear']
 
 
-def denses(input_, hiddens, is_dropout, activation='elu', name='seq_dense', p=0.5, **kwargs):
+def denses(input_, hiddens, is_dropout=True, activation='elu', name='seq_dense', p=0.5, **kwargs):
     """ sequential dense layers """
     is_normal_activation = activation in NORMAL_ACTIVATIONS
     if not is_normal_activation:

@@ -4,6 +4,7 @@
 import random
 import numpy
 
+
 class DataSetBase(object):
     """ Base class of dataset """
 
@@ -28,6 +29,9 @@ class DataSetBase(object):
     def _sample_data_label_weight(self):
         """ Generate a new sample, (data, label, weight) """
         raise TypeError("sample_data_label_weight not implemented.")
+    
+    def visualize(self, sample):
+        raise TypeError("Visualize is not implemented.")
 
     def __next__(self):
         if self.is_label:

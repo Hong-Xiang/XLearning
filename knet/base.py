@@ -9,9 +9,16 @@ from keras.callbacks import TensorBoard, ReduceLROnPlateau, ModelCheckpoint
 from keras.models import Model, Sequential
 from keras import backend as K
 
+# TODO: add multi-model support.
 
 class KNet(object):
     """Base class for keras nets.
+
+    Users need to override _define_model(self) method. In which self._model is defined.
+
+    This super class provided following functinalities:
+    *   common parameters
+        1   _activation
     """
 
     def __init__(self, filenames=None, **kwargs):
@@ -36,7 +43,7 @@ class KNet(object):
         self._lr = self._settings['lr_init']
 
         # loss:
-        self._loss = self._settings['loss']
+        self._loss = self._settings.get('loss','mse')
         self._metrics = self._settings.get('metrics', None)
 
     def _define_model(self):
