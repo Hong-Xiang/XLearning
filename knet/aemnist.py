@@ -17,6 +17,7 @@ class AutoEncoder0(KNet):
         self._encoder = None
         self._decoder = None
         self._is_l1 = self._settings.get('is_l1', True)
+        self._l1_weight= self._settings.get('l1_weight', 1e-4)
 
     def _define_model(self):
         # this is our input placeholder
@@ -24,7 +25,7 @@ class AutoEncoder0(KNet):
         # "encoded" is the encoded representation of the input
         if self._is_l1:
             encoded = Dense(self._encoding_dim, activation='relu',
-                            activity_regularizer=regularizers.activity_l1(1e-3))(input_img)
+                            activity_regularizer=regularizers.activity_l1(self._l1_weight))(input_img)
         else:
             encoded = Dense(self._encoding_dim, activation='relu')(input_img)
         # "decoded" is the lossy reconstruction of the input
