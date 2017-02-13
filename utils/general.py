@@ -88,19 +88,19 @@ def label_name(data_name, case_digit=None, label_prefix=None):
 #     return
 
 
-def with_file_config(func):
+def with_config(func):
     @wraps(func)
     def wrapper(*args, **kwargs):
         sets = merge_settings(settings=kwargs.pop('settings', None), filenames=kwargs.pop(
-            'filenames', None), default_settings=kwargs.pop('default_settings', None))
-        return func(*args, **kwargs, settings=sets)
+            'filenames', None), default_settings=kwargs.pop('default_settings', None), **kwargs)
+        return func(*args,  settings=sets, **kwargs)
+
     return wrapper
 
 
 def merge_settings(settings=None, filenames=None, default_settings=None, **kwargs):
     """Merge settings from multiple file and args into one
     """
-    logging.getLogger(__name__).debug("filenames:{}".format(filenames))
     if settings is None:
         settings = {}
 

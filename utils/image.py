@@ -15,8 +15,35 @@ import numpy as np
 from scipy import misc
 from six.moves import xrange
 
+import matplotlib.pyplot as plt
+
 import xlearn.utils.general as utg
 import xlearn.utils.tensor as utt
+
+
+def subplot_images(images, nb_max_row=8, cmap=None, is_gray=False):
+    if isinstance(images, tuple):
+        nb_cata = len(images)
+    else:
+        nb_cata = 1
+        images = (images, )
+
+    nb_images = len(images[0])
+    nb_row = nb_images // nb_max_row
+
+    cid = 1
+    for i in range(nb_row):
+        for k in range(nb_cata):
+            for j in range(nb_max_row):
+                id_img = i * nb_row + j
+                id_img = min(id_img, nb_images - 1)
+                ax = plt.subplot(nb_row * nb_cata, nb_max_row, cid)
+                plt.imshow(images[k][id_img], cmap=cmap)
+                if is_gray:
+                    plt.gray()
+                ax.get_xaxis().set_visible(False)
+                ax.get_yaxis().set_visible(False)
+                cid += 1
 
 
 def imread(filename):
@@ -46,7 +73,6 @@ def image_type(tensor):
     if len(tensor.shape) == 5:
         return 'NHWDC'
     return 'unknown'
-
 
 
 def rgb2gray(image):
