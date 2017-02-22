@@ -30,20 +30,31 @@ def upscale_block(input_, rx, ry, channel, id=0):
     return x
 
 
-def convolution_blocks(ip, nb_filters, nb_rows, nb_cols, id=0, border_mode='same', scope=''):
+def convolution_blocks(ip, nb_filters, nb_rows=None, nb_cols=None, subsamples=None, id=0, border_mode='same', scope=''):
     """ stack of standard convolution blocks """
     nb_layers = len(nb_filters)
     x = ip
+    if subsamples is None:
+        subsamples = [(1, 1)] * nb_layers
+    if nb_rows is None:
+        nb_rows = [3]*nb_layers
+    if nb_cols is None:
+        nb_cols = [3]*nb_layers
     for i in range(nb_layers):
-        x = convolution_block(x, nb_filters[i], nb_rows[i], nb_cols[
-                              i], i, scope=scope+"convolutions%d/"%id)
+        x = convolution_block(ip=x,
+                              nb_filter=nb_filters[i],
+                              nb_row=nb_rows[i],
+                              nb_col=nb_cols[i],
+                              subsamples=subsamples,
+                              id=i,
+                              scope=scope + "convolutions%d/" % id)
     return x
 
 
-def convolution_block(ip, nb_filter, nb_row, nb_col, id=0, border_mode='same', scope=''):
+def convolution_block(ip, nb_filter, nb_row, nb_col, subsample=(1, 1), id=0, border_mode='same', scope=''):
     """ standard convolution block """
     x = Convolution2D(nb_filter,  nb_row, nb_col, border_mode=border_mode,
-                      name=scope + 'conv%d/conv' % id)(ip)
+                      name=scope + 'conv%d/conv' % id, subsample=subsample)(ip)
     x = BatchNormalization(name=scope + 'conv%d/bn' % id)(x)
     x = ELU(name=scope + "conv%d/elu" % id)(x)
     return x

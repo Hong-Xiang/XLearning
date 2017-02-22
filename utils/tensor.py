@@ -22,7 +22,12 @@ def load_mat(filename, varnames):
 def offset_1d(length, patch_size, stride=1, offset0=0, offset1=0, check_all=False):
     """Slicing offset generator for 1-D array.
     Args:
-        length :: Int
+        length :: int, length of array to be split,
+        patch_size :: int, patch size,
+        stride :: int,
+        offset0 :: int, left offset
+        offset1 :: int, right offset
+        check_all :: True for force include end point
     Return:
         None
     """

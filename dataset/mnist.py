@@ -9,14 +9,16 @@ from .base import DataSetBase
 from ..utils.general import with_config
 from ..utils.cells import Sampler
 
+#TODO: Impl is_bin
 
 class MNIST(DataSetBase):
     """ MNIST dataset based on kears.datasets.mnist. With enhanced methods.
     """
 
-    def __init__(self, is_unsp=True, is_train=True, is_noise=False, noise_scale=0.0, noise_type='poisson',
+    def __init__(self, is_unsp=True, is_train=True, is_noise=False, is_4d=False, noise_scale=0.0, noise_type='poisson',
                  is_norm=False,
                  is_flatten=False,
+                 is_bin=False,
                  **kwargs):
         super(MNIST, self).__init__(is_train=is_train, is_noise=is_noise,
                                     noise_scale=noise_scale, noise_type=noise_type,
@@ -24,6 +26,8 @@ class MNIST(DataSetBase):
                                     is_norm=is_norm,
                                     is_flatten=is_flatten,
                                     is_unsp=is_unsp,
+                                    is_4d=is_4d,
+                                    is_bin=is_bin,
                                     **kwargs)
         self._is_train = self._settings['is_train']
         self._is_noise = self._settings['is_noise']
@@ -32,6 +36,8 @@ class MNIST(DataSetBase):
         self._is_unsp = self._settings['is_unsp']
         self._is_norm = self._settings['is_norm']
         self._is_flatten = self._settings['is_flatten']
+        self._is_4d = self._settings['is_4d']
+        self._is_bin = self._settings['is_bin']
 
         (x_train, y_train), (x_test, y_test) = mnist.load_data()
         x_train = x_train.astype(np.float32)
@@ -47,16 +53,10 @@ class MNIST(DataSetBase):
 
         self._combine = [(d, l) for d, l in zip(self._data, self._label)]
 
-        self._sampler = Sampler(datas=self._combine)
+        self._sampler = Sampler(datas=self._combine)    
 
-    def visualize(self, sample, **kwargs):
-        image_type = kwargs.get('image_type', 'data')
-        if image_type == 'data':
-            image = sample[0]
-        elif image_type == 'label':
-            image = sample[1]
-        nb_images = image.shape[0]
-        if self._is_flatten:
+    def visualize(self, image, **kwargs):
+        if self._is_flatten or self._is_4d:
             image = image.reshape([-1, 28, 28])
         output = []
         if self._is_batch:
@@ -71,17 +71,25 @@ class MNIST(DataSetBase):
         image = sample[0]
         digit = sample[1]
         if self._is_norm:
-            image = image / 256.0
+            image = image / 256.0        
         if self._is_flatten:
             image = image.reshape([np.prod(image.shape)])
+
         if self._is_unsp:
             label = np.copy(image)
         else:
             label = digit
         if self._is_noise:
             if self._noise_type == 'poisson':
-                image = np.random.poisson(image / self._noise_scale).astype(np.float32)
-                image *= (self._noise_scale / 2.0 )
+                image = np.random.poisson(
+                    image / self._noise_scale).astype(np.float32)
+                image *= (self._noise_scale / 2.0)
             elif self._noise_type == "gaussian":
-                image = np.random.normal(image, scale=self._noise_scale)
+                args = image.shape
+                noise = np.random.randn(*args) * self._noise_scale
+                image = image + noise
+        if self._is_4d:
+            image = image.reshape((28, 28, 1))
+            if self._is_unsp:
+                label = label.reshape((28, 28, 1))    
         return (image, label, 1.0)

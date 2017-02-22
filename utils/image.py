@@ -22,6 +22,8 @@ import xlearn.utils.tensor as utt
 
 
 def subplot_images(images, nb_max_row=8, cmap=None, is_gray=False):
+    if isinstance(images, np.ndarray):
+        images = images.tolist()
     if isinstance(images, tuple):
         nb_cata = len(images)
     else:

@@ -5,9 +5,16 @@ import os
 import re
 import json
 import logging
+import sys
 import numpy as np
 from functools import wraps
 
+def show_debug_logs():
+    """ print debug logging info """
+    logger = logging.getLogger()
+    sh = logging.StreamHandler(sys.stderr)
+    logger.addHandler(sh)
+    logger.setLevel(logging.DEBUG)
 
 def unpack_list_nd(input_, item_type=None, keep_types=(str, np.ndarray)):
     """unpack list of multi dimension into one dimension.
@@ -94,7 +101,6 @@ def with_config(func):
         sets = merge_settings(settings=kwargs.pop('settings', None), filenames=kwargs.pop(
             'filenames', None), default_settings=kwargs.pop('default_settings', None), **kwargs)
         return func(*args,  settings=sets, **kwargs)
-
     return wrapper
 
 
