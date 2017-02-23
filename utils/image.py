@@ -22,13 +22,13 @@ import xlearn.utils.tensor as utt
 
 
 def subplot_images(images, nb_max_row=8, cmap=None, is_gray=False):
-    if isinstance(images, np.ndarray):
-        images = images.tolist()
+    """ subplot list of images of multiple categories into grid subplots
+    Args:
+        images: tuple of list of images
+    """
+
     if isinstance(images, tuple):
         nb_cata = len(images)
-    else:
-        nb_cata = 1
-        images = (images, )
 
     nb_images = len(images[0])
     nb_row = nb_images // nb_max_row
@@ -37,7 +37,7 @@ def subplot_images(images, nb_max_row=8, cmap=None, is_gray=False):
     for i in range(nb_row):
         for k in range(nb_cata):
             for j in range(nb_max_row):
-                id_img = i * nb_row + j
+                id_img = i * nb_max_row + j
                 id_img = min(id_img, nb_images - 1)
                 ax = plt.subplot(nb_row * nb_cata, nb_max_row, cid)
                 plt.imshow(images[k][id_img], cmap=cmap)
