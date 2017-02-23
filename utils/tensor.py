@@ -267,9 +267,11 @@ def combine_tensor_list(tensor_list, shape, strides=None, margin0=None, margin1=
     cid = 0
     for i in xrange(dim):
         if margin0[i] < 0:
-            raise ValueError(utg.errmsg(margin0, ">0", "margin0 needs to be positive"))
+            raise ValueError(utg.errmsg(
+                margin0, ">0", "margin0 needs to be positive"))
         if margin1[i] < 0:
-            raise ValueError(utg.errmsg(margin0, ">0", "margin1 needs to be positive"))
+            raise ValueError(utg.errmsg(
+                margin0, ">0", "margin1 needs to be positive"))
     for offset in offset_nd(embed_shape, patch_shape, strides, margin0, margin1, check_all):
 
         sli = multidim_slicer(offset, patch_shape)
@@ -279,6 +281,16 @@ def combine_tensor_list(tensor_list, shape, strides=None, margin0=None, margin1=
         if cid == len(tensor_list):
             break
     return output
+
+
+def downsample_shape(input_shape, ratio):
+    output_shape = [sz // r for (sz, r) in utg.zip_equal(input_shape, ratio)]
+    return output_shape
+
+
+def upsample_shape(input_shape, ratio):
+    output_shape = [sz * r for (sz, r) in utg.zip_equal(input_shape, ratio)]
+    return output_shape
 
 
 def down_sample_1d(input_, axis, ratio, offset=0, method='mean'):

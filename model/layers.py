@@ -5,6 +5,21 @@ import xlearn.utils.general as utg
 FLAGS = tf.app.flags.FLAGS
 
 
+def Label(shape, name='label', dtype=tf.float32):
+    shape = [None] + list(shape)
+    return tf.placeholder(dtype, shape, name)
+
+
+def Input(shape, name='input', dtype=tf.float32):
+    shape = [None] + list(shape)
+    return tf.placeholder(dtype, shape, name)
+
+
+def Output(shape, name='output', dtype=tf.float32):
+    shape = [None] + list(shape)
+    return tf.placeholder(dtype, shape, name)
+
+
 def _weight_variable(name, shape, ncolumn, scope=tf.get_variable_scope()):
     """Helper to create a Variable
     Args:
@@ -378,14 +393,11 @@ def inputs(shape, name='input'):
     return input_tensor
 
 
-def Label(shape, dtype=None, name='label'):
+def labels(shape, name='label'):
     """
     Shortcut to create a tf.float32 plackholder, for labels.
     """
-    if dtype is None:
-        dtype = tf.float32
-    batch_shape = [None]+list(shape)    
-    label_tensor = tf.placeholder(dtype=dtype, shape=batch_shape, name=name)
+    label_tensor = _placeholder(name, shape)
     return label_tensor
 
 
@@ -516,6 +528,7 @@ def trainstep_clip(loss, learn_rate, global_step, name='trainstep_clip'):
         train_op = opt.minimize(loss, global_step, name=name)
     return train_op
 
+
 def __loopops(k, p, l):
     shape_in = k.get_shape().as_list()
     knew = k + 1
@@ -523,20 +536,25 @@ def __loopops(k, p, l):
     kres = tf.select(p < l, k, knew)
     return kres, pnew, l
 
+
 def possion_layer(input_, name="possion_layer"):
     shape_in = input_.get_shape().as_list()
     k0v = np.zeros(shape=shape_in)
     with tf.name_scope(name) as scope:
         l = tf.exp(-input_)
         k0 = tf.constant(k0v, name='k0', dtype=tf.float32)
-        k = tf.get_variable(name=scope+'k', shape=shape_in, initializer=tf.constant_initializer(0))
-        p = tf.get_variable(name=scope+'p', shape=shape_in, initializer=tf.constant_initializer(1))
+        k = tf.get_variable(name=scope + 'k', shape=shape_in,
+                            initializer=tf.constant_initializer(0))
+        p = tf.get_variable(name=scope + 'p', shape=shape_in,
+                            initializer=tf.constant_initializer(1))
         o = k - 1
         init_sample = tf.Variable.assign(k, k0)
         k_i, p_i, l_i = tf.tuple([k, p, l], control_inputs=[init_sample])
-        k, p, l = tf.while_loop(lambda kk, pp, ll: tf.reduce_any(pp > ll), __loopops, (k_i, p_i, l_i))
+        k, p, l = tf.while_loop(lambda kk, pp, ll: tf.reduce_any(
+            pp > ll), __loopops, (k_i, p_i, l_i))
     o = k - 1
     return o
+
 
 def histogram(input_, value_min, value_max, nbins=None, name="histogram"):
     return tf.histogram_fixed_width(input_, [value_min, value_max], nbins, name=name)

@@ -53,7 +53,7 @@ class MNIST(DataSetBase):
 
         self._combine = [(d, l) for d, l in zip(self._data, self._label)]
 
-        self._sampler = Sampler(datas=self._combine)    
+        self._sampler = Sampler(datas=self._combine)
 
     def visualize(self, image, **kwargs):
         if self._is_flatten or self._is_4d:
@@ -70,6 +70,9 @@ class MNIST(DataSetBase):
         sample = sample[0]
         image = sample[0]
         digit = sample[1]
+        if self._is_bin:
+            image[image < 125.1] = 0.0
+            image[image >= 125.0] = 255.0
         if self._is_norm:
             image = image / 256.0        
         if self._is_flatten:
