@@ -57,13 +57,12 @@ class MNIST(DataSetBase):
 
     def visualize(self, image, **kwargs):
         if self._is_flatten or self._is_4d:
-            image = image.reshape([-1, 28, 28])
-        output = []
+            output = image.reshape([-1, 28, 28])
+        else:
+            output = image        
         if self._is_batch:
-            for i in range(image.shape[0]):
-                output.append(image[i, :, :])
-            image = output
-        return image
+            output = list(output)
+        return output
 
     def _sample_data_label_weight(self):
         sample = next(self._sampler)

@@ -12,7 +12,7 @@ class SRNetBase(Net):
     """Base net of super resolution nets
     """
     @with_config
-    def __init__(self, settings=None, **kwargs):
+    def __init__(self, filenames=None, settings=None, **kwargs):
         logging.getLogger(__name__).debug(
             'SRNetBase: filenames:{}'.format(filenames))
         super(SRNetBase, self).__init__(settings=settings, **kwargs)
