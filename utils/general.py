@@ -11,12 +11,14 @@ from functools import wraps
 from itertools import zip_longest
 import logging
 
+
 class Sentinel:
     pass
 
+
 def zip_equal(*iterables):
     sen = Sentinel()
-    for combo in zip_longest(*iterables, fillvalue=sen):        
+    for combo in zip_longest(*iterables, fillvalue=sen):
         for ele in combo:
             if isinstance(ele, Sentinel):
                 raise ValueError('Iterables have different length.')
@@ -37,6 +39,21 @@ def empty_list(length):
     for i in range(length):
         output.append(None)
     return output
+
+
+class ExceptionHook:
+    instance = None
+
+    def __call__(self, *args, **kwargs):
+        if self.instance is None:
+            from IPython.core import ultratb
+            self.instance = ultratb.FormattedTB(mode='Plain',
+                                                color_scheme='Linux', call_pdb=1)
+        return self.instance(*args, **kwargs)
+
+
+def enter_debug():
+    sys.excepthook = ExceptionHook()
 
 
 def show_debug_logs():

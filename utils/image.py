@@ -21,19 +21,19 @@ import xlearn.utils.general as utg
 import xlearn.utils.tensor as utt
 
 
-def subplot_images(images, nb_max_row=8, cmap=None, is_gray=False):
+def subplot_images(images, nb_max_row=8, cmap=None, is_gray=False, size=1.0, is_axis=False, tight_c=1.08):
     """ subplot list of images of multiple categories into grid subplots
     Args:
         images: tuple of list of images
     """
-
     if isinstance(images, tuple):
         nb_cata = len(images)
 
     nb_images = len(images[0])
     nb_row = nb_images // nb_max_row
-
+    nb_row = max(nb_row, 1)
     cid = 1
+    plt.figure(figsize=(nb_max_row*size, nb_row*nb_cata*size))
     for i in range(nb_row):
         for k in range(nb_cata):
             for j in range(nb_max_row):
@@ -43,9 +43,11 @@ def subplot_images(images, nb_max_row=8, cmap=None, is_gray=False):
                 plt.imshow(images[k][id_img], cmap=cmap)
                 if is_gray:
                     plt.gray()
-                ax.get_xaxis().set_visible(False)
-                ax.get_yaxis().set_visible(False)
+                if not is_axis:
+                    ax.get_xaxis().set_visible(False)
+                    ax.get_yaxis().set_visible(False)
                 cid += 1
+    plt.tight_layout(tight_c)
 
 
 def imread(filename):

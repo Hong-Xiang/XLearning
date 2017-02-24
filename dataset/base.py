@@ -4,7 +4,9 @@
 import random
 import numpy
 import logging
+import json
 from ..utils.general import with_config
+from ..utils.tensor import down_sample_nd
 
 
 class DataSetBase(object):
@@ -17,6 +19,7 @@ class DataSetBase(object):
                  is_weight=False,
                  random_seed=None,
                  is_norm=False,
+                 norm_c=numpy.float32(256.0),
                  is_train=True,
                  is_noise=False,
                  noise_level=0.0,
@@ -38,6 +41,7 @@ class DataSetBase(object):
         self._random_seed = self._update_settings('random_seed', random_seed)
 
         self._is_norm = self._update_settings('is_norm', is_norm)
+        self._norm_c = self._update_settings('norm_c', norm_c)
         self._is_train = self._update_settings('is_train', is_train)
         self._is_noise = self._update_settings('is_noise', is_noise)
         self._noise_level = self._update_settings('noise_level', noise_level)
@@ -96,6 +100,9 @@ class DataSetBase(object):
         """ Generate a new sample, (data, label, weight) """
         raise TypeError("sample_data_label_weight not implemented.")
 
+    def pretty_settings(self):
+        return json.dumps(self._c, sort_keys=True, indent=4, separators=(',', ':'))
+
     def visualize(self, sample):
         """ Convert sample into visualizeable format """
         raise TypeError("Visualize is not implemented.")
@@ -125,9 +132,6 @@ class DataSetBase(object):
             return self._sample_data()
 
     def _sample_batch(self):
-        if not self._is_batch:
-            raise ValueError(
-                "Can not call _sample_batch when _is_batch == False.")
         if self._is_label:
             if self._is_weight:
                 x = []
@@ -177,25 +181,72 @@ class DataSetImages(DataSetBase):
                  is_4d=True,
                  is_gray=True,
                  is_down_sample=False,
-                 down_sample_ratio=None,
+                 down_sample_ratio=(1, 4),
+                 down_sample_method='mean',
+                 is_crop=False,
+                 crop_target_shape=None,
+                 crop_offset=(0, 0),
+                 is_crop_random=False,
                  settings=None,
-                 filenames=None,
                  **kwargs):
-        super(DataSetImages, self).__init__(filenames=filenames, **kwargs)
+        super(DataSetImages, self).__init__(**kwargs)
         self._settings = settings
         self._is_4d = self._update_settings('is_4d', is_4d)
         self._is_gray = self._update_settings('is_gray', is_gray)
+
         self._is_down_sample = self._update_settings(
             'is_down_sample', is_down_sample)
         self._down_sample_ratio = self._update_settings(
             'down_sample_ratio', down_sample_ratio)
+        self._down_sample_method = self._update_settings(
+            'down_sample_method', down_sample_method)
+        self._is_crop = self._update_settings('is_crop', is_crop)
+        self._crop_target_shape = self._update_settings(
+            'crop_target_shape', crop_target_shape)
+        self._crop_offset = self._update_settings('crop_offset', crop_offset)
+        self._is_crop_random = self._update_settings(
+            'is_crop_random', is_crop_random)
+        self._fin = None
+
+    def __exit__(self, etype, value, traceback):
+        self._fin.close()
+
+    def _crop(self, image):
+        """ crop image into small patch """
+        image = numpy.array(image, dtype=image.dtype)
+        target_shape = self._crop_target_shape
+        offsets = list(self._crop_offset)
+        is_crop_random = self._is_crop_random
+        if is_crop_random:
+            offsets[0] += self.randint(minv=0,
+                                       maxv=image.shape[0] - target_shape[0])
+            offsets[1] += self.randint(minv=0,
+                                       maxv=image.shape[1] - target_shape[1])
+        if len(image.shape) == 3:
+            image = image[offsets[0]:offsets[0] +
+                          target_shape[0], offsets[1]:offsets[1] + target_shape[1], :]
+        else:
+            image = image[offsets[0]:offsets[0] +
+                          target_shape[0], offsets[1]:offsets[1] + target_shape[1]]
+        return image
+
+    def _downsample(self, image):
+        """ down sample image/patch """
+        image = numpy.array(image, dtype=image.dtype)
+        image_d = down_sample_nd(image, list(
+            self._down_sample_ratio) + [1], method=self._down_sample_method)
+        return image_d
 
     def visualize(self, sample):
-        images = None
+        # Decouple visualization of data
+        images = numpy.array(sample, dtype=sample.dtype)
+
         if sample.shape[-1] == 1:
-            images = sample.reshape(sample.shape[:2])
+            images = images.reshape(images.shape[:-1])
         else:
-            images = sample
+            images = images
+        if self._is_norm:
+            images *= self._norm_c
         if self._is_batch:
             images = list(images)
         return images

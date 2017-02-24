@@ -28,14 +28,11 @@ class Flickr25k(DataSetImages):
             self._sampler = Sampler(datas=data_keys, is_shuffle=False)
         return self
 
-    def __exit__(self, etype, value, traceback):
-        self._fin.close()
-
     def visualize(self, sample):
         image = super(Flickr25k, self).visualize(sample)
-        if not self._is_gray:
-            if self._is_norm:
-                image *= np.float32(256.0)
+
+        if self._is_norm:
+            image *= self._norm_c
         if self._is_batch:
             image = [np.uint8(im) for im in image]
         else:
@@ -44,11 +41,15 @@ class Flickr25k(DataSetImages):
 
     def _sample_data_label_weight(self):
         image = np.array(self._fin[next(self._sampler)[0]], dtype=np.float32)
-        if self._is_norm:
-            image /= np.float32(256.0)
-        if self._is_4d:
-            image = image.reshape((image.shape[0], image.shape[1], image.shape[2]))
+        if self._is_crop:
+            image = self._crop(image)
         if self._is_gray:
-            image = np.mean(image, axis=-1)
-            image = image.reshape(list(image.shape) + [1])
-        return image, image, 1.0
+            image = np.mean(image, axis=-1, keepdims=True)
+        if self._is_norm:
+            image /= self._norm_c
+        if self._is_down_sample:
+            label = np.array(image, dtype=np.float32)
+            image = self._downsample(image)
+        else:
+            label = image
+        return image, label, 1.0
