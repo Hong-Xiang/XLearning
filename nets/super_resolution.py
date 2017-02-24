@@ -50,7 +50,7 @@ class SRNetBase(Net):
         tf.summary.scalar(name='residual_mse_loss', tensor=loss_residual)
 
     def _define_models(self):
-        with tf.name_scoep('low_res_input'):
+        with tf.name_scope('low_res_input'):
             low_res = Input(shape=self._shape_i, name='low_res')
         with tf.name_scope('high_res_lable'):
             high_res = Label(shape=self._shape_o, name="high_res")
