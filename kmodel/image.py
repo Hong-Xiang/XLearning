@@ -1,34 +1,60 @@
 from keras.models import Model
-from keras.layers import Dense, Activation, Dropout, Convolution2D, BatchNormalization, Merge, ELU, LeakyReLU, UpSampling2D
+from keras.layers import Dense, Activation, Dropout, Convolution2D, BatchNormalization, merge, ELU, LeakyReLU, UpSampling2D
 
 
-def residual_block(input_, channels, kxs, kys, id=0, activation='elu'):
+def residual_block(input_, channels, kxs=None, kys=None, id=0, cat=False, scope=''):
     n_conv = len(channels)
+    if kxs is None:
+        kxs = [3] * n_conv
+    if kys is None:
+        kys = [3] * n_conv
     x = input_
-    for i in range(n_conv):
-        x = Convolution2D(channels[i], kxs[i], kys[
-                          i], border_mode='same', name='sr_res_conv_%d_%d' % (id, i))(x)
-        x = BatchNormalization(name='sr_res_bn_%d_%d' % (id, i))(x)
-        x = LeakyReLU(alpha=0.25, name="sr_res_activation_%d_%d" % (id, i))(x)
-    m = Merge([x, input_], mode='sum', name="sr_res_merge_%d" % id)
+    x = convolution_blocks(x, channels, kxs, kys, id,)
+    if cat:
+        m = merge([x, input_], mode='concat', name="resi_%d_merge" % id)
+    else:
+        m = merge([x, input_], mode='sum', name="resi_%d_merge" % id)
     return m
 
-def upscale_block(input_, r, id):
+
+def upscale_block(input_, rx, ry, channel, id=0):
     x = input_
-    x = Convolution2D(128, 3, 3, border_mode='same', name='sr_res_upconv1_%d' % id)(x)
-    x = LeakyReLU(alpha=0.25, name='sr_res_up_lr_%d_1_1' % id)(x)
-    x = UpSampling2D(size=(r, r), name='sr_res_upscale_%d' % id)(x)
-    #x = SubPixelUpscaling(r=2, channels=32)(x)
-    x = Convolution2D(128, 3, 3, border_mode='same', name='sr_res_filter1_%d' % id)(x)
-    x = LeakyReLU(alpha=0.3, name='sr_res_up_lr_%d_1_2' % id)(x)
+    x = Convolution2D(channel, 5, 5, border_mode='same',
+                      name='upscale_%d_conv_0' % id)(x)
+    x = ELU(name='upscale_%d_elu_0' % id)(x)
+    x = UpSampling2D(size=(rx, ry), name='upscale_%d_upsample' % id)(x)
+    # x = SubPixelUpscaling(r=2, channels=32)(x)
+    x = Convolution2D(channel, 5, 5, border_mode='same',
+                      name='upscale_%d_conv_1' % id)(x)
+    x = ELU(name='upscale_%d_elu_1' % id)(x)
     return x
 
-def conv_seq(input_, channels, kxs, kys, id=0, activation='elu'):
-    n_conv = len(channels)
-    x = input_
-    for i in range(n_conv):
-        x = Convolution2D(channels[i], kxs[i], kys[
-                          i], border_mode='same', name='seq_conv_conv_%d_%d' % (id, i))(x)
-        x = BatchNormalization(name='seq_conv_bn_%d_%d' % (id, i))(x)
-        x = LeakyReLU(alpha=0.25, name="seq_conv_activation_%d_%d" % (id, i))(x)    
+
+def convolution_blocks(ip, nb_filters, nb_rows=None, nb_cols=None, subsamples=None, id=0, border_mode='same', scope=''):
+    """ stack of standard convolution blocks """
+    nb_layers = len(nb_filters)
+    x = ip
+    if subsamples is None:
+        subsamples = [(1, 1)] * nb_layers
+    if nb_rows is None:
+        nb_rows = [3]*nb_layers
+    if nb_cols is None:
+        nb_cols = [3]*nb_layers
+    for i in range(nb_layers):
+        x = convolution_block(ip=x,
+                              nb_filter=nb_filters[i],
+                              nb_row=nb_rows[i],
+                              nb_col=nb_cols[i],
+                              subsamples=subsamples,
+                              id=i,
+                              scope=scope + "convolutions%d/" % id)
+    return x
+
+
+def convolution_block(ip, nb_filter, nb_row, nb_col, subsample=(1, 1), id=0, border_mode='same', scope=''):
+    """ standard convolution block """
+    x = Convolution2D(nb_filter,  nb_row, nb_col, border_mode=border_mode,
+                      name=scope + 'conv%d/conv' % id, subsample=subsample)(ip)
+    x = BatchNormalization(name=scope + 'conv%d/bn' % id)(x)
+    x = ELU(name=scope + "conv%d/elu" % id)(x)
     return x

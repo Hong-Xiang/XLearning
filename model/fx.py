@@ -22,7 +22,7 @@ class NetFx(TFNet):
         self._label = layer.labels([self._batch_size, 1])
         self._net_definition()
         self._add_summary()
-    
+
     def _gather_paras(self):
         self._batch_size = self._paras['batch_size']
         self._is_possion_layer = self._paras['is_possion_layer']
@@ -64,7 +64,7 @@ class NetFx(TFNet):
         model.scalar_summary(self._loss)
         for op in self._midops:
             model.activation_summary(op)
-    
+
     @property
     def keep_prob(self):
         return self._keep

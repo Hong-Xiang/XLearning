@@ -21,15 +21,43 @@ import struct
 import shutil
 import scipy.misc
 import numpy as np
-
+import h5py
+from tqdm import tqdm
 
 from six.moves import xrange
 import xlearn.utils.general as utg
 import xlearn.utils.xpipes as utp
 import xlearn.utils.image as uti
+import numpy as np
 
 IMAGE_SUFFIX = ['png', 'jpg']
 
+
+def merge_npy_to_h5py(h5file, dataset_name, npyfiles, is_different=False, is_256=False):
+    x_0 = np.array(np.load(npyfiles[0]))
+    shape_x = x_0.shape
+    if is_different:
+        if h5file.get(dataset_name):
+            del h5file['dataset_name']
+        dg = h5file.create_group(dataset_name)
+        cid = 0
+        for filename in tqdm(npyfiles):
+            x = np.load(filename).astype(np.float32)
+            if is_256:
+                x /= np.float(256)
+            dset = dg.create_dataset('data%09d' % cid, data=x, dtype='float32')
+            cid += 1
+    else:
+        shape_dataset = [len(npyfiles)] + list(shape_x)
+        dset = h5file.create_dataset(
+            dataset_name, shape=shape_dataset, dtype='float32')
+        cid = 0
+        for filename in tqdm(npyfiles):
+            x = np.load(filename).astype(np.float32)
+            if is_256:
+                x /= np.float(256)
+            dset[cid, ...] = x_0
+            cid += 1
 
 def rename(source, prefix=None, suffix=None, recurrent=False, no_action=False, force=False):
     """Rename all files in a folder, reform prefixes, with filter using suffix.
@@ -266,11 +294,11 @@ def pad_sino(source, target, prefix, pwx, pwy):
     pipe_runner.run()
 
 
-def combine_infer(source, target, prefix, pwx, pwy):    
+def combine_infer(source, target, prefix, pwx, pwy):
     if isinstance(source, (list, tuple)):
-        source = source[0]    
+        source = source[0]
     source = os.path.abspath(source)
-    print("COMBINE INFER IN:",source)
+    print("COMBINE INFER IN:", source)
     files = os.listdir(source)
     filesfull = []
     for file_ in files:

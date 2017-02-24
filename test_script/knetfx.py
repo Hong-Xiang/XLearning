@@ -8,7 +8,7 @@ def main(argv):
     dataset = xlearn.reader.fx.DataSetFx(
         filenames="./fx.json", batch_size=1024 * 128, is_gaussian=True)
     x, y = dataset.next_batch()
-    net = KNetFx(filenames=['./fx.json', './net.json'])
+    net = KNetFx(filenames=['./fx.json', './knetfx.json'])
     net.define_net()
     data_gen = dataset
     net.model.fit(x, y, nb_epoch=10, batch_size=1024, callbacks=net.callbacks)

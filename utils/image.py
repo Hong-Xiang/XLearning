@@ -15,8 +15,39 @@ import numpy as np
 from scipy import misc
 from six.moves import xrange
 
+import matplotlib.pyplot as plt
+
 import xlearn.utils.general as utg
 import xlearn.utils.tensor as utt
+
+
+def subplot_images(images, nb_max_row=8, cmap=None, is_gray=False, size=1.0, is_axis=False, tight_c=1.08):
+    """ subplot list of images of multiple categories into grid subplots
+    Args:
+        images: tuple of list of images
+    """
+    if isinstance(images, tuple):
+        nb_cata = len(images)
+
+    nb_images = len(images[0])
+    nb_row = nb_images // nb_max_row
+    nb_row = max(nb_row, 1)
+    cid = 1
+    plt.figure(figsize=(nb_max_row*size, nb_row*nb_cata*size))
+    for i in range(nb_row):
+        for k in range(nb_cata):
+            for j in range(nb_max_row):
+                id_img = i * nb_max_row + j
+                id_img = min(id_img, nb_images - 1)
+                ax = plt.subplot(nb_row * nb_cata, nb_max_row, cid)
+                plt.imshow(images[k][id_img], cmap=cmap)
+                if is_gray:
+                    plt.gray()
+                if not is_axis:
+                    ax.get_xaxis().set_visible(False)
+                    ax.get_yaxis().set_visible(False)
+                cid += 1
+    plt.tight_layout(tight_c)
 
 
 def imread(filename):
@@ -46,7 +77,6 @@ def image_type(tensor):
     if len(tensor.shape) == 5:
         return 'NHWDC'
     return 'unknown'
-
 
 
 def rgb2gray(image):

@@ -5,7 +5,63 @@ import os
 import re
 import json
 import logging
+import sys
 import numpy as np
+from functools import wraps
+from itertools import zip_longest
+import logging
+
+
+class Sentinel:
+    pass
+
+
+def zip_equal(*iterables):
+    sen = Sentinel()
+    for combo in zip_longest(*iterables, fillvalue=sen):
+        for ele in combo:
+            if isinstance(ele, Sentinel):
+                raise ValueError('Iterables have different length.')
+        yield combo
+
+
+def extend_list(list_input, nb_target):
+    if len(list_input) == nb_target:
+        return list_input
+    if len(list_input) == 1 and nb_target > 1:
+        return list_input * nb_target
+    else:
+        raise ValueError("Can't extend list with len != 1")
+
+
+def empty_list(length):
+    output = []
+    for i in range(length):
+        output.append(None)
+    return output
+
+
+class ExceptionHook:
+    instance = None
+
+    def __call__(self, *args, **kwargs):
+        if self.instance is None:
+            from IPython.core import ultratb
+            self.instance = ultratb.FormattedTB(mode='Plain',
+                                                color_scheme='Linux', call_pdb=1)
+        return self.instance(*args, **kwargs)
+
+
+def enter_debug():
+    sys.excepthook = ExceptionHook()
+
+
+def show_debug_logs():
+    """ print debug logging info """
+    logger = logging.getLogger()
+    sh = logging.StreamHandler(sys.stderr)
+    logger.addHandler(sh)
+    logger.setLevel(logging.DEBUG)
 
 
 def unpack_list_nd(input_, item_type=None, keep_types=(str, np.ndarray)):
@@ -87,10 +143,18 @@ def label_name(data_name, case_digit=None, label_prefix=None):
 #     return
 
 
+def with_config(func):
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        sets = merge_settings(settings=kwargs.pop('settings', None), filenames=kwargs.pop(
+            'filenames', None), default_settings=kwargs.pop('default_settings', None), **kwargs)
+        return func(*args,  settings=sets, **kwargs)
+    return wrapper
+
+
 def merge_settings(settings=None, filenames=None, default_settings=None, **kwargs):
     """Merge settings from multiple file and args into one
     """
-    logging.getLogger(__name__).debug("filenames:{}".format(filenames))
     if settings is None:
         settings = {}
 
@@ -115,6 +179,12 @@ def merge_settings(settings=None, filenames=None, default_settings=None, **kwarg
     settings.update(filted_kwargs)
 
     return settings
+
+
+def check_same_len(shape0, shape1, ext_msg=''):
+    if len(shape0) != len(shape1):
+        raise ValueError(errmsg(shape0.shape, shape1.shape,
+                                ext_msg + "Need to be same length, "))
 
 
 def filename_filter(filenames, prefix, suffix):
