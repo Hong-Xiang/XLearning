@@ -59,56 +59,72 @@ class Net(object):
 
     @with_config
     def __init__(self,
-                 inputs_dims=[],
-                 outputs_dims=[],
+                 inputs_dims=None,
+                 outputs_dims=None,
+                 batch_size=128,
+                 optims_names=('Adam',),
+                 losses_names=('mse',),
+                 metrxs_names=(None,),
+                 lrs=(1e-3,),
+                 is_train_step=('True'),
+                 is_save=(True,),
+                 is_load=(False,),
+                 path_saves=('./model.ckpt',),
+                 path_loads=('./model.ckpt',),
+                 path_summary=('./log',),
+                 summary_freq=10,
+                 arch='default',
+                 activ='relu',
+                 var_init='glorot_uniform',
+                 hiddens=[],
+                 is_dropout=False,
+                 dropout_rate=0.5,
+                 filenames=None,
                  settings=None,
                  **kwargs):
-
-        self._inputs_dims = settings.get('inputs_dims', inputs_dims)
-        self._outputs_dims = settings.get('outputs_dims', outputs_dims)
-        self._batch_size = settings.get('batch_size', 128)
-        self._summary_freq = settings.get('summary_freq', 10)
-
-        self._optims_names = settings.get('optims_names', ['Adam'])
-        self._losses_names = settings.get('losses_names', ['mse'])
-        self._metrxs_names = settings.get('metrxs_names', [None])
-        self._lrs = settings.get('lrs', [1e-4])
-
-        self._is_train_step = settings.get('is_train_step', [True])
-
-        self._is_save = settings.get('is_save', [True])
-        self._is_load = settings.get('is_load', [False])
-
-        self._path_saves = settings.get('path_saves', ['./model.ckpt'])
-        self._path_loads = settings.get('path_loads', ['./model.ckpt'])
-        self._path_summary = settings.get('path_summary', ['./log'])
-
-        self._arch = settings.get('arch', 'default')
-        self._activ = settings.get('activ', 'relu')
-        self._var_init = settings.get('var_init', 'glorot_uniform')
-        self._hiddens = settings.get('hiddens', [])
-        self._is_dropout = settings.get('is_dropout', False)
-        self._dropout_rate = settings.get('dropout_rate', 0.5)
+        self._settings = settings
 
         self._c = dict()
-        self._c.update({'inputs_dims': self._inputs_dims})
-        self._c.update({'outputs_dims': self._outputs_dims})
-        self._c.update({'hiddens': self._hiddens})
-        self._c.update({'batch_size': self._batch_size})
-        self._c.update({'var_init': self._var_init})
-        self._c.update({'optims_names': self._optims_names})
-        self._c.update({'losses_names': self._losses_names})
-        self._c.update({'metrxs_names': self._metrxs_names})
-        self._c.update({'lrs': self._lrs})
-        self._c.update({'is_save': self._is_save})
-        self._c.update({'is_load': self._is_load})
-        self._c.update({'path_saves': self._path_saves})
-        self._c.update({'path_loads': self._path_loads})
-        self._c.update({'arch': self._arch})
-        self._c.update({'var_init': self._var_init})
-        self._c.update({'hiddens': self._hiddens})
-        self._c.update({'is_dropout': self._is_dropout})
-        self._c.update({'dropout_rate': self._dropout_rate})
+        self._inputs_dims = self._update_settings('inputs_dims', inputs_dims)
+        self._outputs_dims = self._update_settings(
+            'outputs_dims', outputs_dims)
+        self._batch_size = self._update_settings('batch_size', batch_size)
+        self._summary_freq = self._update_settings(
+            'summary_freq', summary_freq)
+
+        self._optims_names = self._update_settings(
+            'optims_names', optims_names)
+        self._losses_names = self._update_settings(
+            'losses_names', losses_names)
+        self._metrxs_names = self._update_settings(
+            'metrxs_names', metrxs_names)
+        self._lrs = self._update_settings('lrs', lrs)
+        self._lrs_tensor = None
+
+        self._is_train_step = self._update_settings(
+            'is_train_step', is_train_step)
+
+        self._is_save = self._update_settings('is_save', is_save)
+        self._is_load = self._update_settings('is_load', is_load)
+
+        self._path_saves = self._update_settings('path_saves', path_saves)
+        self._path_loads = self._update_settings('path_loads', path_loads)
+        self._path_summary = self._update_settings(
+            'path_summary', path_summary)
+
+        self._arch = self._update_settings('arch', arch)
+        self._activ = self._update_settings('activ', activ)
+        self._var_init = self._update_settings('var_init', var_init)
+        self._hiddens = self._update_settings('hiddens', hiddens)
+        self._is_dropout = self._update_settings('is_dropout', is_dropout)
+        self._dropout_rate = self._update_settings(
+            'dropout_rate', dropout_rate)
+        self._filenames = self._update_settings('filenames', filenames)
+
+        # Special variable, printable, but don't input by settings.
+        self._models_names = self._update_settings('model_names', ['Model'])
+        self._nb_model = self._update_settings(
+            'model_names', len(self._models_names))
 
         self._inputs = None
         self._outputs = None
@@ -124,11 +140,14 @@ class Net(object):
         self._summary_writer = None
         self._saver = None
 
-        self._models_names = ['Model']
-        self._nb_model = None
+    def _update_settings(self, name, value=None):
+        output = self._settings.get(name, value)
+        self._c.update({name: output})
+        return output
 
-    def print_settings(self):
-        print(json.dumps(self._c, sort_keys=True, separators=(':', ','), indent=4))
+    def pretty_settings(self):
+        """ print all settings in pretty JSON fashion """
+        return json.dumps(self._c, sort_keys=True, indent=4, separators=(',', ':'))
 
     def _before_defines(self):
         # extent shareable parameters
@@ -152,6 +171,11 @@ class Net(object):
         self._metrxs = empty_list(self._nb_model)
         self._train_steps = empty_list(self._nb_model)
 
+        self._lrs_tensor = []
+        for i in range(self._nb_model):
+            self._lrs_tensor.append(tf.Variable(
+                self._lrs[i], trainable=False, name='lr_%i' % i))
+
     def _define_models(self):
         """ define models """
         pass
@@ -160,11 +184,13 @@ class Net(object):
         """ define optimizers """
         for i in range(self._nb_model):
             opt_name = self._optims_names[i]
-            lr = self._lrs[i]
+            lr_tensor = self._lrs_tensor[i]
             if opt_name == "Adam":
-                self._optims[i] = tf.train.AdamOptimizer(learning_rate=lr)
+                self._optims[i] = tf.train.AdamOptimizer(
+                    learning_rate=lr_tensor)
             elif opt_name == "RMSProp" or opt_name == "rmsporp" or opt_name == "rms":
-                self._optims[i] = tf.train.RMSPropOptimizer(learning_rate=lr)
+                self._optims[i] = tf.train.RMSPropOptimizer(
+                    learning_rate=lr_tensor)
             else:
                 raise ValueError("Unknown optimizer name %s." % opt_name)
 
@@ -176,10 +202,11 @@ class Net(object):
             if loss_name == 'mse':
                 self._losses[i] = tf.losses.mean_squared_error(
                     self._labels[i][0], self._outputs[i][0])
-            tf.summary.scalar(name=self._models_names[
-                              i] + '_loss', tensor=self._losses[i])
+            loss_summary_name = self._models_names[i] + '_loss'
+            tf.summary.scalar(name=loss_summary_name, tensor=self._losses[i])
 
     def _define_metrxs(self):
+        # TODO: Impl
         pass
 
     def _define_train_steps(self):
@@ -200,6 +227,7 @@ class Net(object):
 
     def load(self, var_names=None, model_id=None):
         """ load weight from file """
+        # TODO: Impl: restore from checkpoint files
         if model_id is None:
             model_id = 0
         # with open(self._path_loads[model_id]) as fin:
@@ -230,8 +258,6 @@ class Net(object):
         self._define_train_steps()
         self._define_summaries()
 
-        # self.load()
-
     def train_on_batch(self, model_id=None, inputs=None, labels=None, is_summary=None):
         """ train on a batch of data
         Args:
@@ -255,6 +281,8 @@ class Net(object):
         for (tensor, data) in zip_equal(lb_tensors, labels):
             feed_dict.update({tensor: data})
         feed_dict.update({K.learning_phase(): 1})
+        for (tensor, value) in zip_equal(self._lrs_tensor, self._lrs):
+            feed_dict.update({tensor: value})
         if is_summary is None:
             is_summary = (self._step.state % self._summary_freq == 0)
         train_step = self._train_steps[model_id]
@@ -281,8 +309,6 @@ class Net(object):
 
     def reset_lr(self, lrs):
         self._lrs = extend_list(lrs, self._nb_model)
-        self._define_optims()
-        self._define_train_steps()
 
     # def plot_loss(self, model_id=0, sub_id=None, is_clean=True, is_log=False, smooth=0.0):
     #     if is_clean:
