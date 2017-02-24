@@ -29,10 +29,7 @@ class Flickr25k(DataSetImages):
         return self
 
     def visualize(self, sample):
-        image = super(Flickr25k, self).visualize(sample)
-
-        if self._is_norm:
-            image *= self._norm_c
+        image = super(Flickr25k, self).visualize(sample)  
         if self._is_batch:
             image = [np.uint8(im) for im in image]
         else:
