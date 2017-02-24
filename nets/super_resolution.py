@@ -7,27 +7,31 @@ from ..utils.general import with_config
 from ..utils.tensor import upsample_shape
 from .base import Net
 
+IMAGE_SUMMARY_MAX_OUTPUT = 5
+
 
 class SRNetBase(Net):
     """Base net of super resolution nets
     """
     @with_config
-    def __init__(self, filenames=None, settings=None, **kwargs):
-        logging.getLogger(__name__).debug(
-            'SRNetBase: filenames:{}'.format(filenames))
-        super(SRNetBase, self).__init__(settings=settings, **kwargs)
+    def __init__(self,
+                 shape_i=None,
+                 shape_o=None,
+                 down_sample_ratio=None,
+                 settings=None,
+                 **kwargs):
+        super(SRNetBase, self).__init__(**kwargs)
+        self._settings = settings
         logging.getLogger(__name__).info(
             "=" * 8 + "SuperNet." + SRNetBase.__name__ + " Constructing." + "=" * 8)
         self._models_names = ['SuperResolutionResidual', 'SuperResolutionFull']
         self._is_train_step = [True, True]
 
         # Gather settings
-        self._shape_i = settings['shape_i']
-        self._c.update({'shape_i': self._shape_i})
-        self._shape_o = settings['shape_o']
-        self._c.update({'shape_o': self._shape_o})
-        self._down_sample_ratio = settings['down_sample_ratio']
-        self._c.update({'down_sample_ratio': self._down_sample_ratio})
+        self._shape_i = self._update_settings('shape_i', shape_i)
+        self._shape_o = self._update_settings('shape_o', shape_o)
+        self._down_sample_ratio = self._update_settings(
+            'down_sample_ratio', down_sample_ratio)
 
         # Check settings
         shape_o_cal = upsample_shape(self._shape_i, self._down_sample_ratio)
@@ -51,10 +55,14 @@ class SRNetBase(Net):
         self._labels[1] = [high_res]
         self._interp = interp
 
-        tf.summary.image('low_resolution', low_res)
-        tf.summary.image('high_resolution', high_res)
-        tf.summary.image('residual_reference', residual_ref)
-        tf.summary.image('interpolation', interp)
+        tf.summary.image('low_resolution', low_res,
+                         max_outputs=IMAGE_SUMMARY_MAX_OUTPUT)
+        tf.summary.image('high_resolution', high_res,
+                         max_outputs=IMAGE_SUMMARY_MAX_OUTPUT)
+        tf.summary.image('residual_reference', residual_ref,
+                         max_outputs=IMAGE_SUMMARY_MAX_OUTPUT)
+        tf.summary.image('interpolation', interp,
+                         max_outputs=IMAGE_SUMMARY_MAX_OUTPUT)
         logging.getLogger(__name__).info(
             "=" * 8 + "SuperNet." + SRNetBase.__name__ + " Constructed." + "=" * 8)
 
@@ -71,7 +79,7 @@ class SRNetInterp(SRNetBase):
 
     @with_config
     def __init__(self, settings=None, **kwargs):
-        super(SRNetInterp, self).__init__(self, settings=settings, **kwargs)
+        super(SRNetInterp, self).__init__(**kwargs)
         self._is_train_step = [False, False]
         self._dummy_variable = tf.Variable([0.0])
 
@@ -89,7 +97,7 @@ class SRSimple(SRNetBase):
 
     @with_config
     def __init__(self, settings=None, **kwargs):
-        super(SRSimple, self).__init__(self, **kwargs)
+        super(SRSimple, self).__init__(**kwargs)
 
     def _define_models(self):
         super(SRSimple, self)._define_models()
@@ -98,31 +106,40 @@ class SRSimple(SRNetBase):
         convf = Convolution2D(32, 1, 1, border_mode='same',
                               activation='relu', name='dense_conv')(conv0)
         infer = Convolution2D(1, 5, 5, border_mode='same', name='conv2')(convf)
-        tf.summary.image("residual_inference", infer)
+        tf.summary.image("residual_inference", infer,
+                         max_outputs=IMAGE_SUMMARY_MAX_OUTPUT)
         self._outputs[0] = [infer]
         self._outputs[1] = [tf.add(infer, self._interp, name='add_residual')]
+        tf.summary.image("superresolution_inference", self._outputs[
+                         1][0], max_outputs=IMAGE_SUMMARY_MAX_OUTPUT)
+
 
 class SRClassic(SRNetBase):
+
     @with_config
     def __init__(self, settings=None, **kwargs):
-        super(SRSimple, self).__init__(self, **kwargs)
-    
+        super(SRSimple, self).__init__(**kwargs)
+
     def _define_models(self):
         super(SRClassic, self)._define_models()
         conv = self._interp
         for nb_f in range(self._hiddens):
-            conv = Convolution2D(nb_f, 3, 3, border_mode='same', activation='elu')(conv)
+            conv = Convolution2D(
+                nb_f, 3, 3, border_mode='same', activation='elu')(conv)
         infer = Convolution2D(1, 3, 3, border_mode='same')(conv)
-        tf.summary.image("residual_inference", infer)
+        tf.summary.image("residual_inference", infer,
+                         max_outputs=IMAGE_SUMMARY_MAX_OUTPUT)
         self._outputs[0] = [infer]
         self._outputs[1] = [tf.add(infer, self._interp, name='add_residual')]
-        tf.summary.image("superresolution_inference", self._outputs[1][0])
+        tf.summary.image("superresolution_inference", self._outputs[1][0],
+                         max_outputs=IMAGE_SUMMARY_MAX_OUTPUT)
+
 
 class SRF3D(SRNetBase):
 
     @with_config
     def __init__(self, settings=None, **kwargs):
-        super(SRF3D, self).__init__(self, **kwargs)
+        super(SRF3D, self).__init__(**kwargs)
 
     def __conv_block(self, tensor_in, nb_filters, name):
         with tf.name_scope(name):
@@ -159,14 +176,16 @@ class SRF3D(SRNetBase):
 
         res0 = self.__res_block(e_i, 64, name='residual_block0')
         res1 = self.__res_block(res0, 128, name='residual_block0')
-        upsampled = UpSampling2D(size=(1, 4), name='upsample')(res1)
+        upsampled = UpSampling2D(size=self._down_sample_ratio[:2], name='upsample')(res1)
         e_o_0 = ELU(name='EO0')(upsampled)
         c_o_0 = Convolution2D(
             256, 3, 3, border_mode='same', name='CONV_O0')(e_o_0)
         e_o_1 = ELU(name='EO0')(c_o_0)
         infer = Convolution2D(1, 3, 3, border_mode='same',
                               name='CONV_O1_INFER')(e_o_1)
-        tf.summary.image("residual_inference", infer)
+        tf.summary.image("residual_inference", infer,
+                         max_outputs=IMAGE_SUMMARY_MAX_OUTPUT)
         self._outputs[0] = [infer]
         self._outputs[1] = [tf.add(infer, self._interp, name='add_residual')]
-        tf.summary.image("superresolution_inference", self._outputs[1][0])
+        tf.summary.image("superresolution_inference", self._outputs[1][0],
+                         max_outputs=IMAGE_SUMMARY_MAX_OUTPUT)

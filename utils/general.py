@@ -148,6 +148,10 @@ def with_config(func):
     def wrapper(*args, **kwargs):
         sets = merge_settings(settings=kwargs.pop('settings', None), filenames=kwargs.pop(
             'filenames', None), default_settings=kwargs.pop('default_settings', None), **kwargs)
+        logging.getLogger(__name__).debug(
+            "After merge_settings, settings:" + str(sets) + "\nkwargs:" + str(kwargs))
+        logging.getLogger(__name__).debug(
+            "args:" + str(args))
         return func(*args,  settings=sets, **kwargs)
     return wrapper
 
