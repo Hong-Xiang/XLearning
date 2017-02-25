@@ -38,6 +38,9 @@ class Flickr25k(DataSetImages):
 
     def _sample_data_label_weight(self):
         image = np.array(self._fin[next(self._sampler)[0]], dtype=np.float32)
+        if self._is_crop:                        
+            while image.shape[0] < self._crop_offset[0] + self._crop_target_shape[0] or image.shape[1] < self._crop_offset[1] + self._crop_target_shape[1]:
+                image = np.array(self._fin[next(self._sampler)[0]], dtype=np.float32)
         if self._is_crop:
             image = self._crop(image)
         if self._is_gray:
