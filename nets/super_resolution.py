@@ -1,8 +1,8 @@
 import logging
 import tensorflow as tf
-from keras.layers import Input, Convolution2D, BatchNormalization, ELU, merge, UpSampling2D
+from keras.layers import Input, Convolution2D, BatchNormalization, ELU, merge, UpSampling2D, Deconvolution2D
 
-from ..model.layers import Input, Label
+from ..model.layers import Input, Label, Convolution2DwithBN
 from ..utils.general import with_config
 from ..utils.tensor import upsample_shape
 from .base import Net
@@ -123,7 +123,8 @@ class SRSimple(SRNetBase):
         tf.summary.image("residual_inference", infer,
                          max_outputs=IMAGE_SUMMARY_MAX_OUTPUT)
         with tf.name_scope('high_res_inference'):
-            self._outputs[0] = [tf.add(infer, self._interp, name='add_residual')]
+            self._outputs[0] = [
+                tf.add(infer, self._interp, name='add_residual')]
         tf.summary.image("superresolution_inference", self._outputs[
                          0][0], max_outputs=IMAGE_SUMMARY_MAX_OUTPUT)
 
@@ -155,17 +156,13 @@ class SRF3D(SRNetBase):
     def __init__(self, settings=None, **kwargs):
         super(SRF3D, self).__init__(**kwargs)
 
-    def __conv_block(self, tensor_in, nb_filters, name):
+    def __conv_block(self, tensor_in, nb_filter, name):
         with tf.name_scope(name):
-            c0 = Convolution2D(
-                nb_filters, 3, 3, border_mode='same', name='CONV0')(tensor_in)
-            b0 = BatchNormalization(name='BN0')(c0)
-            e0 = ELU(name='ELU0')(b0)
-            c1 = Convolution2D(
-                nb_filters, 3, 3, border_mode='same', name='CONV1')(tensor_in)
-            b1 = BatchNormalization(name='BN1')(c0)
-            e1 = ELU(name='ELU1')(b0)
-        return e1
+            c = tensor_in
+            for i in range(2):
+                c = Convolution2DwithBN(c, nb_filter, 3, 3, name='CONV_BN_%d'%i)
+                # c = Convolution2D(nb_filter, 3, 3, activation='elu', border_mode='same')(c)
+        return c
 
     def __res_block(self, tensor_in, nb_filters, name):
         with tf.name_scope(name):
@@ -181,30 +178,39 @@ class SRF3D(SRNetBase):
         super(SRF3D, self)._define_models()
         low_res = self._inputs[0][0]
         interp = self._interp
-        high_res = self._labels[1][0]
+        high_res = self._labels[0][0]
+        x = low_res
         with tf.name_scope('input_block'):
-            c_i = Convolution2D(64, 9, 9, border_mode='same',
-                                name='CONV_in')(low_res)
-            b_i = BatchNormalization(name='BN_in')(c_i)
-            e_i = ELU(name='ELU_in')(b_i)
+            x = Convolution2D(64, 9, 9, border_mode='same',
+                                name='CONV_in')(x)
+            x = BatchNormalization(name='BN_in')(x)
+            x = ELU(name='ELU_in')(x)
+            # x = Convolution2D(64, 9, 9, border_mode='same',
+            #                   activation='elu')(x)
 
-        res0 = self.__res_block(e_i, 64, name='residual_block0')
-        res1 = self.__res_block(res0, 128, name='residual_block0')
+        x = self.__res_block(x, 64, name='residual_block0')
+        x = self.__res_block(x, 128, name='residual_block1')
         with tf.name_scope('upsamlping'):
-            upsampled = UpSampling2D(size=self._down_sample_ratio[
-                                    :2], name='upsample')(res1)
-            e_o_0 = ELU(name='EO0')(upsampled)
-        with tf.name_scope('conv_infer'):            
-            c_o_0 = Convolution2D(
-                256, 3, 3, border_mode='same', name='CONV_O0')(e_o_0)
-            e_o_1 = ELU(name='EO0')(c_o_0)
-        with tf.name_scope('residual_inference'):            
-            infer = Convolution2D(1, 3, 3, border_mode='same',
-                                name='CONV_O1_INFER')(e_o_1)                
+            x = Deconvolution2D(256, 3, 3, output_shape=[None]+list(self._shape_o)[:-1]+[256], subsample=(3, 3), border_mode='same')(x)
+            # x = UpSampling2D(size=self._down_sample_ratio[
+                # :2], name='upsample')(x)
+            # x = ELU(name='EO0')(upsampled)
+        with tf.name_scope('conv_infer_0'):
+            x = Convolution2D(256, 3, 3, border_mode='same',
+                              activation='elu')(x)
+        with tf.name_scope('conv_infer_1'):
+            x = Convolution2D(128, 3, 3, border_mode='same',
+                              activation='elu')(x)
+        with tf.name_scope('conv_infer_2'):
+            x = Convolution2D(64, 3, 3, border_mode='same',
+                              activation='elu')(x)
+        with tf.name_scope('residual_inference'):
+            infer = Convolution2D(1, 3, 3, border_mode='same')(x)
         self._residual_inf = infer
         tf.summary.image("residual_inference", infer,
                          max_outputs=IMAGE_SUMMARY_MAX_OUTPUT)
         with tf.name_scope('high_residual_inference'):
-            self._outputs[0] = [tf.add(infer, self._interp, name='add_residual')]
-        tf.summary.image("superresolution_inference", self._outputs[1][0],
+            self._outputs[0] = [
+                tf.add(infer, self._interp, name='add_residual')]
+        tf.summary.image("superresolution_inference", self._outputs[0][0],
                          max_outputs=IMAGE_SUMMARY_MAX_OUTPUT)

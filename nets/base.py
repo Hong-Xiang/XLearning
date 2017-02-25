@@ -287,10 +287,10 @@ class Net(object):
             is_summary = (self._step.state % self._summary_freq == 0)
         train_step = self._train_steps[model_id]
         if is_summary:
-            loss_v = self._sess.run(train_step, feed_dict=feed_dict)
+            _, loss_v = self._sess.run([train_step, self._losses[model_id]], feed_dict=feed_dict)
         else:
-            loss_v, summary_v = self._sess.run(
-                [train_step, self._summaries], feed_dict=feed_dict)
+            _, loss_v, summary_v = self._sess.run(
+                [train_step, self._losses[model_id], self._summaries], feed_dict=feed_dict)
             self._summary_writer.add_summary(summary_v, self._step.state)
         return loss_v
 
