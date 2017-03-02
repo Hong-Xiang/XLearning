@@ -51,10 +51,8 @@ class ExceptionHook:
                                                 color_scheme='Linux', call_pdb=1)
         return self.instance(*args, **kwargs)
 
-
 def enter_debug():
     sys.excepthook = ExceptionHook()
-
 
 def show_debug_logs():
     """ print debug logging info """

@@ -486,10 +486,10 @@ class WGAN(KGen):
         for i in range(len(self._hiddens_c)):
             if i == 0:
                 c_conv.append(Convolution2D(self._hiddens_c[
-                              i], 3, 3, input_shape=self._input_dim, name='cri_conv_%d' % i))
+                              i], 3, 3, input_shape=self._input_dim, W_constraint=MaxMinValue(), name='cri_conv_%d' % i))
             else:
                 c_conv.append(Convolution2D(self._hiddens_c[
-                              i], 3, 3, name='cri_conv_%d' % i))
+                              i], 3, 3, W_constraint=MaxMinValue(), name='cri_conv_%d' % i))
             c_maxp.append(MaxPooling2D(name='cri_maxp_%d' % i))
             c_bn.append(BatchNormalization(name='cri_bn_%d' % i))
             c_elu.append(ELU(name='cri_elu_%d' % i))

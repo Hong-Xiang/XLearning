@@ -83,12 +83,14 @@ class Net(object):
                  settings=None,
                  **kwargs):
         self._settings = settings
-
-        self._c = dict()
-        self._inputs_dims = self._update_settings('inputs_dims', inputs_dims)
+        if '_c' not in vars(self):
+            self._c = dict()
+        self._inputs_dims = self._update_settings(
+            'inputs_dims', inputs_dims)
         self._outputs_dims = self._update_settings(
             'outputs_dims', outputs_dims)
-        self._batch_size = self._update_settings('batch_size', batch_size)
+        self._batch_size = self._update_settings(
+            'batch_size', batch_size)
         self._summary_freq = self._update_settings(
             'summary_freq', summary_freq)
 
@@ -107,8 +109,10 @@ class Net(object):
         self._is_save = self._update_settings('is_save', is_save)
         self._is_load = self._update_settings('is_load', is_load)
 
-        self._path_saves = self._update_settings('path_saves', path_saves)
-        self._path_loads = self._update_settings('path_loads', path_loads)
+        self._path_saves = self._update_settings(
+            'path_saves', path_saves)
+        self._path_loads = self._update_settings(
+            'path_loads', path_loads)
         self._path_summary = self._update_settings(
             'path_summary', path_summary)
 
@@ -116,16 +120,24 @@ class Net(object):
         self._activ = self._update_settings('activ', activ)
         self._var_init = self._update_settings('var_init', var_init)
         self._hiddens = self._update_settings('hiddens', hiddens)
-        self._is_dropout = self._update_settings('is_dropout', is_dropout)
+        self._is_dropout = self._update_settings(
+            'is_dropout', is_dropout)
         self._dropout_rate = self._update_settings(
             'dropout_rate', dropout_rate)
         self._filenames = self._update_settings('filenames', filenames)
 
         # Special variable, printable, but don't input by settings.
-        self._models_names = self._update_settings('model_names', ['Model'])
+        self._models_names = self._update_settings(
+            'model_names', ['Model'])
         self._nb_model = self._update_settings(
             'model_names', len(self._models_names))
 
+        self._is_init = False
+
+        if not self._is_init:
+            self._initialize()
+
+    def _initialize(self):
         self._inputs = None
         self._outputs = None
         self._labels = None
@@ -139,6 +151,8 @@ class Net(object):
         self._step = Counter()
         self._summary_writer = None
         self._saver = None
+
+        self._is_init = True
 
     def _update_settings(self, name, value=None):
         output = self._settings.get(name, value)
@@ -237,13 +251,16 @@ class Net(object):
         #             path_restore = infos[1]
         self._saver.restore(self._sess, self._path_loads[model_id])
 
-    def save(self, var_names=None, model_id=None):
+    def save(self, var_names=None, model_id=None, is_print=False):
         # TODO: Impl partial save.
         if model_id is None:
             model_id = 0
         # self._saver.save(self._sess, self._path_saves[
         #                  model_id], global_step=self._step.state)
-        self._saver.save(self._sess, self._path_saves[model_id])
+        path = self._saver.save(self._sess, self._path_saves[model_id])
+        if is_print:
+            print('Net saved in:')
+            print(path)
 
     def model_id(self, name):
         return self._models_names.index(name)
@@ -287,14 +304,15 @@ class Net(object):
             is_summary = (self._step.state % self._summary_freq == 0)
         train_step = self._train_steps[model_id]
         if is_summary:
-            _, loss_v = self._sess.run([train_step, self._losses[model_id]], feed_dict=feed_dict)
+            _, loss_v = self._sess.run(
+                [train_step, self._losses[model_id]], feed_dict=feed_dict)
         else:
             _, loss_v, summary_v = self._sess.run(
                 [train_step, self._losses[model_id], self._summaries], feed_dict=feed_dict)
             self._summary_writer.add_summary(summary_v, self._step.state)
         return loss_v
 
-    def predict(self, model_id=None, inputs=None, **kwargs):
+    def predict(self, model_id=None, inputs=None):
         if model_id is None:
             model_id = 0
         if isinstance(model_id, str):
@@ -309,6 +327,10 @@ class Net(object):
 
     def reset_lr(self, lrs):
         self._lrs = extend_list(lrs, self._nb_model)
+
+    def lr_decay(self):
+        lr_v = self._lrs[0]
+        self._lrs = extend_list([lr_v], self._nb_model)
 
     # def plot_loss(self, model_id=0, sub_id=None, is_clean=True, is_log=False, smooth=0.0):
     #     if is_clean:
@@ -350,22 +372,45 @@ class Net(object):
         return self._summary_writer
 
 
-# class KGen(KNet):
+class NetGen(Net):
 
-#     def __init__(self, **kwargs):
-#         super(KGen, self).__init__(**kwargs)
-#         self._model_gen = None
+    @with_config
+    def __init__(self,
+                 latent_dis='gaussian',
+                 latent_dim=2,
+                 latent_MoG_mode=10,
+                 latent_sigma=1.0,
+                 latent_MoG_mus=None,
+                 settings=None,
+                 **kwargs):
+        super(NetGen, self).__init__(**kwargs)
+        self._settings = settings
+        self._latent_dis = self._update_settings(
+            'latent_dis', latent_dis)
+        self._latent_dim = self._update_settings(
+            'latent_dim', latent_dim)
+        self._latent_MoG_mode = self._update_settings(
+            'latent_MoG_mode', latent_MoG_mode)
+        self._latent_MoG_mus = self._update_settings(
+            'latent_MoG_mus', latent_MoG_mus)
+        self._latent_sigma = self._update_settings(
+            'latent_sigma', latent_sigma)
 
-#     def gen_noise(self):
-#         return np.random.randn(self._batch_size, self._encoding_dim)
-#         # return np.random.normal(size=(self._batch_size, self._encoding_dim))
+    def gen_latent(self):
+        if self._latent_dis == 'gaussian':
+            return np.random.randn(self._batch_size, self._latent_dim) * self._latent_sigma
+        elif self._latent_dis == 'uniform':
+            return np.random.rand(self._batch_size, self._latent_dim) * self._latent_sigma - self._latent_sigma / 2
+        elif self._latent_dis == 'MoG':
+            id_gaussian = np.random.randint(
+                0, self._latent_MoG_mode)
+            value = np.random.randn(
+                self._batch_size, self._latent_dim) * self._latent_sigma
+            value += self._latent_MoG_mus[id_gaussian]
+            return value
 
-#     def gen_data(self, noise=None):
-#         if noise is None:
-#             return self._model_gen.predict(self.gen_noise())
-#         else:
-#             return self._model_gen.predict(noise)
-
-#     @property
-#     def model_gen(self):
-#         return self._model_gen
+    def gen_data(self, latent=None):
+        if latent is None:
+            return self.predict(self.model_id('Gen'), self.gen_latent())
+        else:
+            return self.predict(self.model_id('Gen'), latent)
