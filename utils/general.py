@@ -9,12 +9,45 @@ import sys
 import numpy as np
 from functools import wraps
 from itertools import zip_longest
+import time
 import logging
+import time
+import datetime
+
+class ProgressTimer:
+    def __init__(self, nb_steps=100, min_elp=1.0):
+        self._nb_steps = nb_steps
+        self._start = None
+        self._elaps = None
+        self._pre = None
+        self._min_elp = min_elp
+        self.reset()
+
+    def reset(self):
+        self._start = time.time()
+        self._pre = 0.0
+
+    def event(self, step, msg='None'):
+        self._elaps = time.time() - self._start
+        if self._elaps - self._pre < self._min_elp:
+            return
+        comp_percen = float(step)/float(self._nb_steps)
+        if comp_percen > 0:        
+            eta = (1-comp_percen)*self._elaps/comp_percen
+        else:
+            eta = None
+
+        time_pas = str(datetime.timedelta(seconds=int(self._elaps)))
+        if eta is None:
+            time_eta = 'UKN'
+        else:
+            time_eta = str(datetime.timedelta(seconds=int(eta)))
+        print("i=%d, [%s<%s] :"%(step, time_pas, time_eta), msg)
+        self._pre = self._elaps
 
 
 class Sentinel:
     pass
-
 
 def zip_equal(*iterables):
     sen = Sentinel()
@@ -144,12 +177,13 @@ def label_name(data_name, case_digit=None, label_prefix=None):
 def with_config(func):
     @wraps(func)
     def wrapper(*args, **kwargs):
-        sets = merge_settings(settings=kwargs.pop('settings', None), filenames=kwargs.pop(
-            'filenames', None), default_settings=kwargs.pop('default_settings', None), **kwargs)
+        fns = kwargs.pop('filenames', None)
+        sets = merge_settings(settings=kwargs.pop('settings', None), filenames=fns, default_settings=kwargs.pop('default_settings', None), **kwargs)
         logging.getLogger(__name__).debug(
             "After merge_settings, settings:" + str(sets) + "\nkwargs:" + str(kwargs))
         logging.getLogger(__name__).debug(
             "args:" + str(args))
+        kwargs['filenames'] = fns
         return func(*args,  settings=sets, **kwargs)
     return wrapper
 

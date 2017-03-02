@@ -78,10 +78,9 @@ class Net(object):
                  var_init='glorot_uniform',
                  hiddens=[],
                  is_dropout=False,
-                 dropout_rate=0.5,
-                 filenames=None,
+                 dropout_rate=0.5,                 
                  settings=None,
-                 **kwargs):
+                 **kwargs):        
         self._settings = settings
         if '_c' not in vars(self):
             self._c = dict()
@@ -124,7 +123,7 @@ class Net(object):
             'is_dropout', is_dropout)
         self._dropout_rate = self._update_settings(
             'dropout_rate', dropout_rate)
-        self._filenames = self._update_settings('filenames', filenames)
+        self._filenames = self._update_settings('filenames', None)
 
         # Special variable, printable, but don't input by settings.
         self._models_names = self._update_settings(
@@ -175,6 +174,7 @@ class Net(object):
         self._path_saves = extend_list(self._path_saves, self._nb_model)
         self._path_loads = extend_list(self._path_loads, self._nb_model)
         self._is_train_step = extend_list(self._is_train_step, self._nb_model)
+        self._is_load = extend_list(self._is_load, self._nb_model)
 
         self._inputs = empty_list(self._nb_model)
         self._outputs = empty_list(self._nb_model)
@@ -274,6 +274,9 @@ class Net(object):
         self._define_optims()
         self._define_train_steps()
         self._define_summaries()
+        for i in range(self._nb_model):
+            if self._is_load[i]:
+                self.load(model_id=i)
 
     def train_on_batch(self, model_id=None, inputs=None, labels=None, is_summary=None):
         """ train on a batch of data

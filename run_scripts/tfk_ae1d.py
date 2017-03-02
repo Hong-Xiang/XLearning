@@ -13,7 +13,7 @@ enter_debug()
 
 net_name = 'vae'
 
-batch_size = 16
+batch_size = 128
 # nb_batches = 60000*75//batch_size+1
 nb_batches = 30000
 
@@ -24,7 +24,7 @@ data_settings = {
     'is_weight': False,
     'is_batch': True,
     'is_bin': False,
-    'is_norm': True,    
+    'is_norm': True,
     'batch_size': batch_size,
     'is_cata': False,
 }
@@ -32,9 +32,9 @@ data_settings = {
 net_settings = {
     'inputs_dims': ((28 * 28,), ),
     'latent_dims': 2,
-    'hiddens': (512, 512, 512),
+    'hiddens': (256,),
     'batch_size': batch_size,
-    'sigma': 1.0,
+    'sigma': 1e-3,
 }
 
 
@@ -92,14 +92,15 @@ def predict():
     imgs = dataset.visualize(p[0])
     subplot_images((imgs, ), is_gray=True, size=3.0, tight_c=0.5)
 
+
 def show_latent(nb_sample=10000):
     print("AE1D Test. Show latent called.")
     if net_name == 'ae':
         net = AutoEncoder1D(**net_settings)
     elif net_name == 'vae':
         net = VAE1D(**net_settings)
-    net.define_net()    
-    net.load('AutoEncoder')    
+    net.define_net()
+    net.load('AutoEncoder')
     nb_batch_show = nb_sample // batch_size
     dataset = MNIST(**data_settings)
     latents = []
@@ -124,6 +125,7 @@ def show_latent(nb_sample=10000):
     plt.plot(*para)
     plt.legend(list(map(str, range(10))))
 
+
 def show_mainfold():
     dataset = MNIST(**data_settings)
     nb_axis = int(np.sqrt(batch_size))
@@ -138,14 +140,15 @@ def show_mainfold():
         net = AutoEncoder1D(**net_settings)
     elif net_name == 'vae':
         net = VAE1D(**net_settings)
-    net.define_net()    
+    net.define_net()
     net.load('AutoEncoder')
-    latents = np.array([xs, ys]).T    
+    latents = np.array([xs, ys]).T
     p = net.predict('Decoder', [latents])
     imgs = dataset.visualize(p[0])
-    subplot_images((imgs, ), nb_max_row=nb_axis, is_gray=True, size=1.0, tight_c=0.5)
+    subplot_images((imgs, ), nb_max_row=nb_axis,
+                   is_gray=True, size=1.0, tight_c=0.5)
 
-if __name__ == "__main__":    
+if __name__ == "__main__":
     if len(sys.argv) == 1:
         task = 'train'
     else:
@@ -154,10 +157,10 @@ if __name__ == "__main__":
     if task == 'train':
         if len(sys.argv) > 2:
             net_settings['path_summary'] = [sys.argv[2]]
-            net_settings['sigma'] = float(sys.argv[3])            
+            net_settings['sigma'] = float(sys.argv[3])
         train()
     elif task == 'predict':
-        predict()    
+        predict()
     elif task == 'show':
         show_latent()
     elif task == 'test':
