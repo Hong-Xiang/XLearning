@@ -24,8 +24,7 @@ data_settings = {
     'is_weight': False,
     'is_batch': True,
     'is_bin': False,
-    'is_norm': True,
-    'lrs': [1e-3],
+    'is_norm': True,    
     'batch_size': batch_size,
     'is_cata': False,
 }

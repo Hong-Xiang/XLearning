@@ -62,7 +62,7 @@ class Net(object):
                  inputs_dims=None,
                  outputs_dims=None,
                  batch_size=128,
-                 optims_names=('Adam',),
+                 optims_names=("RMSProp",),
                  losses_names=('mse',),
                  metrxs_names=(None,),
                  lrs=(1e-3,),
