@@ -12,6 +12,31 @@ import copy
 import xlearn.utils.general as utg
 
 
+def to_bin(x, threshold=None, zero_value=0, one_value=1):
+    if threshold is None:
+        threshold = (np.min(x) + np.max(x)) / 2    
+    y = np.zeros(shape=x.shape, dtype=np.int32)
+    y[x < threshold] = zero_value
+    y[x >= threshold] = one_value
+    return y
+
+
+def to_cata(x, thresholds=None, nb_threshold=None, values=None):
+    if thresholds is None:
+        if nb_threshold is None:
+            raise ValueError(
+                "Both thresholds and nb_threshold are None, only one of them can be None.")
+        thresholds = np.linspace(np.min(x), np.max(x), nb_threshold + 1)
+    nb_threshold = len(thresholds) - 1
+    y = np.zeros(shape=x.shape, dtype=np.int32)
+    if values is None:
+        values = list(range(nb_threshold))
+    y[x == thresholds[-1]] = values[-1]
+    for i in range(nb_threshold):
+        y[np.logical_and(x < thresholds[i + 1], x >= thresholds[i])] = values[i]
+    return y
+
+
 def load_mat(filename, varnames):
     file_in = h5py.File(filename, 'r')
     output = []

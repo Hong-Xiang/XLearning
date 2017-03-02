@@ -16,9 +16,6 @@ def train_cri(net, dataset, n_batch=10):
         net.clip_theta()
         net.train_on_batch('cri', c_input, c_output)        
 
-
-
-
 def train_wgan(net, dataset, n_batch=1):
     for i in range(n_batch):
         noise_input = net.gen_noise()

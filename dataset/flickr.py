@@ -47,6 +47,7 @@ class Flickr25k(DataSetImages):
             image = np.mean(image, axis=-1, keepdims=True)
         if self._is_norm:
             image /= self._norm_c
+            image -= 0.5
         if self._is_down_sample:
             label = np.array(image, dtype=np.float32)
             image = self._downsample(image)

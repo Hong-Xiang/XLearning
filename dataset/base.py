@@ -13,13 +13,13 @@ class DataSetBase(object):
     """ Base class of dataset """
     @with_config
     def __init__(self,
-                 is_batch=False,
-                 batch_size=128,
+                 is_batch=True,
+                 batch_size=32,
                  is_label=True,
                  is_weight=False,
                  random_seed=None,
                  is_norm=False,
-                 norm_c=numpy.float32(256.0),
+                 norm_c=256.0,
                  is_train=True,
                  is_noise=False,
                  noise_level=0.0,
@@ -41,6 +41,7 @@ class DataSetBase(object):
         self._random_seed = self._update_settings('random_seed', random_seed)
 
         self._is_norm = self._update_settings('is_norm', is_norm)
+
         self._norm_c = self._update_settings('norm_c', norm_c)
         self._is_train = self._update_settings('is_train', is_train)
         self._is_noise = self._update_settings('is_noise', is_noise)
@@ -246,6 +247,7 @@ class DataSetImages(DataSetBase):
         else:
             images = images
         if self._is_norm:
+            images += 0.5
             images *= self._norm_c
         if self._is_batch:
             images = list(images)
