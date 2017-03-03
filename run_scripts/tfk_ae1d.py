@@ -15,7 +15,7 @@ net_name = 'vae'
 
 batch_size = 128
 # nb_batches = 60000*75//batch_size+1
-nb_batches = 30000
+nb_batches = 60000*40
 
 data_settings = {
     'is_flatten': True,

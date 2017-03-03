@@ -1,6 +1,6 @@
 import tensorflow as tf
 from keras.layers import Dense, Convolution2D, BatchNormalization, ELU, Flatten, Deconvolution2D, Reshape
-from keras.objectives import mean_squared_error
+from keras.objectives import mean_squared_error, binary_crossentropy
 from .base import Net, NetGen
 from ..utils.general import with_config
 from ..model.layers import Input, Label
@@ -98,8 +98,9 @@ class VAE1D(AutoEncoderBase, NetGen):
 
     def _define_losses(self):
         with tf.name_scope('loss'):
-            xent_loss = tf.losses.mean_squared_error(
-                self._label, self._data_recon) / self._sigma
+            # xent_loss = tf.losses.mean_squared_error(
+            #     self._label, self._data_recon) / self._sigma
+            xent_loss = tf.reduce_mean(binary_crossentropy(self._label, self._data_recon)) / self._sigma
             kl_loss = tf.reduce_mean(- 0.5 * (- self._latent_dim + self._latent_log_var - tf.square(
                 self._latent_mean) - tf.exp(self._latent_log_var)), name='kl_loss')
             self._losses[0] = tf.add(xent_loss, kl_loss, name='total_loss')
@@ -117,19 +118,19 @@ class VAE1D(AutoEncoderBase, NetGen):
             for dim in self._hiddens:
                 x = Dense(dim, name='mean_encoder_inter', activation='elu')(x)
             self._latent_mean = Dense(
-                self._latent_dim, name='mean_encoder', activation='elu')(x)
+                self._latent_dim, name='mean_encoder')(x)
         with tf.name_scope('log_var_encoder'):
             x = self._data
             for dim in self._hiddens:
                 x = Dense(dim, name='log_var_encoder_inter',
                           activation='elu')(x)
             self._latent_log_var = Dense(
-                self._latent_dim, name='log_var_encoder', activation='elu')(x)
+                self._latent_dim, name='log_var_encoder')(x)
         with tf.name_scope('sample'):
             epsilon = tf.random_normal(
                 shape=(self._batch_size, self._latent_dim), name='sampler')
             self._data_latent = self._latent_mean + \
-                tf.exp(self._latent_log_var) * epsilon
+                tf.exp(self._latent_log_var/2) * epsilon
 
         with tf.name_scope('latent_input'):
             self._latent = Input((self._latent_dim,), name='latent_input')
@@ -139,7 +140,7 @@ class VAE1D(AutoEncoderBase, NetGen):
                 decoder_inter.append(
                     Dense(dim, name='decoder_inter', activation='elu'))
             decoder_inter.append(
-                Dense(self._inputs_dims[0][0], name='decoder', activation='elu'))
+                Dense(self._inputs_dims[0][0], name='decoder', activation='sigmoid'))
             x_data = self._data_latent
             x_latent = self._latent
             for ly in decoder_inter:

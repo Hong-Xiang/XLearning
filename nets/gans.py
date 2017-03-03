@@ -8,7 +8,7 @@ from ..model.layers import Input, Label
 from ..keras_ext.constrains import MaxMinValue
 
 
-class WGAN1D(NetGen):
+class WGAN(NetGen):
 
     @with_config
     def __init__(self,
@@ -37,7 +37,6 @@ class WGAN1D(NetGen):
 
     def _define_optims(self):
         with tf.name_scope('optim_gen'):
-
             optim_gen = tf.train.RMSPropOptimizer(self._lrs_tensor[0])
 
         with tf.name_scope('optim_cri'):
@@ -67,15 +66,20 @@ class WGAN1D(NetGen):
             self._labels = Input(shape=(None, 1), name='label')
         self._weights = []
 
+        # build generator
+
         x = self._latent_input
         with tf.name_scope('gen'):
             with tf.name_scope('denses'):
                 for dim in self._hiddens:
-                    ly = Dense(dim, activation='elu')
-                    x = ly(x)
-            with tf.name_scope('recon'):
+                    x = Dense(dim, activation='elu')(x)
+            with tf.name_scope('reshape'):
+                x = Reshape(())
+            with tf.name_scope('up'):
                 ly = Dense(np.prod(self._inputs_dims))
                 self._image = ly(x)
+
+        # build discriminator
 
         lys = []
         with tf.name_scope('cri'):

@@ -8,5 +8,6 @@
     "is_norm": true,
     "batch_size": 128,
     "is_cata": false,
+    "is_bernolli": true,
     "path_summary": ["./logC"]
 }
