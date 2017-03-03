@@ -98,9 +98,12 @@ class VAE1D(AutoEncoderBase, NetGen):
 
     def _define_losses(self):
         with tf.name_scope('loss'):
-            # xent_loss = tf.losses.mean_squared_error(
-            #     self._label, self._data_recon) / self._sigma
-            xent_loss = tf.reduce_mean(binary_crossentropy(self._label, self._data_recon)) / self._sigma
+            if self._losses_names[0] == "mse":
+                xent_loss = tf.losses.mean_squared_error(
+                    self._label, self._data_recon) / self._sigma
+            elif self._losses_names[0] == "xetp":
+                xent_loss = tf.reduce_mean(binary_crossentropy(
+                    self._label, self._data_recon)) / self._sigma
             kl_loss = tf.reduce_mean(- 0.5 * (- self._latent_dim + self._latent_log_var - tf.square(
                 self._latent_mean) - tf.exp(self._latent_log_var)), name='kl_loss')
             self._losses[0] = tf.add(xent_loss, kl_loss, name='total_loss')
@@ -130,7 +133,7 @@ class VAE1D(AutoEncoderBase, NetGen):
             epsilon = tf.random_normal(
                 shape=(self._batch_size, self._latent_dim), name='sampler')
             self._data_latent = self._latent_mean + \
-                tf.exp(self._latent_log_var/2) * epsilon
+                tf.exp(self._latent_log_var / 2) * epsilon
 
         with tf.name_scope('latent_input'):
             self._latent = Input((self._latent_dim,), name='latent_input')
