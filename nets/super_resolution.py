@@ -19,7 +19,7 @@ class SRNetBase(Net):
                  shape_o=None,
                  down_sample_ratio=None,
                  is_deconv=False,
-                 settings=None,                 
+                 settings=None,
                  **kwargs):
         super(SRNetBase, self).__init__(**kwargs)
         self._settings = settings
@@ -159,7 +159,7 @@ class SRF3D(SRNetBase):
                  nb_deconv_filters=64,
                  nb_input_filters=64,
                  nb_input_row=3,
-                 nb_res_blocks=2,                
+                 nb_res_blocks=2,
                  settings=None, **kwargs):
         super(SRF3D, self).__init__(**kwargs)
 
@@ -169,19 +169,25 @@ class SRF3D(SRNetBase):
         #  3. upsp - with BN, ResNet on high res
         #  4. no_bn_upsp - without BN, ResNet on high res
         self._settings = settings
-        self._nb_deconv_filters = self._update_settings('nb_deconv_filters', nb_deconv_filters)
-        self._nb_input_filters = self._update_settings('nb_input_filters', nb_input_filters)
-        self._nb_input_row = self._update_settings('nb_input_row', nb_input_row)
-        self._nb_res_blocks = self._update_settings('nb_res_block', nb_res_blocks)
+        self._nb_deconv_filters = self._update_settings(
+            'nb_deconv_filters', nb_deconv_filters)
+        self._nb_input_filters = self._update_settings(
+            'nb_input_filters', nb_input_filters)
+        self._nb_input_row = self._update_settings(
+            'nb_input_row', nb_input_row)
+        self._nb_res_blocks = self._update_settings(
+            'nb_res_block', nb_res_blocks)
 
     def __conv_block(self, tensor_in, nb_filter, name):
         with tf.name_scope(name):
             c = tensor_in
             for i in range(2):
                 if self._arch == "default" or self._arch == "upsp":
-                    c = Convolution2DwithBN(c, nb_filter, 3, 3, name='CONV_BN_%d' % i)
+                    c = Convolution2DwithBN(
+                        c, nb_filter, 3, 3, name='CONV_BN_%d' % i)
                 else:
-                    c = Convolution2D(nb_filter, 3, 3, activation='elu', border_mode='same')(c)
+                    c = Convolution2D(
+                        nb_filter, 3, 3, activation='elu', border_mode='same')(c)
         return c
 
     def __res_block(self, tensor_in, nb_filters, name):
@@ -203,13 +209,13 @@ class SRF3D(SRNetBase):
         if self._arch == "upsp" or self._arch == "no_bn_upsp":
             with tf.name_scope('upsamlping'):
                 if self._is_deconv:
-                    x = Deconvolution2D(self._nb_deconv_filters, 3, 3, output_shape=[None]+list(self._shape_o)[:-1]+[256], subsample=(3, 3), border_mode='same')(x)
+                    x = Deconvolution2D(self._nb_deconv_filters, 3, 3, output_shape=[
+                                        None] + list(self._shape_o)[:-1] + [256], subsample=(3, 3), border_mode='same')(x)
                 else:
                     x = UpSampling2D(size=self._down_sample_ratio[
                         :2], name='upsample')(x)
-                x = ELU(name='EO0')(x)
         with tf.name_scope('input_block'):
-            
+
             x = Convolution2D(self._nb_input_filters,
                               self._nb_input_row,
                               self._nb_input_row,
@@ -220,16 +226,17 @@ class SRF3D(SRNetBase):
             x = ELU(name='ELU_in')(x)
 
         for i in range(self._nb_res_blocks):
-            x = self.__res_block(x, int(x.get_shape()[-1]), name='residual_block%d'%i)
-            
+            x = self.__res_block(
+                x, int(x.get_shape()[-1]), name='residual_block%d' % i)
+
         if self._arch == "default" or self._arch == "no_bn":
             with tf.name_scope('upsamlping'):
                 if self._is_deconv:
-                    x = Deconvolution2D(self._nb_deconv_filters, 3, 3, output_shape=[None]+list(self._shape_o)[:-1]+[x.get_shape[-1]], subsample=(3, 3), border_mode='same')(x)
+                    x = Deconvolution2D(self._nb_deconv_filters, 3, 3, output_shape=[
+                                        None] + list(self._shape_o)[:-1] + [x.get_shape[-1]], subsample=(3, 3), border_mode='same')(x)
                 else:
                     x = UpSampling2D(size=self._down_sample_ratio[
-                        :2], name='upsample')(x)
-                x = ELU(name='EO0')(x)
+                        :2], name='upsample')(x)                
         with tf.name_scope('conv_infer_0'):
             x = Convolution2D(512, 3, 3, border_mode='same',
                               activation='elu')(x)
@@ -243,5 +250,3 @@ class SRF3D(SRNetBase):
                 tf.add(infer, self._interp, name='add_residual')]
         tf.summary.image("superresolution_inference", self._outputs[0][0],
                          max_outputs=IMAGE_SUMMARY_MAX_OUTPUT)
-
-

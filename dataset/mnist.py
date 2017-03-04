@@ -25,7 +25,7 @@ class MNIST(DataSetBase):
                  settings=None,
                  **kwargs):
         super(MNIST, self).__init__(**kwargs)
-        self._settings = settings
+        self._settings = settings        
         self._is_unsp = self._update_settings('is_unsp', is_unsp)
         self._is_flatten = self._update_settings('is_flatten', is_flatten)
         self._is_4d = self._update_settings('is_4d', is_4d)

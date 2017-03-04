@@ -75,9 +75,9 @@ def show_latent(cfs, nb_sample=10000):
 
 def show_mainfold(cfs):
     dataset = MNIST(filenames=cfs)
-    nb_axis = int(np.sqrt(dataset._batch_size))
-    x = np.linspace(-1.5, 1.5, nb_axis)
-    y = np.linspace(-1.5, 1.5, nb_axis)
+    nb_axis = int(np.sqrt(dataset._batch_size*16))
+    x = np.linspace(-4.0, 4.0, nb_axis)
+    y = np.linspace(-4.0, 4.0, nb_axis)
     pos = np.meshgrid(x, y)
     xs = pos[0]
     ys = pos[1]

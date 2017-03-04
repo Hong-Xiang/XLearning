@@ -1,0 +1,5 @@
+{
+    "inputs_dims": [[784]],
+    "latent_dims": 2,
+    "hiddens": [512, 512, 512]
+}

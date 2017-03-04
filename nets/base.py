@@ -72,15 +72,15 @@ class Net(object):
                  path_saves=('./model.ckpt',),
                  path_loads=('./model.ckpt',),
                  path_summary=('./log',),
-                 summary_freq=10,
+                 summary_freq=3,
                  arch='default',
                  activ='relu',
                  var_init='glorot_uniform',
                  hiddens=[],
                  is_dropout=False,
-                 dropout_rate=0.5,                 
+                 dropout_rate=0.5,
                  settings=None,
-                 **kwargs):        
+                 **kwargs):
         self._settings = settings
         if '_c' not in vars(self):
             self._c = dict()
@@ -288,6 +288,10 @@ class Net(object):
         Returns:
             loss_v: value of loss of current step.
         """
+        if inputs is None:
+            inputs = []
+        if labels is None:
+            labels = []
         if model_id is None:
             model_id = 0
         next(self._step)
@@ -296,6 +300,10 @@ class Net(object):
         feed_dict = {}
         ip_tensors = self._inputs[model_id]
         lb_tensors = self._labels[model_id]
+        if ip_tensors is None:
+            ip_tensors = []
+        if lb_tensors is None:
+            lb_tensors = []
         for (tensor, data) in zip_equal(ip_tensors, inputs):
             feed_dict.update({tensor: data})
         for (tensor, data) in zip_equal(lb_tensors, labels):
@@ -306,7 +314,7 @@ class Net(object):
         if is_summary is None:
             is_summary = (self._step.state % self._summary_freq == 0)
         train_step = self._train_steps[model_id]
-        if is_summary:
+        if not is_summary:
             _, loss_v = self._sess.run(
                 [train_step, self._losses[model_id]], feed_dict=feed_dict)
         else:
@@ -380,7 +388,7 @@ class NetGen(Net):
     @with_config
     def __init__(self,
                  latent_dis='gaussian',
-                 latent_dim=2,
+                 latent_dims=2,
                  latent_MoG_mode=10,
                  latent_sigma=1.0,
                  latent_MoG_mus=None,
@@ -390,8 +398,8 @@ class NetGen(Net):
         self._settings = settings
         self._latent_dis = self._update_settings(
             'latent_dis', latent_dis)
-        self._latent_dim = self._update_settings(
-            'latent_dim', latent_dim)
+        self._latent_dims = self._update_settings(
+            'latent_dims', latent_dims)
         self._latent_MoG_mode = self._update_settings(
             'latent_MoG_mode', latent_MoG_mode)
         self._latent_MoG_mus = self._update_settings(
@@ -401,14 +409,14 @@ class NetGen(Net):
 
     def gen_latent(self):
         if self._latent_dis == 'gaussian':
-            return np.random.randn(self._batch_size, self._latent_dim) * self._latent_sigma
+            return np.random.randn(self._batch_size, self._latent_dims) * self._latent_sigma
         elif self._latent_dis == 'uniform':
-            return np.random.rand(self._batch_size, self._latent_dim) * self._latent_sigma - self._latent_sigma / 2
+            return np.random.rand(self._batch_size, self._latent_dims) * self._latent_sigma - self._latent_sigma / 2
         elif self._latent_dis == 'MoG':
             id_gaussian = np.random.randint(
                 0, self._latent_MoG_mode)
             value = np.random.randn(
-                self._batch_size, self._latent_dim) * self._latent_sigma
+                self._batch_size, self._latent_dims) * self._latent_sigma
             value += self._latent_MoG_mus[id_gaussian]
             return value
 

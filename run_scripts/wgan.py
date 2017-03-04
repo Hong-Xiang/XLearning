@@ -10,26 +10,60 @@ from xlearn.utils.general import enter_debug, ProgressTimer
 
 enter_debug()
 
+
 def test(cfs):
     net = WGAN(filenames=cfs)
     net.define_net()
 
 
+
 def train(nb_batches, cfs):
+
+    GEN_FREQ = 100
+    PRE_TRAIN = 10
+    N_GEN_TRA = 0
+
     dataset = MNIST(filenames=cfs)
+    print("=" * 30)
+    print("DATASET SETTINGS:")
+    print(dataset.pretty_settings())
+    print("=" * 30)
     net = WGAN(filenames=cfs)
     net.define_net()
+    print("=" * 30)
+    print("NETWORK SETTINGS:")
     print(net.pretty_settings())
+    print("=" * 30)
+    ptp = ProgressTimer(PRE_TRAIN)
+    for i in range(PRE_TRAIN):
+        s = next(dataset)
+        z = net.gen_latent()        
+        loss_c = net.train_on_batch('Cri', [s[0], z], [])
+        msg = 'loss_c= %f' % loss_c
+        ptp.event(i, msg)
+
     pt = ProgressTimer(nb_batches)
+    loss_c = np.nan
+    loss_g = np.nan
     for i in range(nb_batches):
         s = next(dataset)
-        loss_v = net.train_on_batch('AutoEncoder', [s[0]], [s[0]])
-        msg = 'loss= %f' % loss_v
-        pt.event(i, msg)
+        z = net.gen_latent()
+        if i % GEN_FREQ > 0:
+            loss_c = net.train_on_batch('Cri', [s[0], z], [])
+            msg = 'loss_c= %f; loss_g= %f' % (loss_c, loss_g)
+            pt.event(i, msg)
+        else:
+            loss_g = net.train_on_batch('WGan', [s[0], z], [])
+            msg = 'loss_c= %f; loss_g= %f' % (loss_c, loss_g)
+            pt.event(i, msg)
+            N_GEN_TRA += 1
+            if N_GEN_TRA > 25:
+                GEN_FREQ = 5
+            if N_GEN_TRA % 20 == 0:
+                GEN_FREQ = 100
         if i % 1000 == 0:
             net.save('AutoEncoder')
     net.save('AutoEncoder', is_print=True)
-
 
 def predict(cfs):
     dataset = MNIST(filenames=cfs)
@@ -43,36 +77,6 @@ def predict(cfs):
     subplot_images((imgs, ), is_gray=True, size=3.0, tight_c=0.5)
 
 
-# def show_latent(cfs, nb_sample=10000):
-#     print("WGAN Test. Show latent called.")
-#     net = VAE1D(filenames=cfs)
-#     net.define_net()
-#     net.load('AutoEncoder')
-#     nb_batch_show = nb_sample // net._batch_size
-#     dataset = MNIST(filenames=cfs)
-#     latents = []
-#     for i in range(10):
-#         latents.append([])
-#     for i in tqdm(range(nb_batch_show)):
-#         s = next(dataset)
-#         p = net.predict('Encoder', [s[0]])
-#         for j in range(dataset._batch_size):
-#             latents[s[1][j]].append(p[0][j])
-#     x = []
-#     y = []
-#     for i in range(10):
-#         pos = np.array(latents[i])
-#         x.append(pos[:, 0])
-#         y.append(pos[:, 1])
-#     para = []
-#     for i in range(10):
-#         para.append(x[i])
-#         para.append(y[i])
-#         para.append('.')
-#     plt.plot(*para)
-#     plt.legend(list(map(str, range(10))))
-
-
 def show_mainfold(cfs):
     dataset = MNIST(filenames=cfs)
     nb_axis = int(np.sqrt(dataset._batch_size))
@@ -83,7 +87,7 @@ def show_mainfold(cfs):
     ys = pos[1]
     xs = xs.reshape([-1])
     ys = ys.reshape([-1])
-    net = VAE1D(filenames=cfs)
+    net = WGAN(filenames=cfs)
     net.define_net()
     net.load('Gen')
     latents = np.array([xs, ys]).T

@@ -38,11 +38,12 @@ class ProgressTimer:
             eta = None
 
         time_pas = str(datetime.timedelta(seconds=int(self._elaps)))
+        time_int = str(datetime.timedelta(seconds=int(self._elaps/(step+1.0))))
         if eta is None:
             time_eta = 'UKN'
         else:
             time_eta = str(datetime.timedelta(seconds=int(eta)))
-        print("i=%d, [%s<%s] :"%(step, time_pas, time_eta), msg)
+        print("i=%d, %s/it [%s<%s] :"%(step, time_int, time_pas, time_eta), msg)
         self._pre = self._elaps
 
 
