@@ -19,8 +19,8 @@ def test(cfs):
 
 def train(nb_batches, cfs):
 
-    GEN_FREQ = 100
-    PRE_TRAIN = 10
+    GEN_FREQ = 2
+    PRE_TRAIN = 100
     N_GEN_TRA = 0
 
     dataset = MNIST(filenames=cfs)
@@ -41,7 +41,8 @@ def train(nb_batches, cfs):
         loss_c = net.train_on_batch('Cri', [s[0], z], [])
         msg = 'loss_c= %f' % loss_c
         ptp.event(i, msg)
-
+    # net._define_clip_steps()
+    # _ = net.sess.run(net.clip_steps)
     pt = ProgressTimer(nb_batches)
     loss_c = np.nan
     loss_g = np.nan
@@ -50,17 +51,18 @@ def train(nb_batches, cfs):
         z = net.gen_latent()
         if i % GEN_FREQ > 0:
             loss_c = net.train_on_batch('Cri', [s[0], z], [])
-            msg = 'loss_c= %f; loss_g= %f' % (loss_c, loss_g)
+            # _ = net.sess.run(net.clip_steps)
+            msg = 'c_step, loss_c= %f; loss_g= %f' % (loss_c, loss_g)
             pt.event(i, msg)
         else:
             loss_g = net.train_on_batch('WGan', [s[0], z], [])
-            msg = 'loss_c= %f; loss_g= %f' % (loss_c, loss_g)
+            msg = 'g_step, loss_c= %f; loss_g= %f' % (loss_c, loss_g)
             pt.event(i, msg)
             N_GEN_TRA += 1
             if N_GEN_TRA > 25:
-                GEN_FREQ = 5
+                GEN_FREQ = 2
             if N_GEN_TRA % 20 == 0:
-                GEN_FREQ = 100
+                GEN_FREQ = 2
         if i % 1000 == 0:
             net.save('AutoEncoder')
     net.save('AutoEncoder', is_print=True)

@@ -1,0 +1,11 @@
+{
+    "lr_init": 1e-3,
+    "loss": "mse",
+    "metrics": "mse",
+    "n_upscale": 1,
+    "n_residual": 3,
+    "n_hidden": 128,
+    "n_layer": 20,
+    "loss": "mse",
+    "metrics": ["mse"]
+}

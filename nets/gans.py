@@ -12,20 +12,27 @@ from ..keras_ext.constrains import MaxMinValue
 class WGAN(NetGen):
 
     @with_config
-    def __init__(self,                 
-                 settings=None,                 
+    def __init__(self,
+                 settings=None,
                  **kwargs):
         NetGen.__init__(self, **kwargs)
         self._settings = settings
         self._models_names = ['WGan', 'Cri', 'Gen']
-        self._is_train_step = [True, True, False]        
+        self._is_train_step = [True, True, False]
+        self._cri_weight_names = None
+        self._clip_step = None
+        a = -1
+        b = 1
+        c = 0
+        self._la = tf.Variable(np.ones(shape=(self._batch_size, 1))*a, trainable=False, name='a_label', dtype=tf.float32)
+        self._lb = tf.Variable(np.ones(shape=(self._batch_size, 1))*b, trainable=False, name='b_label', dtype=tf.float32)
+        self._lc = tf.Variable(np.ones(shape=(self._batch_size, 1))*c, trainable=False, name='c_label', dtype=tf.float32)
 
     def _define_losses(self):
         with tf.name_scope('loss_gen'):
-            loss_gen = tf.reduce_mean(self._logit_fake)
+            loss_gen = tf.losses.mean_squared_error(self._lc, self._logit_fake)
         with tf.name_scope('loss_cri'):
-            loss_cri = tf.reduce_mean(self._logit_true) - \
-                tf.reduce_mean(self._logit_fake)
+            loss_cri = tf.losses.mean_squared_error(self._la, self._logit_fake) + tf.losses.mean_squared_error(self._lb, self._logit_true)
 
         self._losses[0] = loss_gen
         self._losses[1] = loss_cri
@@ -55,6 +62,12 @@ class WGAN(NetGen):
                 tf.GraphKeys.TRAINABLE_VARIABLES, scope='gen')
             self._train_steps[0] = self._optims[0].minimize(
                 self._losses[0], var_list=gen_vars)
+
+    def _define_clip_steps(self):
+        self._clip_step = []
+        for var_name in self._cri_weight_names:
+            w = tf.get_variable(var_name)
+            self._clip_step.append(tf.clip_by_value(w, -0.01, 0.01))
 
     def _define_models(self):
         with tf.name_scope('input'):
@@ -120,28 +133,37 @@ class WGAN(NetGen):
         #         #                  W_constraint=MaxMinValue()))
         #         lys.append(Dense(1))
 
+        self._cri_weight_names = []
         with tf.name_scope('cri'):
             cri = Sequential()
             with tf.name_scope('conv_0'):
-                cri.add(Convolution2D(32, 3, 3, subsample=(2, 2),
-                                      activation='elu', W_constraint=MaxMinValue(), input_shape=(28, 28, 1)))
+                c = Convolution2D(32, 3, 3, subsample=(
+                    2, 2), activation='elu', input_shape=(28, 28, 1))
+                cri.add(c)
+                self._cri_weight_names.append(c.W.name)
                 cri.add(Dropout(0.3))
             with tf.name_scope('conv_1'):
-                cri.add(Convolution2D(64, 3, 3, activation='elu',
-                                      W_constraint=MaxMinValue()))
+                c = Convolution2D(64, 3, 3, activation='elu')
+                cri.add(c)
+                self._cri_weight_names.append(c.W.name)
                 cri.add(Dropout(0.3))
             with tf.name_scope('conv_2'):
-                cri.add(Convolution2D(128, 3, 3, subsample=(2, 2),
-                                      activation='elu', W_constraint=MaxMinValue()))
+                c = Convolution2D(
+                    128, 3, 3, subsample=(2, 2), activation='elu')
+                cri.add(c)
+                self._cri_weight_names.append(c.W.name)
                 cri.add(Dropout(0.3))
             with tf.name_scope('conv_3'):
-                cri.add(Convolution2D(
-                    256, 3, 3, activation='elu', W_constraint=MaxMinValue()))
+                c = Convolution2D(256, 3, 3, activation='elu')
+                cri.add(c)
+                self._cri_weight_names.append(c.W.name)
                 cri.add(Dropout(0.3))
             with tf.name_scope('flatten'):
                 cri.add(Flatten())
             with tf.name_scope('logits'):
-                cri.add(Dense(1, W_constraint=MaxMinValue()))
+                d = Dense(1)
+                cri.add(d)
+                self._cri_weight_names.append(d.W.name)
 
         self._logit_true = cri(self._data)
         self._logit_fake = cri(self._generated)
@@ -169,3 +191,9 @@ class WGAN(NetGen):
 
         self._inputs[2] = [self._latent_input]
         self._outputs[2] = [self._generated]
+
+        # self._define_clip_steps()
+
+    @property
+    def clip_steps(self):
+        return self._clip_step
