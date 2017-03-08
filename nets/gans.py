@@ -9,30 +9,38 @@ from ..model.layers import Input, Label
 from ..keras_ext.constrains import MaxMinValue
 
 
-class WGAN(NetGen):
+class LSGAN(NetGen):
 
     @with_config
     def __init__(self,
                  settings=None,
+                 gen_freq=5,
+                 pre_train=100,
+                 is_dense=False,
                  **kwargs):
         NetGen.__init__(self, **kwargs)
         self._settings = settings
         self._models_names = ['WGan', 'Cri', 'Gen']
         self._is_train_step = [True, True, False]
-        self._cri_weight_names = None
-        self._clip_step = None
+        self._is_dense = self._update_settings('is_dense', is_dense)
+        self.gen_freq = self._update_settings('gen_freq', gen_freq)
+        self.pre_train = self._update_settings('pre_train', pre_train)
         a = -1
         b = 1
         c = 0
-        self._la = tf.Variable(np.ones(shape=(self._batch_size, 1))*a, trainable=False, name='a_label', dtype=tf.float32)
-        self._lb = tf.Variable(np.ones(shape=(self._batch_size, 1))*b, trainable=False, name='b_label', dtype=tf.float32)
-        self._lc = tf.Variable(np.ones(shape=(self._batch_size, 1))*c, trainable=False, name='c_label', dtype=tf.float32)
+        self._la = tf.Variable(np.ones(shape=(
+            self._batch_size, 1)) * a, trainable=False, name='a_label', dtype=tf.float32)
+        self._lb = tf.Variable(np.ones(shape=(
+            self._batch_size, 1)) * b, trainable=False, name='b_label', dtype=tf.float32)
+        self._lc = tf.Variable(np.ones(shape=(
+            self._batch_size, 1)) * c, trainable=False, name='c_label', dtype=tf.float32)
 
     def _define_losses(self):
         with tf.name_scope('loss_gen'):
             loss_gen = tf.losses.mean_squared_error(self._lc, self._logit_fake)
         with tf.name_scope('loss_cri'):
-            loss_cri = tf.losses.mean_squared_error(self._la, self._logit_fake) + tf.losses.mean_squared_error(self._lb, self._logit_true)
+            loss_cri = tf.losses.mean_squared_error(
+                self._la, self._logit_fake) + tf.losses.mean_squared_error(self._lb, self._logit_true)
 
         self._losses[0] = loss_gen
         self._losses[1] = loss_cri
@@ -63,18 +71,11 @@ class WGAN(NetGen):
             self._train_steps[0] = self._optims[0].minimize(
                 self._losses[0], var_list=gen_vars)
 
-    def _define_clip_steps(self):
-        self._clip_step = []
-        for var_name in self._cri_weight_names:
-            w = tf.get_variable(var_name)
-            self._clip_step.append(tf.clip_by_value(w, -0.01, 0.01))
-
     def _define_models(self):
         with tf.name_scope('input'):
             self._data = Input(shape=self._inputs_dims[0], name='data_input')
         with tf.name_scope('latent_input'):
             self._latent_input = Input(shape=(self._latent_dims,))
-        self._weights = []
 
         # build generator
 
@@ -84,14 +85,18 @@ class WGAN(NetGen):
                 x = Dense(1024, activation='elu')(x)
                 x = Dense(128 * 7 * 7, activation='elu')(x)
             with tf.name_scope('reshape'):
-                x = Reshape((7, 7, self._batch_size))(x)
+                x = tf.reshape(x, shape=(self._batch_size, 7, 7, 128))
             with tf.name_scope('upsampling0'):
                 x = UpSampling2D(size=(2, 2))(x)
+                x = Convolution2D(128, 5, 5, border_mode='same',
+                                  activation='elu', init='glorot_normal')(x)
                 x = Convolution2D(256, 5, 5, border_mode='same',
                                   activation='elu', init='glorot_normal')(x)
             with tf.name_scope('upsampling1'):
                 x = UpSampling2D(size=(2, 2))(x)
-                x = Convolution2D(128, 5, 5, border_mode='same',
+                x = Convolution2D(256, 5, 5, border_mode='same',
+                                  activation='elu', init='glorot_normal')(x)
+                x = Convolution2D(512, 5, 5, border_mode='same',
                                   activation='elu', init='glorot_normal')(x)
             with tf.name_scope('generation'):
                 x = Convolution2D(1, 2, 2, border_mode='same',
@@ -101,87 +106,38 @@ class WGAN(NetGen):
 
         # build discriminator
 
-        # lys = []
-        # with tf.name_scope('cri'):
-
-        #     with tf.name_scope('reshape'):
-        #         lys.append(Reshape((28, 28, 1)))
-        #     with tf.name_scope('conv_0'):
-        #         lys.append(Convolution2D(32, 3, 3, subsample=(2, 2),
-        #                                  activation='elu', W_constraint=MaxMinValue()))
-        #         lys.append(Dropout(0.3))
-        #     with tf.name_scope('conv_1'):
-        #         lys.append(Convolution2D(64, 3, 3, activation='elu',
-        #                                  W_constraint=MaxMinValue()))
-        #         lys.append(Dropout(0.3))
-        #     with tf.name_scope('conv_2'):
-        #         lys.append(Convolution2D(128, 3, 3, subsample=(2, 2),
-        #                                  activation='elu', W_constraint=MaxMinValue()))
-        #         lys.append(Dropout(0.3))
-        #     with tf.name_scope('conv_3'):
-        #         lys.append(Convolution2D(
-        #             256, 3, 3, activation='elu', W_constraint=MaxMinValue()))
-        #         lys.append(Dropout(0.3))
-        #     with tf.name_scope('flatten'):
-        #         lys.append(Flatten())
-        #     # with tf.name_scope('denses'):
-        #     #     for dim in self._hiddens:
-        #     #         lys.append(Dense(dim, activation='elu',
-        #     #                          W_constraint=MaxMinValue()))
-        #     with tf.name_scope('logits'):
-        #         # lys.append(Dense(1, activation='sigmoid',
-        #         #                  W_constraint=MaxMinValue()))
-        #         lys.append(Dense(1))
-
         self._cri_weight_names = []
         with tf.name_scope('cri'):
             cri = Sequential()
-            with tf.name_scope('conv_0'):
-                c = Convolution2D(32, 3, 3, subsample=(
-                    2, 2), activation='elu', input_shape=(28, 28, 1))
-                cri.add(c)
-                self._cri_weight_names.append(c.W.name)
-                cri.add(Dropout(0.3))
-            with tf.name_scope('conv_1'):
-                c = Convolution2D(64, 3, 3, activation='elu')
-                cri.add(c)
-                self._cri_weight_names.append(c.W.name)
-                cri.add(Dropout(0.3))
-            with tf.name_scope('conv_2'):
-                c = Convolution2D(
-                    128, 3, 3, subsample=(2, 2), activation='elu')
-                cri.add(c)
-                self._cri_weight_names.append(c.W.name)
-                cri.add(Dropout(0.3))
-            with tf.name_scope('conv_3'):
-                c = Convolution2D(256, 3, 3, activation='elu')
-                cri.add(c)
-                self._cri_weight_names.append(c.W.name)
-                cri.add(Dropout(0.3))
-            with tf.name_scope('flatten'):
-                cri.add(Flatten())
-            with tf.name_scope('logits'):
-                d = Dense(1)
-                cri.add(d)
-                self._cri_weight_names.append(d.W.name)
+            if self._is_dense:
+                pass
+            else:
+                with tf.name_scope('conv_0'):
+                    c = Convolution2D(32, 3, 3, subsample=(
+                        2, 2), activation='elu', input_shape=(28, 28, 1))
+                    cri.add(c)
+                    cri.add(Dropout(0.3))
+                with tf.name_scope('conv_1'):
+                    c = Convolution2D(64, 3, 3, activation='elu')
+                    cri.add(c)
+                    cri.add(Dropout(0.3))
+                with tf.name_scope('conv_2'):
+                    c = Convolution2D(
+                        128, 3, 3, subsample=(2, 2), activation='elu')
+                    cri.add(c)
+                    cri.add(Dropout(0.3))
+                with tf.name_scope('conv_3'):
+                    c = Convolution2D(256, 3, 3, activation='elu')
+                    cri.add(c)
+                    cri.add(Dropout(0.3))
+                with tf.name_scope('flatten'):
+                    cri.add(Flatten())
+                with tf.name_scope('logits'):
+                    d = Dense(1)
+                    cri.add(d)
 
         self._logit_true = cri(self._data)
         self._logit_fake = cri(self._generated)
-        # nb_lys = len(lys)
-        # x = self._data
-
-        # for i in range(nb_lys):
-        #     # DEBUG
-        #     print(lys[i])
-        #     print(x.get_shape())
-        #     # DBUG
-        #     x = lys[i](x)
-        # self._logit_true = x
-
-        # x = self._latent_input
-        # for i in range(nb_lys):
-        #     x = lys[i](x)
-        # self._logit_fake = x
 
         self._inputs[0] = [self._data, self._latent_input]
         self._outputs[0] = [self._logit_fake]
@@ -191,9 +147,3 @@ class WGAN(NetGen):
 
         self._inputs[2] = [self._latent_input]
         self._outputs[2] = [self._generated]
-
-        # self._define_clip_steps()
-
-    @property
-    def clip_steps(self):
-        return self._clip_step

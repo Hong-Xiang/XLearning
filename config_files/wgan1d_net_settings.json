@@ -1,5 +1,6 @@
 {
-    "inputs_dims": [[784]],
+    "inputs_dims": [[28, 28, 1]],
     "latent_dims": 2,
-    "hiddens": [512, 512, 512]
+    "gen_freq": 5,
+    "pre_train": 100
 }

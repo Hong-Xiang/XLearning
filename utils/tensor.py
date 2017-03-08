@@ -220,6 +220,7 @@ def shape_dim_fix(shape_input, shape_to_embbed, dim0=0, dim1=0, n_items=1, smart
 def multidim_slicer(index_start, index_range, strides=None):
     """
     Caution: true end is index_start + index_range
+    A[index_start[0]:index_start[0]+index_range[0], index_start[1]:index_start[1]+index_range[1], ...]
     """
     if not hasattr(index_start, "__iter__"):
         index_start = [index_start]
