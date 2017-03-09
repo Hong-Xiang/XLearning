@@ -144,8 +144,8 @@ class LSGAN(NetGen):
             with tf.name_scope('logits'):
                 d = Dense(1)
                 cri.add(d)
-            self._logit_fake = cri(self._data)
-            self._logit_true = cri(self._generated)
+            self._logit_fake = cri(self._generated)
+            self._logit_true = cri(self._data)
 
     def _define_models(self):
         with tf.name_scope('input'):
