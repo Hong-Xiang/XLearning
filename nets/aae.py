@@ -116,28 +116,24 @@ class AAE1D(Net):
         # build encoder
         with tf.name_scope('enc'):
             x = self._data
-            tf.summary.image('data', self._data, max_outputs=16)
+            tf.summary.image('data', self._data)
             with tf.name_scope('flatten'):
-                x = tf.reshape(x, shape=(self._batch_size, np.prod(
-                    self._inputs_dims[0])), name='flatten')
+                x = tf.reshape(x, shape=(self._batch_size, -1), name='flatten')
             with tf.name_scope('encoder_denses'):
-                for dim in self._hiddens_enc:
-                    with tf.name_scope('dense'):
-                        x = Dense(dim, activation='elu')(x)
-            with tf.name_scope('encoder_latent'):
-                x = Dense(self._latent_dims)(x)
+                x = Denses((28 * 28,), self._latent_dims,
+                           self._hiddens_enc, is_bn=False, is_dropout=False)(x)
             self._latent_data = x
 
         with tf.name_scope('dec'):
             x = self._latent_data
             dec = Denses((self._latent_dims, 1),
-                         self._inputs_dims[0], self._hiddens_dec)
+                         28 * 28, self._hiddens_dec, is_bn=False, is_dropout=False)
             self._dec_data = dec(self._latent_data)
             self._dec_z = dec(self._z)
-            dec_data_img = tf.reshape(self._dec_data, shape=[
-                                      self._batch_size] + np.prod(self._inputs_dims[0]))
+            dec_data_img = tf.reshape(
+                self._dec_data, shape=(self._batch_size, 28, 28, 1))
             dec_data_z = tf.reshape(
-                self._dec_z, shape=[self._batch_size] + np.prod(self._inputs_dims[0]))
+                self._dec_z, shape=(self._batch_size, 28, 28, 1))
             tf.summary.image('decoded_data', dec_data_img)
             tf.summary.image('decoded_z', dec_data_z)
 
@@ -145,33 +141,22 @@ class AAE1D(Net):
             cri = Sequential()
             is_first = True
             with tf.name_scope('cri_denses'):
-                for dim in self._hiddens_cri:
-                    with tf.name_scope('dense'):
-                        if is_first:
-                            cri.add(Dense(dim, activation='elu',
-                                          input_dim=(self._latent_dims,)))
-                        else:
-                            cri.add(Dense(dim, activation='elu'))
-            with tf.name_scope('logits'):
-                cri.add(Dense(1))
+                cri = Denses((28*28,), 1, self._hiddens_cri, is_bn=False, is_dropout=False)
 
         self._logit_true = cri(self._z)
         self._logit_fake = cri(self._latent_data)
 
         self._inputs[0] = [self._data]
-        self._outputs[0] = [self._dec_out]
+        self._outputs[0] = [self._dec_data]
 
         self._inputs[1] = [self._data]
         self._outputs[1] = [self._latent_data]
 
-        self._inputs[2] = [self._latent_data]
-        self._outputs[2] = [self._generated]
+        self._inputs[2] = [self._data, self._z]
+        self._outputs[2] = [self._logit_true, self._logit_fake]
 
-        self._inputs[2] = [self._latent_input]
-        self._outputs[2] = [self._generated]
+        self._inputs[3] = [self._latent_data]
+        self._outputs[3] = [dec_data_img]
 
-        # self._define_clip_steps()
-
-    @property
-    def clip_steps(self):
-        return self._clip_step
+        self._inputs[4] = [self._z]
+        self._outputs[4] = [dec_data_z]
