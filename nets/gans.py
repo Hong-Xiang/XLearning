@@ -5,7 +5,7 @@ from keras.objectives import mean_squared_error
 from keras.models import Sequential
 from .base import Net, NetGen
 from ..utils.general import with_config
-from ..model.layers import Input, Label
+from ..model.layers import Input, Label, Denses
 from ..keras_ext.constrains import MaxMinValue
 
 
@@ -16,13 +16,11 @@ class LSGAN(NetGen):
                  settings=None,
                  gen_freq=5,
                  pre_train=100,
-                 is_dense=False,
                  **kwargs):
         NetGen.__init__(self, **kwargs)
         self._settings = settings
         self._models_names = ['WGan', 'Cri', 'Gen']
         self._is_train_step = [True, True, False]
-        self._is_dense = self._update_settings('is_dense', is_dense)
         self.gen_freq = self._update_settings('gen_freq', gen_freq)
         self.pre_train = self._update_settings('pre_train', pre_train)
         a = -1
@@ -71,12 +69,26 @@ class LSGAN(NetGen):
             self._train_steps[0] = self._optims[0].minimize(
                 self._losses[0], var_list=gen_vars)
 
-    def _define_models(self):
-        with tf.name_scope('input'):
-            self._data = Input(shape=self._inputs_dims[0], name='data_input')
-        with tf.name_scope('latent_input'):
-            self._latent_input = Input(shape=(self._latent_dims,))
+    def _define_models_dense(self):
+        x = self._latent_input
+        with tf.name_scope('gen'):
+            with tf.name_scope("denses"):
+                x = Denses((self._latent_dims,), 28*28, self._hiddens)(x)
+            with tf.name_scope('reshape'):
+                self._generated = tf.reshape(
+                    x, shape=(self._batch_size, 28, 28, 1))
+        tf.summary.image('generated', self._generated)
+        with tf.name_scope('cri'):
+            with tf.name_scope("flatten"):
+                f_data = tf.reshape(self._data, (self._batch_size, 28 * 28))
+                f_fake = tf.reshape(
+                    self._generated, (self._batch_size, 28 * 28))
+            with tf.name_scope('denses'):
+                cri = Denses((28*28,), 1, self._hiddens)
+            self._logit_fake = cri(f_fake)
+            self._logit_true = cri(f_data)
 
+    def _define_models_convolution(self):
         # build generator
 
         x = self._latent_input
@@ -109,35 +121,40 @@ class LSGAN(NetGen):
         self._cri_weight_names = []
         with tf.name_scope('cri'):
             cri = Sequential()
-            if self._is_dense:
-                pass
-            else:
-                with tf.name_scope('conv_0'):
-                    c = Convolution2D(32, 3, 3, subsample=(
-                        2, 2), activation='elu', input_shape=(28, 28, 1))
-                    cri.add(c)
-                    cri.add(Dropout(0.3))
-                with tf.name_scope('conv_1'):
-                    c = Convolution2D(64, 3, 3, activation='elu')
-                    cri.add(c)
-                    cri.add(Dropout(0.3))
-                with tf.name_scope('conv_2'):
-                    c = Convolution2D(
-                        128, 3, 3, subsample=(2, 2), activation='elu')
-                    cri.add(c)
-                    cri.add(Dropout(0.3))
-                with tf.name_scope('conv_3'):
-                    c = Convolution2D(256, 3, 3, activation='elu')
-                    cri.add(c)
-                    cri.add(Dropout(0.3))
-                with tf.name_scope('flatten'):
-                    cri.add(Flatten())
-                with tf.name_scope('logits'):
-                    d = Dense(1)
-                    cri.add(d)
+            with tf.name_scope('conv_0'):
+                c = Convolution2D(32, 3, 3, subsample=(
+                    2, 2), activation='elu', input_shape=(28, 28, 1))
+                cri.add(c)
+                cri.add(Dropout(0.3))
+            with tf.name_scope('conv_1'):
+                c = Convolution2D(64, 3, 3, activation='elu')
+                cri.add(c)
+                cri.add(Dropout(0.3))
+            with tf.name_scope('conv_2'):
+                c = Convolution2D(
+                    128, 3, 3, subsample=(2, 2), activation='elu')
+                cri.add(c)
+                cri.add(Dropout(0.3))
+            with tf.name_scope('conv_3'):
+                c = Convolution2D(256, 3, 3, activation='elu')
+                cri.add(c)
+                cri.add(Dropout(0.3))
+            with tf.name_scope('flatten'):
+                cri.add(Flatten())
+            with tf.name_scope('logits'):
+                d = Dense(1)
+                cri.add(d)
 
-        self._logit_true = cri(self._data)
-        self._logit_fake = cri(self._generated)
+    def _define_models(self):
+        with tf.name_scope('input'):
+            self._data = Input(shape=self._inputs_dims[0], name='data_input')
+        with tf.name_scope('latent_input'):
+            self._latent_input = Input(shape=(self._latent_dims,))
+
+        if self._arch == 'default' or self._arch == 'dense':
+            self._define_models_dense()
+        else:
+            self._define_models_convolution()
 
         self._inputs[0] = [self._data, self._latent_input]
         self._outputs[0] = [self._logit_fake]

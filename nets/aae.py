@@ -3,8 +3,10 @@
 import numpy as np
 import tensorflow as tf
 from keras.layers import Input, Convolution2D, Dense
+from keras.models import Sequential
 from .base import Net
 from ..utils.general import with_config
+from ..model.layers import Denses
 
 
 class AAE1D(Net):
@@ -22,8 +24,8 @@ class AAE1D(Net):
                  **kwargs):
         Net.__init__(self, **kwargs)
         self._settings = settings
-        self._models_names = ['ae', 'enc', 'dec', 'cri', 'gen']
-        self._is_train_step = [True, True, False, True, False]
+        self._models_names = ['ae', 'enc', 'cri', 'dec_data', 'dec_z']
+        self._is_train_step = [True, True, True, False, False]
 
         self._latent_dims = self._update_settings('latent_dims', latent_dims)
         self._lsgan_a = self._update_settings('lsgan_a', lsgan_a)
@@ -61,8 +63,7 @@ class AAE1D(Net):
 
         self._losses[0] = loss_ae
         self._losses[1] = loss_enc
-        self._losses[2] = None
-        self._losses[3] = loss_cri
+        self._losses[2] = loss_cri
 
         tf.summary.scalar('loss_ae', loss_ae)
         tf.summary.scalar('loss_enc', loss_enc)
@@ -72,31 +73,33 @@ class AAE1D(Net):
         with tf.name_scope('optim_ae'):
             optim_ae = tf.train.RMSPropOptimizer(self._lrs_tensor[0])
 
-        with tf.name_scope('optim_gen'):
-            optim_gen = tf.train.RMSPropOptimizer(self._lrs_tensor[1])
+        with tf.name_scope('optim_enc'):
+            optim_enc = tf.train.RMSPropOptimizer(self._lrs_tensor[1])
 
         with tf.name_scope('optim_cri'):
             optim_cri = tf.train.RMSPropOptimizer(self._lrs_tensor[3])
 
         self._optims[0] = optim_ae
-        self._optims[1] = None        
-        self._optims[2] = optim_gen
-        self._optims[3] = optim_cri
+        self._optims[1] = optim_enc
+        self._optims[2] = optim_cri
 
     def _define_train_steps(self):
+        enc_vars = tf.get_collection(
+            tf.GraphKeys.TRAINABLE_VARIABLES, scope='enc')
+        dec_vars = tf.get_collection(
+            tf.GraphKeys.TRAINABLE_VARIABLES, scope='dec')
+        cri_vars = tf.get_collection(
+            tf.GraphKeys.TRAINABLE_VARIABLES, scope='cri')
         with tf.name_scope('train_ae'):
-            gen_vars = tf.get_collection(
-                tf.GraphKeys.TRAINABLE_VARIABLES, scope='ae')
+            ae_vars = enc_vars + dec_vars
             self._train_steps[0] = self._optims[0].minimize(
-                self._losses[0], var_list=gen_vars)
-        with tf.name_scope('train_cri'):
-            cri_vars = tf.get_collection(
-                tf.GraphKeys.TRAINABLE_VARIABLES, scope='cri')
+                self._losses[0], var_list=ae_vars)
+        with tf.name_scope('train_enc'):
             self._train_steps[1] = self._optims[1].minimize(
-                self._losses[1], var_list=cri_vars)
-        with tf.name_scope('train_gen'):
-            gen_vars = tf.get_collection(
-                tf.GraphKeys.TRAINABLE_VARIABLES, scope='gen')
+                self._losses[1], var_list=enc_vars)
+        with tf.name_scope('train_cri'):
+            self._train_steps[2] = self._optims[1].minimize(
+                self._losses[2], var_list=cri_vars)
 
         for i in range(self._nb_model):
             if not self._is_train_step[i]:
@@ -111,8 +114,7 @@ class AAE1D(Net):
                 shape=(self._batch_size, self._latent_dims), name='z')
 
         # build encoder
-
-        with tf.name_scope('encoder'):
+        with tf.name_scope('enc'):
             x = self._data
             tf.summary.image('data', self._data, max_outputs=16)
             with tf.name_scope('flatten'):
@@ -126,54 +128,44 @@ class AAE1D(Net):
                 x = Dense(self._latent_dims)(x)
             self._latent_data = x
 
-        with tf.name_scope('decoder'):
+        with tf.name_scope('dec'):
             x = self._latent_data
-            with tf.name_scope('decoder_denses'):
-                for dim in self._hiddens_dec:
-                    with tf.name_scope('dense'):
-                        x = Dense(dim, activation='elu')(x)
-            with tf.name_scope('decoder_generated'):
-                x = Dense(np.prod(self._inputs_dims[0]))(x)
-            with tf.name_scope('reshape'):
-                x = tf.reshape(
-                    x, shape=[self._batch_size] + list(self._inputs_dims[0]), name='reshape')
-            self._dec_out = x
-            tf.summary.image('decoded_data', self._dec_out, max_outputs=16)
-                
+            dec = Denses((self._latent_dims, 1),
+                         self._inputs_dims[0], self._hiddens_dec)
+            self._dec_data = dec(self._latent_data)
+            self._dec_z = dec(self._z)
+            dec_data_img = tf.reshape(self._dec_data, shape=[
+                                      self._batch_size] + np.prod(self._inputs_dims[0]))
+            dec_data_z = tf.reshape(
+                self._dec_z, shape=[self._batch_size] + np.prod(self._inputs_dims[0]))
+            tf.summary.image('decoded_data', dec_data_img)
+            tf.summary.image('decoded_z', dec_data_z)
+
         with tf.name_scope('cri'):
             cri = Sequential()
-            with tf.name_scope('conv_0'):
-                c = Convolution2D(32, 3, 3, subsample=(
-                    2, 2), activation='elu', input_shape=(28, 28, 1))
-                cri.add(c)                
-                cri.add(Dropout(0.3))
-            with tf.name_scope('conv_1'):
-                c = Convolution2D(64, 3, 3, activation='elu')
-                cri.add(c)                
-                cri.add(Dropout(0.3))
-            with tf.name_scope('conv_2'):
-                c = Convolution2D(
-                    128, 3, 3, subsample=(2, 2), activation='elu')
-                cri.add(c)                
-                cri.add(Dropout(0.3))
-            with tf.name_scope('conv_3'):
-                c = Convolution2D(256, 3, 3, activation='elu')
-                cri.add(c)                
-                cri.add(Dropout(0.3))
-            with tf.name_scope('flatten'):
-                cri.add(Flatten())
+            is_first = True
+            with tf.name_scope('cri_denses'):
+                for dim in self._hiddens_cri:
+                    with tf.name_scope('dense'):
+                        if is_first:
+                            cri.add(Dense(dim, activation='elu',
+                                          input_dim=(self._latent_dims,)))
+                        else:
+                            cri.add(Dense(dim, activation='elu'))
             with tf.name_scope('logits'):
-                d = Dense(1)
-                cri.add(d)                
+                cri.add(Dense(1))
 
-        self._logit_true = cri(self._data)
-        self._logit_fake = cri(self._generated)
+        self._logit_true = cri(self._z)
+        self._logit_fake = cri(self._latent_data)
 
-        self._inputs[0] = [self._data, self._latent_input]
-        self._outputs[0] = [self._logit_fake]
+        self._inputs[0] = [self._data]
+        self._outputs[0] = [self._dec_out]
 
-        self._inputs[1] = [self._data, self._latent_input]
-        self._outputs[1] = [self._logit_true, self._logit_fake]
+        self._inputs[1] = [self._data]
+        self._outputs[1] = [self._latent_data]
+
+        self._inputs[2] = [self._latent_data]
+        self._outputs[2] = [self._generated]
 
         self._inputs[2] = [self._latent_input]
         self._outputs[2] = [self._generated]

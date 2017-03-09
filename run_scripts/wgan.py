@@ -12,7 +12,8 @@ enter_debug()
 
 
 def test(cfs):
-    net = LSGAN(filenames=cfs)
+    print("Test Routine with config files:", cfs)
+    net = LSGAN(filenames=cfs)    
     net.define_net()
 
 

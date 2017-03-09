@@ -20,35 +20,40 @@ def Output(shape, name='output', dtype=tf.float32):
     shape = [None] + list(shape)
     return tf.placeholder(dtype, shape, name)
 
-def Convolution2DwithBN(tensor_in, nb_filter, nb_row, nb_col, activation='elu', border_mode='same', is_summary=True, name=None):    
+
+def Convolution2DwithBN(tensor_in, nb_filter, nb_row, nb_col, activation='elu', border_mode='same', is_summary=True, name=None):
     with tf.name_scope(name):
         x = tensor_in
-        x = Convolution2D(nb_filter, nb_row, nb_col, border_mode=border_mode, name='convolution')(x)
+        x = Convolution2D(nb_filter, nb_row, nb_col,
+                          border_mode=border_mode, name='convolution')(x)
         x = BatchNormalization()(x)
         x = Activation(activation)(x)
     return x
 
+
 def Denses(input_shape, output_dim, hiddens, activation='elu', last_activation=None, name='denses', is_bn=True, is_dropout=False, dropout_rate=0.5):
-    """ sequential dense layers """    
+    """ sequential dense layers """
     n_hidden_layers = len(hiddens)
-    with tf.name_scope(name):    
+    with tf.name_scope(name):
         m = Sequential(name=name)
         for i in range(n_hidden_layers):
-            if i == 0:
-                m.add(Dense(hiddens[i], activation=activation,
-                            input_shape=input_shape, name=name + '/Dense_%d' % i))
+            with tf.name_scope('hidden_block'):
+                with tf.name_scope('dense'):
+                    if i == 0:
+                        m.add(Dense(hiddens[i], activation=activation,
+                                    input_shape=input_shape))
+                    else:
+                        m.add(Dense(hiddens[i], activation=activation))
+                if is_bn:
+                    with tf.name_scope('bn'):
+                        m.add(BatchNormalization())
+                if is_dropout:
+                    with tf.name_scope('dropout'):
+                        m.add(Dropout(dropout_rate))
+        with tf.name_scope('output'):
+            if last_activation is None:
+                m.add(Dense(output_dim, name=name + '/Dense_end'))
             else:
-                m.add(Dense(hiddens[i], activation=activation,
-                            name=name + '/Dense_%d' % i))
-            if is_bn:
-                m.add(BatchNormalization())
-            if is_dropout:
-                m.add(Dropout(dropout_rate, name=name + '/Dropout_%d' % i))
-        if last_activation is None:
-            m.add(Dense(output_dim, name=name+'/Dense_end'))
-        else:
-            m.add(Dense(output_dim, activation=last_activation, name=name+'/Dense_end'))
+                m.add(Dense(output_dim, activation=last_activation,
+                            name=name + '/Dense_end'))
     return m
-
-
-
