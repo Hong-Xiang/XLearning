@@ -51,22 +51,22 @@ def train(filenames=None, settings=None, **kwargs):
     nb_batches = settings['nb_batches']
     net.load()
     ptp = ProgressTimer(nb_batches)
-    for i in range(nb_batches // 2):
+    for i in range(nb_batches // 3 * 2):
         loss_ae = train_ae(net, dataset)
-        msg = 'step #%5d, AuE, loss=%05f' % (net.step, loss_ae)
+        msg = 'T:AuE, loss=%05f' % (net.step, loss_ae)
         ptp.event(net.step, msg)
     net.lr_decay()
-    for i in range(nb_batches // 2):
+    for i in range(nb_batches // 3):
         loss_ae = train_ae(net, dataset)
-        msg = 'step #%5d, AuE, loss=%05f' % (net.step, loss_ae)
+        msg = 'T:AuE, loss=%05f' % (net.step, loss_ae)
         ptp.event(net.step, msg)
-    for i in range(nb_batches//5):
-        loss_cri = train_cri(net, dataset)
-        msg = 'Cri, loss=%05f    ' % (loss_cri)
-        # loss_gen = train_gen(net, dataset)
-        # msg += 'Gen, loss=%05f    ' % (loss_gen)
-        ptp.event(net.step, msg)
-        ptp = ProgressTimer(nb_batches)
+    # for i in range(nb_batches//5):
+    #     loss_cri = train_cri(net, dataset)
+    #     msg = 'Cri, loss=%05f    ' % (loss_cri)
+    #     # loss_gen = train_gen(net, dataset)
+    #     # msg += 'Gen, loss=%05f    ' % (loss_gen)
+    #     ptp.event(net.step, msg)
+    #     ptp = ProgressTimer(nb_batches)
     # for i in range(nb_batches // 2):
     #     loss_ae = train_ae(net, dataset)
     #     msg = 'step #%5d, AuE, loss=%05f' % (net.step, loss_ae)
@@ -76,22 +76,22 @@ def train(filenames=None, settings=None, **kwargs):
     #     loss_ae = train_ae(net, dataset)
     #     msg = 'step #%5d, AuE, loss=%05f' % (net.step, loss_ae)
     #     ptp.event(net.step, msg)
-    for i in range(nb_batches):
-        loss_cri = train_cri(net, dataset)
-        msg = 'Cri, loss=%05f    ' % (loss_cri)
-        loss_gen = train_gen(net, dataset)
-        msg += 'Gen, loss=%05f    ' % (loss_gen)
-        ptp.event(net.step, msg)
+    # for i in range(nb_batches):
+    #     loss_cri = train_cri(net, dataset)
+    #     msg = 'Cri, loss=%05f    ' % (loss_cri)
+    #     loss_gen = train_gen(net, dataset)
+    #     msg += 'Gen, loss=%05f    ' % (loss_gen)
+    #     ptp.event(net.step, msg)
     net.save('net', is_print=True)
-    print("PHASE " + "B" * 30)
-    s = next(dataset)
-    p = net.predict('cri', [s[0], net.gen_latent()])
-    print('dataset::fake')
-    print(p[0])
-    print('mean', np.mean(p[0]))
-    print('latent::true')
-    print(p[1])
-    print('mean', np.mean(p[1]))
+    # print("PHASE " + "B" * 30)
+    # s = next(dataset)
+    # p = net.predict('cri', [s[0], net.gen_latent()])
+    # print('dataset::fake')
+    # print(p[0])
+    # print('mean', np.mean(p[0]))
+    # print('latent::true')
+    # print(p[1])
+    # print('mean', np.mean(p[1]))
 
 #     for i in range(net.pre_train):
 #         s = next(dataset)
