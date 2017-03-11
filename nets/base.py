@@ -72,7 +72,7 @@ class Net(object):
                  path_saves=('./model.ckpt',),
                  path_loads=('./model.ckpt',),
                  path_summary=('./log',),
-                 summary_freq=3,
+                 summary_freq=100,
                  arch='default',
                  activ='relu',
                  var_init='glorot_uniform',
@@ -189,6 +189,7 @@ class Net(object):
         for i in range(self._nb_model):
             self._lrs_tensor.append(tf.Variable(
                 self._lrs[i], trainable=False, name='lr_%i' % i))
+            tf.summary.scalar('lr_%i' % i, self._lrs_tensor[-1])
 
     def _define_models(self):
         """ define models """
@@ -239,7 +240,7 @@ class Net(object):
         self._summaries = tf.summary.merge_all()
         self._saver = tf.train.Saver()
 
-    def load(self, var_names=None, model_id=None):
+    def load(self, var_names=None, model_id=None, path=None):
         """ load weight from file """
         # TODO: Impl: restore from checkpoint files
         if model_id is None:
@@ -249,7 +250,8 @@ class Net(object):
         #         infos = info.split(" ")
         #         if infos[0] == 'all_model_checkpoint_paths:':
         #             path_restore = infos[1]
-        self._saver.restore(self._sess, self._path_loads[model_id])
+        path_load = self._path_loads[model_id] if path is None else path
+        self._saver.restore(self._sess, path_load)
 
     def save(self, var_names=None, model_id=None, is_print=False):
         # TODO: Impl partial save.
@@ -277,6 +279,40 @@ class Net(object):
         for i in range(self._nb_model):
             if self._is_load[i]:
                 self.load(model_id=i)
+
+    def test_on_batch(self, model_id=None, inputs=None, labels=None, is_summary=True):
+        if inputs is None:
+            inputs = []
+        if labels is None:
+            labels = []
+        if model_id is None:
+            model_id = 0
+        if isinstance(model_id, str):
+            model_id = self.model_id(model_id)
+        feed_dict = {}
+        ip_tensors = self._inputs[model_id]
+        lb_tensors = self._labels[model_id]
+        if ip_tensors is None:
+            ip_tensors = []
+        if lb_tensors is None:
+            lb_tensors = []
+        for (tensor, data) in zip_equal(ip_tensors, inputs):
+            feed_dict.update({tensor: data})
+        for (tensor, data) in zip_equal(lb_tensors, labels):
+            feed_dict.update({tensor: data})
+        feed_dict.update({K.learning_phase(): 0})
+        for (tensor, value) in zip_equal(self._lrs_tensor, self._lrs):
+            feed_dict.update({tensor: value})
+        if is_summary is None:
+            is_summary = (self._step.state % self._summary_freq == 0)
+        if not is_summary:
+            loss_v = self._sess.run(
+                self._losses[model_id], feed_dict=feed_dict)
+        else:
+            loss_v, summary_v = self._sess.run(
+                [self._losses[model_id], self._summaries], feed_dict=feed_dict)
+            self._summary_writer.add_summary(summary_v, self._step.state)
+        return loss_v
 
     def train_on_batch(self, model_id=None, inputs=None, labels=None, is_summary=None):
         """ train on a batch of data
@@ -339,8 +375,8 @@ class Net(object):
     def reset_lr(self, lrs):
         self._lrs = extend_list(lrs, self._nb_model)
 
-    def lr_decay(self):
-        lr_v = self._lrs[0]
+    def lr_decay(self, ratio=0.1):
+        lr_v = self._lrs[0] * ratio
         self._lrs = extend_list([lr_v], self._nb_model)
 
     # def plot_loss(self, model_id=0, sub_id=None, is_clean=True, is_log=False, smooth=0.0):
@@ -381,6 +417,10 @@ class Net(object):
     @property
     def summary_writer(self):
         return self._summary_writer
+
+    @property
+    def step(self):
+        return self._step.state
 
 
 class NetGen(Net):

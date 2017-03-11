@@ -13,6 +13,11 @@ import time
 import logging
 import time
 import datetime
+import tensorflow as tf
+
+def print_global_vars():
+    for v in tf.global_variables():
+        print(v.name)
 
 class ProgressTimer:
     def __init__(self, nb_steps=100, min_elp=1.0):
@@ -43,7 +48,7 @@ class ProgressTimer:
             time_eta = 'UKN'
         else:
             time_eta = str(datetime.timedelta(seconds=int(eta)))
-        print("i=%d, %s/it [%s<%s] :"%(step, time_int, time_pas, time_eta), msg)
+        print("i=%6d, %s/it [%s<%s] :"%(step, time_int, time_pas, time_eta), msg)
         self._pre = self._elaps
 
 

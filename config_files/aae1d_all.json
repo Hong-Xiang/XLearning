@@ -1,0 +1,16 @@
+{
+    "inputs_dims": [[784]],
+    "latent_dims": 2,   
+    "is_flatten": true,
+    "is_unsp": false,
+    "is_label": true,
+    "is_weight": false,
+    "is_batch": true,
+    "is_bin": false,
+    "is_norm": true,
+    "batch_size": 128,
+    "is_cata": false,
+    "is_bernolli": true,
+    "path_summary": ["./log"],
+    "nb_batches": 10000
+}
