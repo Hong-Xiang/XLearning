@@ -7,7 +7,7 @@ from xlearn.nets.aae import AAE1D
 from xlearn.utils.image import subplot_images
 from xlearn.utils.general import enter_debug, ProgressTimer, with_config
 
-enter_debug()
+#enter_debug()
 
 
 def test(cfs):
@@ -51,22 +51,24 @@ def train(filenames=None, settings=None, **kwargs):
     nb_batches = settings['nb_batches']
     net.load()
     ptp = ProgressTimer(nb_batches)
-    for i in range(nb_batches // 3 * 2):
-        loss_ae = train_ae(net, dataset)
-        msg = 'T:AuE, loss=%05f' % (net.step, loss_ae)
-        ptp.event(net.step, msg)
-    net.lr_decay()
-    for i in range(nb_batches // 3):
-        loss_ae = train_ae(net, dataset)
-        msg = 'T:AuE, loss=%05f' % (net.step, loss_ae)
-        ptp.event(net.step, msg)
-    # for i in range(nb_batches//5):
-    #     loss_cri = train_cri(net, dataset)
-    #     msg = 'Cri, loss=%05f    ' % (loss_cri)
-    #     # loss_gen = train_gen(net, dataset)
-    #     # msg += 'Gen, loss=%05f    ' % (loss_gen)
+    # for i in range(nb_batches // 3 * 2):
+    #     loss_ae = train_ae(net, dataset)
+    #     msg = 'T:AuE, loss=%05f' % (loss_ae)
     #     ptp.event(net.step, msg)
-    #     ptp = ProgressTimer(nb_batches)
+    # net.lr_decay()
+    # for i in range(nb_batches // 3):
+    #     loss_ae = train_ae(net, dataset)
+    #     msg = 'T:AuE, loss=%05f' % (loss_ae)
+    #     ptp.event(net.step, msg)
+    for i in range(nb_batches):
+        loss_cri = train_cri(net, dataset)
+        msg = '|T:Cri, loss=%05f|' % (loss_cri)
+        loss_gen = train_gen(net, dataset)
+        msg += '|T:Gen, loss=%05f|' % (loss_gen)
+        loss_ae = train_ae(net, dataset)
+        msg = '|T:AuE, loss=%05f|' % (loss_ae)
+        ptp.event(net.step, msg)
+        ptp = ProgressTimer(nb_batches)
     # for i in range(nb_batches // 2):
     #     loss_ae = train_ae(net, dataset)
     #     msg = 'step #%5d, AuE, loss=%05f' % (net.step, loss_ae)
