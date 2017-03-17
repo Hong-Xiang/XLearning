@@ -1,11 +1,13 @@
 """ Warp for mnist based on keras.datasets.mnist
 """
-
+import os
 import numpy as np
 from keras.datasets import mnist
 from keras.utils.np_utils import to_categorical
+from tqdm import tqdm
+import h5py
 
-from .base import DataSetBase, DataSetImages
+from .base import DataSetBase, DataSetImages, PATH_DATASETS
 from ..utils.general import with_config
 from ..utils.cells import Sampler
 from ..utils.tensor import down_sample_nd
@@ -25,7 +27,7 @@ class MNIST(DataSetBase):
                  settings=None,
                  **kwargs):
         super(MNIST, self).__init__(**kwargs)
-        self._settings = settings        
+        self._settings = settings
         self._is_unsp = self._update_settings('is_unsp', is_unsp)
         self._is_flatten = self._update_settings('is_flatten', is_flatten)
         self._is_4d = self._update_settings('is_4d', is_4d)
@@ -144,3 +146,81 @@ class MNISTImage(DataSetImages):
                 noise = np.random.randn(*args) * self._noise_scale
                 data = data + noise
         return (data, label, 1.0)
+
+
+class MNIST2(DataSetImages):
+
+    @with_config
+    def __init__(self, **kwargs):
+        DataSetBase.__init__(self, **kwargs)
+        self._fin = h5py.File(os.path.join(PATH_DATASETS, 'mnist2.h5'), 'r')
+        if self._is_train:
+            self._dataset = self._fin['train']
+        else:
+            self._dataset = self._fin['test']
+        self._images = self._dataset['image']
+        self._labels = self._dataset['label']
+        self._nb_datas = self._images.shape[0]
+        ids = list(range(self._nb_datas))
+        self._sampler = Sampler(ids, is_shuffle=self._is_train)
+
+    def _sample_data_label_weight(self):
+        id_ = next(self._sampler)
+        data = np.array(self._images[id_[0], :, :, :], dtype=np.float16)
+        label = np.array(self._labels[id_[0], :, :, :], dtype=np.float16)
+        return (data, label, 1.0)
+
+
+# def write_dataset_to_tfrecords():
+#     (x_train, y_train), (x_test, y_test) = mnist.load_data()
+#     nb_train = x_train.shape[0]
+#     nb_test = x_test.shape[0]
+#     with tf.python_io.TFRecordWriter("MNIST.train.tfrecords") as writer:
+#         for i in tqdm(range(nb_train)):
+#             bytes = np.reshape(x_train[i, ...], (-1,)
+#                                ).astype(np.uint8).tobytes()
+#             bytes_f = tf.train.Feature(
+#                 bytes_list=tf.train.BytesList(value=[bytes]))
+#             shape_f = tf.train.Feature(
+#                 int64_list=tf.train.Int64List(value=[28, 28]))
+#             label_f = tf.train.Feature(
+#                 int64_list=tf.train.Int64List(value=[y_train[i]]))
+#             example = tf.train.Example(features=tf.train.Features(feature={
+#                 'shape': shape_f,
+#                 'image': bytes_f,
+#                 'label': label_f
+#             }))
+#             writer.write(example.SerializeToString())
+
+#     with tf.python_io.TFRecordWriter("MNIST.test.tfrecords") as writer:
+#         for i in tqdm(range(nb_test)):
+#             bytes = np.reshape(x_test[i, ...], (-1,)
+#                                ).astype(np.uint8).tobytes()
+#             bytes_f = tf.train.Feature(
+#                 bytes_list=tf.train.BytesList(value=[bytes]))
+#             shape_f = tf.train.Feature(
+#                 int64_list=tf.train.Int64List(value=[28, 28]))
+#             label_f = tf.train.Feature(
+#                 int64_list=tf.train.Int64List(value=[y_test[i]]))
+#             example = tf.train.Example(features=tf.train.Features(feature={
+#                 'shape': shape_f,
+#                 'image': bytes_f,
+#                 'label': label_f
+#             }))
+#             writer.write(example.SerializeToString())
+
+
+# def check_load():
+#     record_iterator = tf.python_io.tf_record_iterator(
+#         path='MNIST.test.tfrecords')
+#     imgs = []
+#     label = []
+#     for i in range(5):
+#         string_record = next(record_iterator)
+#         example = tf.train.Example()
+#         example.ParseFromString(string_record)
+#         imgs.append(np.fromstring(example.features.feature[
+#                     'image'].bytes_list.value[0], dtype=np.uint8))
+#         label.append(int(example.features.feature[
+#                      'label'].int64_list.value[0]))
+#     return imgs, label

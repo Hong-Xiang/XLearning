@@ -26,8 +26,10 @@ def subplot_images(images, nb_max_row=8, cmap=None, is_gray=False, size=1.0, is_
     Args:
         images: tuple of list of images
     """
-    if isinstance(images, tuple):
+    if isinstance(images, (tuple, list)):
         nb_cata = len(images)
+    else:
+        nb_cata = 1
 
     nb_images = len(images[0])
     nb_row = nb_images // nb_max_row

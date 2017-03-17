@@ -236,7 +236,7 @@ class SRF3D(SRNetBase):
                                         None] + list(self._shape_o)[:-1] + [x.get_shape[-1]], subsample=(3, 3), border_mode='same')(x)
                 else:
                     x = UpSampling2D(size=self._down_sample_ratio[
-                        :2], name='upsample')(x)                
+                        :2], name='upsample')(x)
         with tf.name_scope('conv_infer_0'):
             x = Convolution2D(512, 3, 3, border_mode='same',
                               activation='elu')(x)

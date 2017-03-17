@@ -15,6 +15,12 @@ import time
 import datetime
 import tensorflow as tf
 
+def setting_with_priority(settings_list):
+    for setting in settings_list:
+        if setting is not None:
+            return setting
+    return None
+
 def print_global_vars():
     for v in tf.global_variables():
         print(v.name)

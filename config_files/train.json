@@ -1,0 +1,6 @@
+{
+    "nb_phases": 1,
+    "nb_batches": 10000,
+    "lrs": [1e-3],
+    "is_save_figs": false
+}

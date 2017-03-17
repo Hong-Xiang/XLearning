@@ -447,7 +447,7 @@ class NetGen(Net):
         self._latent_sigma = self._update_settings(
             'latent_sigma', latent_sigma)
 
-    def gen_latent(self):
+    def gen_latent(self, label=None):
         if self._latent_dis == 'gaussian':
             return np.random.randn(self._batch_size, self._latent_dims) * self._latent_sigma
         elif self._latent_dis == 'uniform':
@@ -460,8 +460,19 @@ class NetGen(Net):
             value += self._latent_MoG_mus[id_gaussian]
             return value
 
-    def gen_data(self, latent=None):
+    def gen_data(self, latent=None, label=None):
         if latent is None:
-            return self.predict(self.model_id('Gen'), self.gen_latent())
+            return self.predict(self.model_id('Gen'), self.gen_latent(label))
         else:
             return self.predict(self.model_id('Gen'), latent)
+
+# generative decorator
+class Config:
+    pass
+
+class ConfigLatent(Config):
+    pass
+
+class ConfigGeneral(Config):
+    pass
+

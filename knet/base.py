@@ -9,23 +9,26 @@
 
 import logging
 import numpy as np
+import json
 import matplotlib.pyplot as plt
 from IPython import display
 
 from keras.optimizers import Adam, RMSprop
 from keras.callbacks import TensorBoard, ReduceLROnPlateau, ModelCheckpoint
 from keras.models import Model, Sequential
+from keras.losses import mean_square_error
 from keras import backend as K
 import keras.utils.visualize_util as kvu
 
-from ..utils.general import with_config
+from ..utils.general import with_config, extend_list, zip_equal, empty_list
 
 
 class KNet(object):
-    """Base class for keras nets.
+    """Base class for nets (hybrid of Keras and Tensorflow)
     This super class is designed to handle following common procedures of constructing a net:
 
-    *   common parameters
+    *   easy train/evaluation/prediction
+    *   common parameters fields and general parameter handling
     *   compile model with given loss, metrics, optimizer
     *   common callbacks
     *   save & load
@@ -38,7 +41,7 @@ class KNet(object):
     *   _define_metrics(self)
     *   _define_optimizer(self)
 
-    All parameters are saved in self.settings
+    All parameters are saved in self._c
     Some shortcut to frequently used parameters are:
 
     *   _activ
@@ -50,72 +53,125 @@ class KNet(object):
     *   _is_dropout
     *   _is_save
     *   _is_load
-    *   _lr
+    *   _lrs
     *   _path_load
+    *   _path_save
+    *   _hiddens
+    *   _inputs_shapes
+    *   _outputs_shapes
+
+    Parameter priority:
+    command line(tf.flags) > python func args > file args(in order, later is higher) > default
     """
 
     @with_config
-    def __init__(self, settings=None, **kwargs):
+    def __init__(self,
+                 inputs_shapes=None,
+                 outputs_shapes=None,
+                 batch_size=None,
+                 optims_names=("RMSProp",),
+                 losses_names=('mse',),
+                 metrxs_names=(None,),
+                 lrs=(1e-3,),
+                 is_trainable=(True,),
+                 is_save=(True,),
+                 is_load=(False,),
+                 path_saves=('./model.ckpt',),
+                 path_loads=('./model.ckpt',),
+                 path_summary=('./log',),
+                 summary_freq=100,
+                 arch='default',
+                 activ='relu',
+                 var_init='glorot_uniform',
+                 hiddens=None,
+                 is_dropout=False,
+                 dropout_rate=0.5,
+                 settings=None,
+                 **kwargs):
         self._settings = settings
+        if '_c' not in vars(self):
+            self._c = dict()
+        self._inputs_shapes = self._update_settings(
+            'inputs_shapes', inputs_shapes)
+        self._outputs_shapes = self._update_settings(
+            'outputs_shapes', outputs_shapes)
+        self._batch_size = self._update_settings(
+            'batch_size', batch_size)
+        self._summary_freq = self._update_settings(
+            'summary_freq', summary_freq)
 
-        # models
+        self._optims_names = self._update_settings(
+            'optims_names', optims_names)
+        self._losses_names = self._update_settings(
+            'losses_names', losses_names)
+        self._metrxs_names = self._update_settings(
+            'metrxs_names', metrxs_names)
+        self._lrs = self._update_settings('lrs', lrs)
 
-        self._models = []
-        self._optims = []
-        self._losses = []
-        self._metrxs = []
-        self._loss_records = []
+        self._is_trainable = self._update_settings(
+            'is_trainable', is_trainable)
 
-        self._callbacks = []
+        self._is_save = self._update_settings('is_save', is_save)
+        self._is_load = self._update_settings('is_load', is_load)
 
-        # settings
-        # general:
+        self._path_saves = self._update_settings(
+            'path_saves', path_saves)
+        self._path_loads = self._update_settings(
+            'path_loads', path_loads)
+        self._path_summary = self._update_settings(
+            'path_summary', path_summary)
 
-        # default activ
-        self._activ = self._settings.get('activ', 'relu')
+        self._arch = self._update_settings('arch', arch)
+        self._activ = self._update_settings('activ', activ)
+        self._var_init = self._update_settings('var_init', var_init)
+        self._hiddens = self._update_settings('hiddens', hiddens)
+        self._is_dropout = self._update_settings(
+            'is_dropout', is_dropout)
+        self._dropout_rate = self._update_settings(
+            'dropout_rate', dropout_rate)
+        self._filenames = self._update_settings('filenames', None)
 
-        # a list convinient input of # of hidden units
-        self._hiddens = self._settings.get('hiddens', [])
-        self._batch_size = self._settings.get('batch_size', 128)
-        self._init = self._settings.get('init', 'glorot_uniform')
+        # Special variable, printable, but don't input by settings.
+        self._models_names = self._update_settings(
+            'model_names', ['Model'])
+        self._nb_model = self._update_settings(
+            'model_names', len(self._models_names))
+        self._callbacks = None
+        self._is_init = False
 
-        self._is_dropout = self._settings.get('is_dropout', False)
-        self._dropout_rate = self._settings.get('dropout_rate', 0.5)
+    def _initialize(self):
+        pass
 
-        self._optims_names = self._settings.get('optims_names', ['Adam'])
-        self._losses_names = self._settings.get('losses_names', ['mse'])
-        self._metrxs_names = self._settings.get('metrxs_names', [None])
-        self._lrs = self._settings.get('lrs', [1e-4])
+    def _update_settings(self, name, value=None):
+        output = self._settings.get(name, value)
+        self._c.update({name: output})
+        return output
 
-        # s/l:
-        self._is_save = self._settings.get('is_save', [True])
-        self._is_load = self._settings.get('is_load', [False])
-        self._path_saves = self._settings.get('path_saves', ['./save'])
-        self._path_loads = self._settings.get('path_loads', ['./save'])
+    def pretty_settings(self):
+        """ print all settings in pretty JSON fashion """
+        return json.dumps(self._c, sort_keys=True, indent=4, separators=(',', ':'))
 
-        self._arch = self._settings.get('arch', 'default')
+    def _before_defines(self):
+        # extent shareable parameters
+        self._nb_model = len(self._models_names)
+        self._models_names = extend_list(self._models_names, self._nb_model)
+        self._optims_names = extend_list(self._optims_names, self._nb_model)
+        self._losses_names = extend_list(self._losses_names, self._nb_model)
+        self._metrxs_names = extend_list(self._metrxs_names, self._nb_model)
+        self._lrs = extend_list(self._lrs, self._nb_model)
+        self._path_summary = extend_list(self._path_summary, self._nb_model)
+        self._path_saves = extend_list(self._path_saves, self._nb_model)
+        self._path_loads = extend_list(self._path_loads, self._nb_model)
+        self._is_trainable = extend_list(self._is_trainable, self._nb_model)
+        self._is_load = extend_list(self._is_load, self._nb_model)
 
-        self._input_dim = self._settings.get('input_dim', (128, ))
-        self._encoding_dim = self._settings.get('encoding_dim', 128)
-
-        self._nb_model = 1
-
-    def _standarize(self):
-        if len(self._optims_names) == 1 and self._nb_model > 1:
-            self._optims_names *= self._nb_model
-        if len(self._losses_names) == 1 and self._nb_model > 1:
-            self._losses_names *= self._nb_model
-        if len(self._metrxs_names) == 1 and self._nb_model > 1:
-            self._metrxs_names *= self._nb_model
-        if len(self._lrs) == 1 and self._nb_model > 1:
-            self._lrs *= self._nb_model
-
-        for i in range(self._nb_model):
-            self._models.append([])
-            self._optims.append([])
-            self._losses.append([])
-            self._metrxs.append([])
-            self._loss_records.append([])
+        self._inputs = empty_list(self._nb_model)
+        self._outputs = empty_list(self._nb_model)
+        self._labels = empty_list(self._nb_model)
+        self._models = empty_list(self._nb_model)
+        self._optims = empty_list(self._nb_model)
+        self._losses = empty_list(self._nb_model)
+        self._metrxs = empty_list(self._nb_model)
 
     def _define_models(self):
         """ define model """
@@ -133,20 +189,14 @@ class KNet(object):
                 raise ValueError("Unknown optimizer name %s." % opt_name)
 
     def _define_losses(self):
-        self._losses = self._losses_names
+        self._losses = []
+        for ls_name in self._losses_names:
+            self._losses.append(mean_square_error())
 
     def _define_metrxs(self):
         self._metrxs = self._metrxs_names
 
     def _compile_models(self):
-        logging.getLogger(__name__).debug(
-            'len(models): %d.' % len(self._models))
-        logging.getLogger(__name__).debug(
-            'len(optims): %d.' % len(self._optims))
-        logging.getLogger(__name__).debug(
-            'len(losses): %d.' % len(self._losses))
-        logging.getLogger(__name__).debug(
-            'len(metrxs): %d.' % len(self._metrxs))
         for md, opt, loss, metric in zip(self._models, self._optims, self._losses, self._metrxs):
             md.compile(optimizer=opt, loss=loss, metrics=metric)
             md.summary()
@@ -164,18 +214,19 @@ class KNet(object):
             tmpbk.append(ckp)
             self._callbacks.append(tmpbk)
 
-    def load_weights(self):
-        """ load weight from file """
-        for md, filepath, flag in zip(self._models, self._path_loads, self._is_load):
-            if flag:
-                md.load_weights(filepath, by_name=True)
+    def save(self):
+        pass
 
-    def get_model_id(self, name):
-        return 0
+    def load(self):
+        """ load weight from file """
+        for md, filepath, flag, md_name in zip(self._models, self._path_loads, self._is_load, self._models_names):
+            if flag:
+                print("Loading model: {0:10}".format(md_name))
+                md.load_weights(filepath, by_name=True)
 
     def define_net(self):
         """ Compile the model"""
-        self._standarize()
+        self._before_defines()
         self._define_losses()
         self._define_metrxs()
         self._define_optims()
@@ -185,9 +236,7 @@ class KNet(object):
         self.load_weights()
 
     def train_on_batch(self, model_id, inputs, outputs, **kwargs):
-        if isinstance(model_id, str):
-            model_id = self.get_model_id(model_id)
-
+        m = self.model(model_id)
         loss_now = self._models[model_id].train_on_batch(
             inputs, outputs, **kwargs)
         self._loss_records[model_id].append(loss_now)
@@ -208,11 +257,11 @@ class KNet(object):
             l = self._loss_records[model_id][sub_id]
         l_s = np.array(l)
         l_s[0] = l[0]
-        for i in range(len(l)-1):
-            l_s[i+1] = l_s[i] * smooth + l[i+1]
+        for i in range(len(l) - 1):
+            l_s[i + 1] = l_s[i] * smooth + l[i + 1]
         l = l_s
         if is_log:
-            l = np.log(l)        
+            l = np.log(l)
         plt.plot(l)
         return plt
 
@@ -226,9 +275,13 @@ class KNet(object):
             kvu.plot(model, show_shapes=show_shapes, to_file='model.png')
 
     @property
-    def model(self):
-        """ model """
-        return self._models
+    def model(self, id_or_name):
+        """ Get model ref by id or model name """
+        if isinstance(id_or_name, str):
+            m_id = self._models_names.index(id_or_name)
+        else:
+            m_id = int(id_or_name)
+        return self._models[m_id]
 
     @property
     def callbacks(self):

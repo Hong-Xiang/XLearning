@@ -1,12 +1,15 @@
 """ base class for samples generator for Keras models."""
 # TODO: batch mode ?
-
-import random
-import numpy
-import logging
+# TODO: Add tensorflow queue support?
+import os
 import json
+import random
+import logging
+import numpy
 from ..utils.general import with_config
 from ..utils.tensor import down_sample_nd
+
+PATH_DATASETS = os.environ['PATH_DATASETS']
 
 
 class DataSetBase(object):
@@ -174,12 +177,14 @@ class DataSetBase(object):
         else:
             return self._sample_single()
 
+    @property
+    def batch_size(self):
+        return self._batch_size
 
 class DataSetImages(DataSetBase):
 
     @with_config
     def __init__(self,
-                 is_4d=True,
                  is_gray=True,
                  is_down_sample=False,
                  down_sample_ratio=(1, 4),
@@ -187,12 +192,11 @@ class DataSetImages(DataSetBase):
                  is_crop=False,
                  crop_target_shape=None,
                  crop_offset=(0, 0),
-                 is_crop_random=False,
+                 is_crop_random=True,
                  settings=None,
                  **kwargs):
         super(DataSetImages, self).__init__(**kwargs)
         self._settings = settings
-        self._is_4d = self._update_settings('is_4d', is_4d)
         self._is_gray = self._update_settings('is_gray', is_gray)
 
         self._is_down_sample = self._update_settings(
@@ -240,7 +244,7 @@ class DataSetImages(DataSetBase):
 
     def visualize(self, sample):
         # Decouple visualization of data
-        images = numpy.array(sample, dtype=sample.dtype)
+        images = numpy.array(sample, dtype=numpy.float32)
 
         if sample.shape[-1] == 1:
             images = images.reshape(images.shape[:-1])

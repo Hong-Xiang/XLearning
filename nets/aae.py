@@ -159,3 +159,4 @@ class AAE1D(NetGen):
 
         self._inputs[4] = [self._z]
         self._outputs[4] = [dec_z_img]
+

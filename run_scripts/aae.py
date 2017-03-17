@@ -60,7 +60,7 @@ def train(filenames=None, settings=None, **kwargs):
     #     loss_ae = train_ae(net, dataset)
     #     msg = 'T:AuE, loss=%05f' % (loss_ae)
     #     ptp.event(net.step, msg)
-    for i in range(nb_batches):
+    for i in range(nb_batches//3):
         loss_cri = train_cri(net, dataset)
         msg = '|T:Cri, loss=%05f|' % (loss_cri)
         loss_gen = train_gen(net, dataset)
@@ -165,9 +165,10 @@ def show_latent(cfs, nb_sample=10000):
 def show_data_mainfold(cfs):
     """ show latent main fold for data """
     dataset = MNIST(filenames=cfs)
-    nb_axis = int(np.sqrt(dataset._batch_size))
-    x = np.linspace(-1.5, 1.5, nb_axis)
-    y = np.linspace(-1.5, 1.5, nb_axis)
+    # nb_axis = int(np.sqrt(dataset._batch_size))
+    nb_axis = 32
+    x = np.linspace(-5.0, 20.0, nb_axis)
+    y = np.linspace(-5.0, 20.0, nb_axis)
     pos = np.meshgrid(x, y)
     xs = pos[0]
     ys = pos[1]

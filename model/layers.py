@@ -8,12 +8,22 @@ from . import config
 FLAGS = tf.app.flags.FLAGS
 
 
-def Label(shape, name='label', dtype=tf.float32):
+def Label(shape, name='label', dtype=tf.float16):
     shape = [None] + list(shape)
     return tf.placeholder(dtype, shape, name)
 
 
-def Input(shape, name='input', dtype=tf.float32):
+def Input(shape, name='input', dtype=tf.float16):
+    shape = [None] + list(shape)
+    return tf.placeholder(dtype, shape, name)
+
+
+def Latent(shape, name='latent', dtype=tf.float16):
+    shape = [None] + list(shape)
+    return tf.placeholder(dtype, shape, name)
+
+
+def Condition(shape, name='condition', dtype=tf.float16):
     shape = [None] + list(shape)
     return tf.placeholder(dtype, shape, name)
 

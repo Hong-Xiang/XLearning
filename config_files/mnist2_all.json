@@ -1,0 +1,6 @@
+{
+    "is_batch": true,
+    "batch_size": 32,
+    "shape_i": [28, 28, 1],
+    "shape_o": [56, 56, 1]
+}
