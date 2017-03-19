@@ -6,7 +6,7 @@ import json
 import random
 import logging
 import numpy
-from ..utils.general import with_config
+from ..utils.general import with_config, empty_list
 from ..utils.tensor import down_sample_nd
 
 PATH_DATASETS = os.environ['PATH_DATASETS']
@@ -53,11 +53,15 @@ class DataSetBase(object):
         self._file_data = self._update_settings('file_data', file_data)
         self._is_finite = self._update_settings('is_finite', is_finite)
 
-        self._nb_datas = 0
+        self._nb_examples = 0
         self._is_init = False
         if self._random_seed is not None:
             numpy.random.seed(self._random_seed)
             random.seed(self._random_seed)
+
+        self._nb_data = 1
+        self._nb_label = 1
+        self._nb_weight = 1
 
     def _update_settings(self, name, value=None):
         output = self._settings.get(name, value)
@@ -136,37 +140,42 @@ class DataSetBase(object):
             return self._sample_data()
 
     def _sample_batch(self):
-        if self._is_label:
-            if self._is_weight:
-                x = []
-                y = []
-                w = []
-                for i in range(self._batch_size):
-                    s = self._sample_data_label_weight()
-                    x.append(s[0])
-                    y.append(s[1])
-                    w.append(s[2])
-                x = numpy.array(x)
-                y = numpy.array(y)
-                w = numpy.array(w)
-                samples = (x, y, w)
-            else:
-                x = []
-                y = []
-                for i in range(self._batch_size):
-                    s = self._sample_data_label()
-                    x.append(s[0])
-                    y.append(s[1])
-                x = numpy.array(x)
-                y = numpy.array(y)
-                samples = (x, y)
-        else:
-            x = []
+        all_example = []
+        for i in range(self._batch_size):
+            all_example.append(self._sample_data_label_weight())
+        samples = []
+        x = empty_list(self._nb_data, is_lol=True)
+        for j in range(self._nb_data):
+            x[j].append(empty_list(self._batch_size))
             for i in range(self._batch_size):
-                s = self._sample_data()
-                x.append(s[0])
-            x = numpy.array(x)
-            samples = (x, )
+                if self._nb_data > 1:
+                    x[j][i] = all_example[i][0][j]
+                else:
+                    x[j][i] = all_example[i][0]
+            x[j] = numpy.array(x[j])
+        samples.append(x)
+        if self._is_label:
+            y = empty_list(self._nb_label, is_lol=True)
+            for j in range(self._nb_label):
+                y[j].append(empty_list(self._batch_size))
+                for i in range(self._batch_size):
+                    if self._nb_label > 1:
+                        y[j][i] = all_example[i][1][j]
+                    else:
+                        y[j][i] = all_example[i][1]
+                y[j] = numpy.array(y[j])
+            samples.append(y)
+        if self._is_weight:
+            w = empty_list(self._nb_weight, is_lol=True)
+            for j in range(self._nb_weight):
+                w[j].append(empty_list(self._batch_size))
+                for i in range(self._batch_size):
+                    if self._nb_weight > 1:
+                        w[j][i] = all_example[i][2][j]
+                    else:
+                        w[j][i] = all_example[i][2]
+                w[j] = numpy.array(w[j])
+            samples.append(w)
         return samples
 
     def __next__(self):
@@ -180,6 +189,7 @@ class DataSetBase(object):
     @property
     def batch_size(self):
         return self._batch_size
+
 
 class DataSetImages(DataSetBase):
 

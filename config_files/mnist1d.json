@@ -1,6 +1,6 @@
 {
     "is_flatten": true,
-    "is_unsp": false,
+    "is_unsp": true,
     "is_label": true,
     "is_weight": false,
     "is_batch": true,
@@ -8,6 +8,5 @@
     "is_norm": true,
     "batch_size": 128,
     "is_cata": false,
-    "is_bernolli": true,
-    "path_summary": ["./logC"]
+    "is_bernolli": true
 }

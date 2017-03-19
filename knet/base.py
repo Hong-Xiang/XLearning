@@ -16,9 +16,9 @@ from IPython import display
 from keras.optimizers import Adam, RMSprop
 from keras.callbacks import TensorBoard, ReduceLROnPlateau, ModelCheckpoint
 from keras.models import Model, Sequential
-from keras.losses import mean_square_error
+# from keras.losses import mean_square_error
 from keras import backend as K
-import keras.utils.visualize_util as kvu
+import keras.utils.vis_utils as kvu
 
 from ..utils.general import with_config, extend_list, zip_equal, empty_list
 
@@ -136,7 +136,7 @@ class KNet(object):
             'model_names', ['Model'])
         self._nb_model = self._update_settings(
             'model_names', len(self._models_names))
-        self._callbacks = None
+        self._callbacks = []
         self._is_init = False
 
     def _initialize(self):
@@ -189,9 +189,7 @@ class KNet(object):
                 raise ValueError("Unknown optimizer name %s." % opt_name)
 
     def _define_losses(self):
-        self._losses = []
-        for ls_name in self._losses_names:
-            self._losses.append(mean_square_error())
+        self._losses = self._losses_names
 
     def _define_metrxs(self):
         self._metrxs = self._metrxs_names
@@ -206,7 +204,7 @@ class KNet(object):
             tmpbk = []
             ckp = ModelCheckpoint(pathsave, monitor='loss', verbose=0,
                                   save_best_only=False, save_weights_only=False, mode='auto', period=10)
-            tsb = TensorBoard(write_graph=False, write_images=True)
+            tsb = TensorBoard(write_graph=True, write_images=True)
             reduce_lr = ReduceLROnPlateau(monitor='val_loss', factor=0.1,
                                           patience=10, min_lr=1e-8)
             tmpbk.append(tsb)
@@ -215,12 +213,14 @@ class KNet(object):
             self._callbacks.append(tmpbk)
 
     def save(self):
-        pass
+        for md, filepath, md_name in zip(self._models, self._path_saves, self._models_names):            
+            print("Saving model: {0:10} to {1:10}.".format(md_name, filepath))
+            md.save_weights(filepath)
 
-    def load(self):
+    def load(self, is_force=False):
         """ load weight from file """
         for md, filepath, flag, md_name in zip(self._models, self._path_loads, self._is_load, self._models_names):
-            if flag:
+            if flag or is_force:
                 print("Loading model: {0:10}".format(md_name))
                 md.load_weights(filepath, by_name=True)
 
@@ -233,7 +233,7 @@ class KNet(object):
         self._define_models()
         self._compile_models()
         self._define_callbks()
-        self.load_weights()
+        self.load()
 
     def train_on_batch(self, model_id, inputs, outputs, **kwargs):
         m = self.model(model_id)
@@ -273,15 +273,17 @@ class KNet(object):
                 prog='dot', format='svg'))
         else:
             kvu.plot(model, show_shapes=show_shapes, to_file='model.png')
-
-    @property
+    
     def model(self, id_or_name):
         """ Get model ref by id or model name """
+        return self._models[self.model_id(id_or_name)]
+
+    def model_id(self, id_or_name):
         if isinstance(id_or_name, str):
             m_id = self._models_names.index(id_or_name)
         else:
             m_id = int(id_or_name)
-        return self._models[m_id]
+        return m_id
 
     @property
     def callbacks(self):
@@ -301,11 +303,38 @@ class KNet(object):
         return self._batch_size
 
 
-class KGen(KNet):
+class KAE(KNet):
+    @with_config
+    def __init__(self,
+                 latent_dim=None,
+                 settings=None,
+                 **kwargs):
+        KNet.__init__(self, **kwargs)
+        self._settings = settings
+        self._latent_dim = self._update_settings('latent_dim', latent_dim)
 
-    def __init__(self, **kwargs):
-        super(KGen, self).__init__(**kwargs)
-        self._model_gen = None
+    @property
+    def model_ae(self):
+        return self.model('ae')
+
+    @property
+    def model_enc(self):
+        return self.model('enc')
+
+    @property
+    def model_dec(self):
+        return self.model('dec')
+
+
+class KGen(KNet):
+    @with_config
+    def __init__(self,
+                 latent_dim=None,
+                 settings=None,
+                 **kwargs):
+        KNet.__init__(self, **kwargs)
+        self._settings = settings
+        self._latent_dim = self._update_settings('latent_dim', latent_dim)
 
     def gen_noise(self):
         return np.random.randn(self._batch_size, self._encoding_dim)
@@ -316,4 +345,4 @@ class KGen(KNet):
 
     @property
     def model_gen(self):
-        return self._model_gen
+        return self.model('gen')

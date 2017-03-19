@@ -1,0 +1,9 @@
+{
+    "net_name": "AE1D",
+    "dataset_name": "mnist",
+    "config_files": [
+        "/home/hongxwing/Workspace/xlearn/config_files/mnist1d.json",
+        "/home/hongxwing/Workspace/xlearn/config_files/ae1d.json"
+    ],
+    "save_filename": "predict_run.png"
+}

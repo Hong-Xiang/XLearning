@@ -79,10 +79,13 @@ def extend_list(list_input, nb_target):
         raise ValueError("Can't extend list with len != 1")
 
 
-def empty_list(length):
+def empty_list(length, is_lol=False):
     output = []
     for i in range(length):
-        output.append(None)
+        if is_lol:
+            output.append([])
+        else:
+            output.append(None)
     return output
 
 

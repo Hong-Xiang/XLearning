@@ -168,7 +168,7 @@ class MNIST2(DataSetImages):
         id_ = next(self._sampler)
         data = np.array(self._images[id_[0], :, :, :], dtype=np.float16)
         label = np.array(self._labels[id_[0], :, :, :], dtype=np.float16)
-        return (data, label, 1.0)
+        return ((label, data), label, 1.0)
 
 
 # def write_dataset_to_tfrecords():
