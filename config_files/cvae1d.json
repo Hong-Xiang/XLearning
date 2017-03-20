@@ -1,7 +1,7 @@
 {
-    "inputs_shapes": [[784]],
-    "outputs_shapes": [[784]],
-    "latent_dim": 2,
+    "inputs_shapes": [[3136],[784]],
+    "outputs_shapes": [[3136]],
+    "latent_dim": 128,
     "hiddens": [512, 1024, 1024],    
     "sigma": 1e-3,
     "lrs": [1e-3],

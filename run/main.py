@@ -11,12 +11,14 @@ matplotlib.use('agg')
 import matplotlib.pyplot as plt
 import fire
 
+from keras.callbacks import ModelCheckpoint
+
 from xlearn.dataset.mnist import MNIST, MNISTImage, MNIST2
 from xlearn.dataset.sinogram import Sinograms
 from xlearn.dataset.flickr import Flickr25k
 
 from xlearn.nets.super_resolution import SRNetInterp, SRSimple, SRF3D, SRClassic
-from xlearn.knet.ae1d import AE1D, VAE1D
+from xlearn.knet.ae1d import AE1D, VAE1D, CVAE1D
 from xlearn.utils.general import with_config, empty_list, enter_debug
 from xlearn.utils.image import subplot_images
 
@@ -50,6 +52,8 @@ class DLRun:
             net = AE1D(filenames=config_files)
         elif net_name == 'VAE1D':
             net = VAE1D(filenames=config_files)
+        elif net_name == 'CVAE1D':
+            net = CVAE1D(filenames=config_files)
         elif net_name == 'sr_interp':
             net = SRNetInterp(filenames=config_files)
         elif net_name == 'sr_simple':
@@ -57,7 +61,7 @@ class DLRun:
         elif net_name == 'sr_classic':
             net = SRClassic(filenames=config_files)
         if net is None:
-            raise ValueError('Unknown dataset_name {0:s}.'.format(net_name))
+            raise ValueError('Unknown net_name {0:s}.'.format(net_name))
         print(net.pretty_settings())
         net.define_net()
         return net
@@ -81,10 +85,10 @@ class DLRun:
         is_reset_lr = settings.get('is_reset_lr', is_reset_lr)
         is_force_load = settings.get('is_force_load', is_force_load)
         lrs = settings.get('lrs', lrs)
-        print("="*30)
+        print("=" * 30)
         print("Train with setttings")
         print(settings)
-        print("="*30)
+        print("=" * 30)
         if is_debug:
             enter_debug()
         net = self.define_net(net_name, config_files=config_files)
@@ -93,10 +97,72 @@ class DLRun:
             net.load(is_force=True)
         if is_reset_lr:
             net.reset_lr(lrs)
-        if net_name == 'AE1D' or 'VAE1D':
+        if net_name == 'AE1D' or 'VAE1D' or 'CVAE1D':
             net.model_ae.fit_generator(
-                dataset, steps_per_epoch=128, epochs=40, verbose=1)
+                dataset, steps_per_epoch=1875, epochs=40, verbose=1,
+                callbacks=[ModelCheckpoint(
+                    filepath=r"weightsP0.{epoch:02d}-{loss:.5f}.hdf5", period=1)]
+            )
+            net.reset_lr([1e-4])
+            net.model_ae.fit_generator(
+                dataset, steps_per_epoch=1875, epochs=40, verbose=1,
+                callbacks=[ModelCheckpoint(
+                    filepath=r"weightsP1.{epoch:02d}-{loss:.5f}.hdf5", period=1)]
+            )
+            net.reset_lr([1e-5])
+            net.model_ae.fit_generator(
+                dataset, steps_per_epoch=1875, epochs=40, verbose=1,
+                callbacks=[ModelCheckpoint(
+                    filepath=r"weightsP2.{epoch:02d}-{loss:.5f}.hdf5", period=1)]
+            )
         net.save()
+
+    @with_config
+    def show_mainfold(self,
+                      net_name=None,
+                      dataset_name=None,
+                      config_files=None,
+                      save_filename='./mainfold.png'):
+        pass
+
+    @with_config
+    def generate(self,
+                 net_name=None,
+                 dataset_name=None,
+                 is_debug=False,
+                 config_files=None,
+                 path_save='./generate',
+                 is_visualize=True,
+                 is_save=True,
+                 save_filename='generate.png',
+                 settings=None,
+                 **kwargs):
+        print('Genererate routine is called.')
+        net_name = settings.get('net_name', net_name)
+        dataset_name = settings.get('dataset_name', dataset_name)
+        is_debug = settings.get('is_debug', is_debug)
+        config_files = settings.get('config_files', config_files)
+        path_save = settings.get('path_save', path_save)
+        is_visualize = settings.get('is_visualize', is_visualize)
+        is_save = settings.get('is_save', is_save)
+        save_filename = settings.get('save_filename', save_filename)
+        if is_debug:
+            enter_debug()
+        net = self.define_net(net_name, config_files=config_files)
+        dataset = self.define_dataset(dataset_name, config_files=config_files)
+        net.load(is_force=True)
+        if net_name == 'CVAE1D':
+            s = next(dataset)
+            z = net.gen_noise()
+            p = net.model('gen').predict(
+                [z, s[0][1]], batch_size=net.batch_size)
+            x = dataset.visualize(s[0][1], data_type='label')
+            ae = dataset.visualize(p, data_type='data')
+            subplot_images((x[:64], ae[:64]), is_gray=True,
+                           is_save=True, filename=save_filename)
+            np.save('generate_condition.npy', s[0][1])
+            np.save('generate_input.npy', z)
+            np.save('generate_output.npy', p)
 
     @with_config
     def predict(self,
@@ -122,17 +188,32 @@ class DLRun:
         save_filename = settings.get('save_filename', save_filename)
         if is_debug:
             enter_debug()
-        net = self.define_net(net_name, config_files=config_files)        
+        net = self.define_net(net_name, config_files=config_files)
         dataset = self.define_dataset(dataset_name, config_files=config_files)
         net.load(is_force=True)
-        if net_name == 'AE1D' or 'VAE1D':
+        if net_name == 'AE1D' or net_name == 'VAE1D':
             s = next(dataset)
             p = net.model('ae').predict(s[0], batch_size=net.batch_size)
-            x = dataset.visualize(s[0])
+            if dataset_name == 'MNIST2':
+                x = dataset.visualize(s[0], data_type='label')
+            else:
+                x = dataset.visualize(s[0])
             ae = dataset.visualize(p)
             subplot_images((x[:64], ae[:64]), is_gray=True,
                            is_save=True, filename=save_filename)
             np.save('predict_input.npy', s[0])
+            np.save('predict_output.npy', p)
+        if net_name == 'CVAE1D':
+            s = next(dataset)
+            p = net.model('ae').predict(s[0], batch_size=net.batch_size)
+
+            xs = dataset.visualize(s[0][0], data_type='data')
+            xl = dataset.visualize(s[0][1], data_type='label')
+            ae = dataset.visualize(p, data_type='data')
+            subplot_images((xs[:64], xl[:64], ae[:64]), is_gray=True,
+                           is_save=True, filename=save_filename)
+            np.save('predict_data.npy', s[0][0])
+            np.save('predict_label.npy', s[0][1])
             np.save('predict_output.npy', p)
 
     @with_config

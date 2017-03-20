@@ -1,4 +1,6 @@
 {
     "is_batch": true,
-    "batch_size": 32    
+    "is_flatten": true,
+    "is_only_label": true,
+    "batch_size": 32
 }

@@ -98,6 +98,79 @@ class MNIST(DataSetBase):
         return (image, label, 1.0)
 
 
+# class MNIST1D(DataSetBase):
+#     """ MNIST dataset based on kears.datasets.mnist. With enhanced methods.
+#     """
+#     @with_config
+#     def __init__(self,
+#                  is_unsp=True,
+#                  is_bin=False,
+#                  is_bernolli=False,
+#                  is_cata=True,
+#                  settings=None,
+#                  **kwargs):
+#         super(MNIST1D, self).__init__(**kwargs)
+#         self._settings = settings
+#         self._is_unsp = self._update_settings('is_unsp', is_unsp)
+#         self._is_bin = self._update_settings('is_bin', is_bin)
+#         self._is_cata = self._update_settings('is_cata', is_cata)
+#         self._is_bernolli = self._update_settings('is_bernolli', is_bernolli)
+
+#         (x_train, y_train), (x_test, y_test) = mnist.load_data()
+#         x_train = x_train.astype(np.float32)
+#         x_test = x_test.astype(np.float32)
+#         if self._is_cata:
+#             y_train = to_categorical(y_train, 10)
+#             y_test = to_categorical(y_test, 10)
+#         if self._is_train:
+#             self._data = x_train
+#             self._label = y_train
+#         else:
+#             self._data = x_test
+#             self._label = y_test
+
+#         self._combine = [(d, l) for d, l in zip(self._data, self._label)]
+
+#         self._sampler = Sampler(datas=self._combine)
+
+#     def visualize(self, image, **kwargs):
+#         if self._is_norm and not self._is_bernolli:
+#             image += 0.5
+#         output = image.reshape([-1, 28, 28])
+#         if self._is_batch:
+#             output = list(output)
+#         return output
+
+#     def _sample_data_label_weight(self):
+#         sample = next(self._sampler)
+#         sample = sample[0]
+#         image = sample[0]
+#         digit = sample[1]
+#         if self._is_bin:
+#             image[image < 125.1] = 0.0
+#             image[image >= 125.0] = 255.0
+#         if self._is_norm:
+#             image = image / 256.0
+#             if not self._is_bernolli:
+#                 image -= 0.5
+#         image = image.reshape([np.prod(image.shape)])
+
+#         if self._is_unsp:
+#             label = np.copy(image)
+#         else:
+#             label = digit
+#         if self._is_noise:
+#             if self._noise_type == 'poisson':
+#                 image = np.random.poisson(
+#                     image / self._noise_scale).astype(np.float32)
+#                 image *= (self._noise_scale / 2.0)
+#             elif self._noise_type == "gaussian":
+#                 args = image.shape
+#                 noise = np.random.randn(*args) * self._noise_scale
+#                 image = image + noise
+#         return (image, label, 1.0)
+
+
 class MNISTImage(DataSetImages):
     """ MNIST dataset as images
     """
@@ -151,8 +224,15 @@ class MNISTImage(DataSetImages):
 class MNIST2(DataSetImages):
 
     @with_config
-    def __init__(self, **kwargs):
+    def __init__(self,
+                 is_flatten=False,
+                 is_only_label=False,
+                 settings=None,
+                 **kwargs):
         DataSetBase.__init__(self, **kwargs)
+        self._settings = settings
+        self._is_flatten = self._update_settings('is_flatten', is_flatten)
+        self._is_only_label = self._update_settings('is_only_label', is_only_label)
         self._fin = h5py.File(os.path.join(PATH_DATASETS, 'mnist2.h5'), 'r')
         if self._is_train:
             self._dataset = self._fin['train']
@@ -160,15 +240,39 @@ class MNIST2(DataSetImages):
             self._dataset = self._fin['test']
         self._images = self._dataset['image']
         self._labels = self._dataset['label']
-        self._nb_datas = self._images.shape[0]
-        ids = list(range(self._nb_datas))
+        self._nb_examples = self._images.shape[0]
+        ids = list(range(self._nb_examples))
         self._sampler = Sampler(ids, is_shuffle=self._is_train)
+        if self._is_only_label:
+            self._nb_data = 1
+        else:
+            self._nb_data = 2
+    
+    def visualize(self, image, data_type='data'):
+        image = np.float32(image)
+        if self._is_flatten:
+            if data_type == 'data':
+                output = image.reshape([-1, 28*2, 28*2])
+            else:
+                output = image.reshape([-1, 28, 28])
+        else:
+            output = image
+        if self._is_batch:
+            output = list(output)
+        return output
+
 
     def _sample_data_label_weight(self):
         id_ = next(self._sampler)
         data = np.array(self._images[id_[0], :, :, :], dtype=np.float16)
         label = np.array(self._labels[id_[0], :, :, :], dtype=np.float16)
-        return ((label, data), label, 1.0)
+        if self._is_flatten:
+            data = data.reshape((-1,))
+            label = label.reshape((-1,))
+        if self._is_only_label:
+            return (label, data, 1.0)
+        else:
+            return ((data, label), data, 1.0)
 
 
 # def write_dataset_to_tfrecords():

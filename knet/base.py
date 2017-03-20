@@ -337,7 +337,7 @@ class KGen(KNet):
         self._latent_dim = self._update_settings('latent_dim', latent_dim)
 
     def gen_noise(self):
-        return np.random.randn(self._batch_size, self._encoding_dim)
+        return np.random.randn(self._batch_size, self._latent_dim)
         # return np.random.normal(size=(self._batch_size, self._encoding_dim))
 
     def gen_data(self):

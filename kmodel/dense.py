@@ -6,7 +6,7 @@ from keras.layers.advanced_activations import ELU
 NORMAL_ACTIVATIONS = ['softmax', 'softplus', 'relu',
                       'tanh', 'sigmoid', 'hard_sigmoid', 'linear']
 
-def dense_stack(input_dim, output_dim, hiddens, activation='elu', last_activation=None, name='denses', is_reuse=False, is_bn=False, is_dropout=False, dropout_rate=0.5):
+def dense_stack(input_dim, output_dim, hiddens, activation='elu', last_activation=None, name='denses', is_reuse=False, is_bn=True, is_dropout=False, dropout_rate=0.5):
     """ sequential dense layers """
     n_hidden_layers = len(hiddens)
     with tf.name_scope(name):

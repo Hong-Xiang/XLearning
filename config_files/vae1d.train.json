@@ -6,7 +6,7 @@
         "/home/hongxwing/Workspace/xlearn/config_files/vae1d.json"
     ],
     "save_filename": "predict_run.png",
-    "is_force_load": false,
+    "is_force_load": true,
     "is_reset_lr": true,
-    "lrs": [1e-3]
+    "lrs": [1e-4]
 }

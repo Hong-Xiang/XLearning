@@ -144,37 +144,43 @@ class DataSetBase(object):
         for i in range(self._batch_size):
             all_example.append(self._sample_data_label_weight())
         samples = []
-        x = empty_list(self._nb_data, is_lol=True)
+        x = empty_list(self._nb_data)
         for j in range(self._nb_data):
-            x[j].append(empty_list(self._batch_size))
+            x[j] = empty_list(self._batch_size)
             for i in range(self._batch_size):
                 if self._nb_data > 1:
                     x[j][i] = all_example[i][0][j]
                 else:
                     x[j][i] = all_example[i][0]
             x[j] = numpy.array(x[j])
+        if self._nb_data == 1:
+            x = x[0]
         samples.append(x)
         if self._is_label:
-            y = empty_list(self._nb_label, is_lol=True)
+            y = empty_list(self._nb_label)
             for j in range(self._nb_label):
-                y[j].append(empty_list(self._batch_size))
+                y[j] = empty_list(self._batch_size)
                 for i in range(self._batch_size):
                     if self._nb_label > 1:
                         y[j][i] = all_example[i][1][j]
                     else:
                         y[j][i] = all_example[i][1]
                 y[j] = numpy.array(y[j])
+            if self._nb_label == 1:
+                y = y[0]
             samples.append(y)
         if self._is_weight:
-            w = empty_list(self._nb_weight, is_lol=True)
+            w = empty_list(self._nb_weight)
             for j in range(self._nb_weight):
-                w[j].append(empty_list(self._batch_size))
+                w[j] = empty_list(self._batch_size)
                 for i in range(self._batch_size):
                     if self._nb_weight > 1:
                         w[j][i] = all_example[i][2][j]
                     else:
                         w[j][i] = all_example[i][2]
                 w[j] = numpy.array(w[j])
+            if self._nb_weight == 1:
+                w = w[0]
             samples.append(w)
         return samples
 

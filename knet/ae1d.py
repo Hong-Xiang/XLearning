@@ -165,11 +165,9 @@ class CVAE1D(KAE, KGen):
                 self._z_mean = dense_stack(
                     x_dim + c_dim, z_dim, self._hiddens, name='enc_mean')(input_m)
             with tf.name_scope('log_var'):
-                self._z_mean = dense_stack(
+                self._z_log_var = dense_stack(
                     x_dim + c_dim, z_dim, self._hiddens, name='enc_var')(input_m)
             with tf.name_scope('sample'):
-                self._z_mean = Dense(z_dim, name='z_mean')(h)
-                self._z_log_var = Dense(z_dim, name='z_log_sigma')(h)
                 z = Lambda(self._sampling, output_shape=(z_dim,), name='latent')(
                     [self._z_mean, self._z_log_var])
         with tf.name_scope('decoder'):
@@ -178,10 +176,13 @@ class CVAE1D(KAE, KGen):
         z_c = concatenate([z, input_c])
         decoded_x = decoder(z_c)
 
-        self._models[self.model_id('ae')] = Model([input_x, input_c], decoded_x)
+        self._models[self.model_id('ae')] = Model(
+            [input_x, input_c], decoded_x)
         self._models[self.model_id('enc')] = Model([input_x, input_c], z)
         input_z = Input(shape=(z_dim,))
-        input_z_c = concatenate(input_z, input_c)
+        input_z_c = concatenate([input_z, input_c])
         decoded_z = decoder(input_z_c)
-        self._models[self.model_id('dec')] = Model([input_z, input_c], decoded_z)
-        self._models[self.model_id('gen')] = Model([input_z, input_c], decoded_z)
+        self._models[self.model_id('dec')] = Model(
+            [input_z, input_c], decoded_z)
+        self._models[self.model_id('gen')] = Model(
+            [input_z, input_c], decoded_z)
