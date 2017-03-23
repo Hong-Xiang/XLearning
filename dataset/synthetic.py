@@ -6,7 +6,7 @@ from ..utils.general import with_config
 
 
 class MoG(DataSetBase):
-
+    """ generate data from mixture of Gaussian model """
     @with_config
     def __init__(self,
                  sigma=1,
@@ -74,13 +74,13 @@ class Wave(DataSetBase):
         self._x = np.linspace(self._x_min, self._x_max, self._x_dim)
 
     def _sample_data_label_weight(self):
-        a = np.random.uniform(self._a_min, self._a_max)
-        k = np.random.uniform(self._k_min, self._k_max)
-        p = np.random.uniform(0.0, 2 * np.pi)
+        a = self.rand_unif(self._a_min, self._a_max, (self.batch_size, 1))
+        k = self.rand_unif(self._k_min, self._k_max, (self.batch_size, 1))
+        p = self.rand_unif(0.0, 2 * np.pi, (self.batch_size, 1))
         x = a * np.sin(k * self._x + p)
         data = np.array(x, dtype=x.dtype)
         label = np.array(x, dtype=x.dtype)
-        if is_bin:
+        if self._is_bin:
             x[x < 0] = -a
             x[x >= 0] = a
             label[label < 0] = -a
@@ -88,10 +88,8 @@ class Wave(DataSetBase):
         return (data, label, 1.0)
 
     def visualize(self, sample, **kwargs):
-        if self._is_batch:
-            return sample.reshape([self._batch_size * self._x_dim])
-        else:
-            return sample
+        return sample.reshape([-1])
+
     @property
     def x(self):
         return self._x

@@ -50,12 +50,6 @@ def subplot_images(images, nb_max_row=8, cmap=None, is_gray=False, size=1.0, is_
                     ax.get_yaxis().set_visible(False)
                 cid += 1
     plt.tight_layout(tight_c)
-    #DEBUG
-    print('DEBUG subplotsave')
-    print(is_save)
-    print(filename)
-    print(fig)
-    #DEBUG
     if is_save:
         fig.savefig(filename)
 

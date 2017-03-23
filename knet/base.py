@@ -86,6 +86,8 @@ class KNet(object):
                  hiddens=None,
                  is_dropout=False,
                  dropout_rate=0.5,
+                 epochs=None,
+                 steps_per_epoch=None,
                  settings=None,
                  **kwargs):
         self._settings = settings
@@ -131,11 +133,14 @@ class KNet(object):
             'dropout_rate', dropout_rate)
         self._filenames = self._update_settings('filenames', None)
 
+        self._epochs = self._update_settings('epochs', epochs)
+        self._steps_per_epoch = self._update_settings('steps_per_epoch', steps_per_epoch)
         # Special variable, printable, but don't input by settings.
         self._models_names = self._update_settings(
             'model_names', ['Model'])
         self._nb_model = self._update_settings(
             'model_names', len(self._models_names))
+        
         self._callbacks = []
         self._is_init = False
 
@@ -213,7 +218,7 @@ class KNet(object):
             self._callbacks.append(tmpbk)
 
     def save(self):
-        for md, filepath, md_name in zip(self._models, self._path_saves, self._models_names):            
+        for md, filepath, md_name in zip(self._models, self._path_saves, self._models_names):
             print("Saving model: {0:10} to {1:10}.".format(md_name, filepath))
             md.save_weights(filepath)
 
@@ -273,7 +278,7 @@ class KNet(object):
                 prog='dot', format='svg'))
         else:
             kvu.plot(model, show_shapes=show_shapes, to_file='model.png')
-    
+
     def model(self, id_or_name):
         """ Get model ref by id or model name """
         return self._models[self.model_id(id_or_name)]
@@ -301,6 +306,12 @@ class KNet(object):
     @property
     def batch_size(self):
         return self._batch_size
+
+    def fit_full(self, data_generator):
+        raise NotImplementedError('No fit_full implementation.')
+
+    def predict(self, model_id, inputs):
+        return self.model(model_id).predict(inputs, batch_size=self._batch_size)
 
 
 class KAE(KNet):
