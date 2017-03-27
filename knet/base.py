@@ -81,8 +81,8 @@ class KNet(object):
                  path_summary=('./log',),
                  summary_freq=100,
                  arch='default',
-                 activ='relu',
-                 var_init='glorot_uniform',
+                 activ='elu',
+                 var_init='glorot_gaussian',
                  hiddens=None,
                  is_dropout=False,
                  dropout_rate=0.5,
@@ -134,13 +134,14 @@ class KNet(object):
         self._filenames = self._update_settings('filenames', None)
 
         self._epochs = self._update_settings('epochs', epochs)
-        self._steps_per_epoch = self._update_settings('steps_per_epoch', steps_per_epoch)
+        self._steps_per_epoch = self._update_settings(
+            'steps_per_epoch', steps_per_epoch)
         # Special variable, printable, but don't input by settings.
         self._models_names = self._update_settings(
             'model_names', ['Model'])
         self._nb_model = self._update_settings(
             'model_names', len(self._models_names))
-        
+
         self._callbacks = []
         self._is_init = False
 
@@ -217,10 +218,28 @@ class KNet(object):
             tmpbk.append(ckp)
             self._callbacks.append(tmpbk)
 
-    def save(self):
-        for md, filepath, md_name in zip(self._models, self._path_saves, self._models_names):
-            print("Saving model: {0:10} to {1:10}.".format(md_name, filepath))
-            md.save_weights(filepath)
+    def save(self, model_id=None, file_path=None):
+        if model_id is None:
+            for md, filepath, md_name in zip(self._models, self._path_saves, self._models_names):
+
+                if file_path is None:
+                    print("Saving model: {0:10} to {1:10}.".format(
+                        md_name, filepath))
+                    md.save_weights(filepath)
+                else:
+                    print("Saving model: {0:10} to {1:10}.".format(
+                        md_name, file_path))
+                    md.save_weights(file_path)
+        else:
+            if file_path is None:
+                filename = self._path_saves[self.model_id(model_id)]
+                print("Saving model: {0:10} to {1:10}.".format(
+                    model_id, filename))
+                self.model(model_id).save_weights(filename)
+            else:
+                print("Saving model: {0:10} to {1:10}.".format(
+                    model_id, file_path))
+                self.model(model_id).save_weights(file_path)
 
     def load(self, is_force=False):
         """ load weight from file """

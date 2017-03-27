@@ -70,6 +70,7 @@ class DataSetBase(object):
         self._noise_type = self._update_settings('noise_type', noise_type)
 
         # Read data from file or by generate
+        self._is_filedata = False
         self._file_data = self._update_settings('file_data', file_data)
         self._dataset_name = self._update_settings(
             'dataset_name', dataset_name)
@@ -114,21 +115,22 @@ class DataSetBase(object):
 
     def __enter__(self):
         self._is_init = True
-        self._fin = h5py.File(self._file_data, 'r')
-        if self._is_train:
-            self._dataset = self._fin.get('train')
-        else:
-            self._dataset = self._fin.get('test')
-        if self._dataset is None:
-            self._dataset = self._fin
-        self._dataset = self._dataset[self._dataset_name]
-        self._nb_examples = self._dataset.shape[0]
-        if self._is_train:
-            self._sampler = Sampler(datas=range(
-                self._nb_examples), is_shuffle=True)
-        else:
-            self._sampler = Sampler(datas=range(
-                self._nb_examples), is_shuffle=False)
+        if self._is_filedata:
+            self._fin = h5py.File(self._file_data, 'r')
+            if self._is_train:
+                self._dataset = self._fin.get('train')
+            else:
+                self._dataset = self._fin.get('test')
+            if self._dataset is None:
+                self._dataset = self._fin
+            self._dataset = self._dataset[self._dataset_name]
+            self._nb_examples = self._dataset.shape[0]
+            if self._is_train:
+                self._sampler = Sampler(datas=range(
+                    self._nb_examples), is_shuffle=True)
+            else:
+                self._sampler = Sampler(datas=range(
+                    self._nb_examples), is_shuffle=False)
         return self
 
     def __exit__(self, etype, value, traceback):
@@ -220,23 +222,23 @@ class DataSetBase(object):
         else:
             return self._sample_single()
 
-    def gather_examples(self, dataset, nb_examples=64):
+    def gather_examples(self, nb_examples=64):
         """ gather given numbers of examples """
         nb_gathered = 0
         s = None
         is_weight = None
         while nb_gathered < nb_examples:
-            tmp = next(dataset)
+            tmp = self.__next__()
             if s is None:
                 s = tmp
                 is_weight = len(s) > 1
             else:
                 nb_gathered += tmp[0][0].shape[0]
                 for i, e in enumerate(tmp[0]):
-                    s[0][i] = numpy.concatenate(s[0][i], tmp[0][i])
+                    s[0][i] = numpy.concatenate((s[0][i], tmp[0][i]))
                 if is_weight:
                     for i, e in enumerate(tmp[1]):
-                        s[1][i] = numpy.concatenate(s[1][i], tmp[1][i])
+                        s[1][i] = numpy.concatenate((s[1][i], tmp[1][i]))
         return s
 
     @property
@@ -258,7 +260,9 @@ class DataSetImages(DataSetBase):
                  crop_offset=(0, 0),
                  is_crop_random=True,
                  is_down_sample=False,
-                 down_sample_ratio=(1, 4),
+                 nb_down_sample=3,
+                 is_down_sample_0=True,
+                 is_down_sample_1=True,
                  down_sample_method='mean',
                  settings=None,
                  **kwargs):
@@ -268,8 +272,12 @@ class DataSetImages(DataSetBase):
         self._is_uint8 = self._update_settings('is_uint8', is_uint8)
         self._is_down_sample = self._update_settings(
             'is_down_sample', is_down_sample)
-        self._down_sample_ratio = self._update_settings(
-            'down_sample_ratio', down_sample_ratio)
+        self._is_down_sample_0 = self._update_settings(
+            'is_down_sample_0', is_down_sample_0)
+        self._is_down_sample_1 = self._update_settings(
+            'is_down_sample_1', is_down_sample_1)
+        self._nb_down_sample = self._update_settings(
+            'nb_down_sample', nb_down_sample)
         self._down_sample_method = self._update_settings(
             'down_sample_method', down_sample_method)
         self._is_crop = self._update_settings('is_crop', is_crop)
@@ -280,6 +288,11 @@ class DataSetImages(DataSetBase):
         self._crop_offset = self._update_settings('crop_offset', crop_offset)
         self._is_crop_random = self._update_settings(
             'is_crop_random', is_crop_random)
+        self._down_sample_ratio = [1, 1]
+        if self._is_down_sample_0:
+            self._down_sample_ratio[0] = 2
+        if self._is_down_sample_1:
+            self._down_sample_ratio[1] = 2
 
         self._is_finite = True
 
@@ -291,6 +304,9 @@ class DataSetImages(DataSetBase):
             self._norm_c = 256.0
         else:
             self._norm_c = 1.0
+
+        if self._is_down_sample:
+            self._nb_data = self._nb_down_sample + 1
 
     def _crop(self, image):
         """ crop image into small patch """
@@ -348,11 +364,16 @@ class DataSetImages(DataSetBase):
         image = numpy.array(self._dataset[idx], dtype=DDTYPE)
         if self._is_crop:
             # read next example until image large enough
+            failed = 0
             min_shape = (self._crop_offset[0] + self._crop_target_shape[0],
                          self._crop_offset[1] + self._crop_target_shape[1])
             while image.shape[0] < min_shape[0] or image.shape[1] < min_shape[1]:
                 idx = next(self._sampler)[0]
                 image = numpy.array(self._dataset[idx], dtype=DDTYPE)
+                failed += 1
+                if failed > 100:
+                    raise ValueError('Failed to get proper sized images with crop_offset: {0}, crop_target_shape {1}, image_shape{2}.'.format(
+                        self._crop_offset, self._crop_target_shape, image.shape))
             # crop sample
             image = self._crop(image)
 
@@ -366,12 +387,15 @@ class DataSetImages(DataSetBase):
         # Down sample
         if self._is_down_sample:
             label = numpy.array(image, dtype=DDTYPE)
-            image = self._downsample(image)
+            imgs = []
+            imgs.append(numpy.array(image, dtype=DDTYPE))
+            for i in range(self._nb_down_sample):
+                imgs.append(numpy.array(
+                    self._downsample(imgs[i]), dtype=DDTYPE))
         else:
             label = image
-
-        if len(image.shape) != 3:
-            raise ValueError('Invalid data shape {0}.'.format(image.shape))
-        if len(label.shape) != 3:
-            raise ValueError('Invalid label shape {0}.'.format(image.shape))
-        return ((image,), (label,), 1.0)
+        if self._is_down_sample:
+            sample = (imgs, (label,), 1.0)
+        else:
+            sample = ((image,), (label,), 1.0)
+        return sample

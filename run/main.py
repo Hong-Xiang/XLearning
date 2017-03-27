@@ -10,6 +10,7 @@ import matplotlib
 matplotlib.use('agg')
 import matplotlib.pyplot as plt
 import fire
+from tqdm import tqdm
 
 from keras.callbacks import ModelCheckpoint
 
@@ -20,8 +21,12 @@ from xlearn.dataset.celeba import Celeba
 
 from xlearn.nets.super_resolution import SRNetInterp, SRSimple, SRF3D, SRClassic
 from xlearn.knet.ae1d import AE1D, VAE1D, CVAE1D, CAAE1D
+from xlearn.knet.sr import SRInterp, SRDv0
 from xlearn.utils.general import with_config, empty_list, enter_debug
 from xlearn.utils.image import subplot_images
+
+
+D_NETS = ['SRInterp', 'SRDv0', 'AE1D']
 
 
 class DLRun:
@@ -56,8 +61,6 @@ class DLRun:
                 'Unknown dataset_name {0:s}.'.format(dataset_name))
         return dataset
 
-    
-
     def define_net(self, net_name, config_files=None):
         if self._is_debug:
             enter_debug()
@@ -70,10 +73,10 @@ class DLRun:
             net = CVAE1D(filenames=config_files)
         elif net_name == 'CAAE1D':
             net = CAAE1D(filenames=config_files)
-        elif net_name == 'sr_interp':
-            net = SRNetInterp(filenames=config_files)
-        elif net_name == 'sr_simple':
-            net = SRSimple(filenames=config_files)
+        elif net_name == 'SRInterp':
+            net = SRInterp(filenames=config_files)
+        elif net_name == 'SRDv0':
+            net = SRDv0(filenames=config_files)
         elif net_name == 'sr_classic':
             net = SRClassic(filenames=config_files)
         if net is None:
@@ -81,6 +84,72 @@ class DLRun:
         print(net.pretty_settings())
         net.define_net()
         return net
+
+    @with_config
+    def train_sr(self,
+                 net_name=None,
+                 dataset_name=None,
+                 is_force_load=False,
+                 config_files=None,
+                 is_debug=False,
+                 is_reset_lr=False,
+                 lrs=None,
+                 settings=None,
+                 filenames=None,
+                 is_p2=False,
+                 **kwargs):
+        net_name = settings.get('net_name', net_name)
+        dataset_name = settings.get('dataset_name', dataset_name)
+        is_debug = settings.get('is_debug', is_debug)
+        config_files = settings.get('config_files', config_files)
+        is_reset_lr = settings.get('is_reset_lr', is_reset_lr)
+        is_force_load = settings.get('is_force_load', is_force_load)
+        is_p2 = settings.get('is_p2', is_p2)
+        lrs = settings.get('lrs', lrs)
+        print("=" * 30)
+        print("Train with setttings")
+        print(settings)
+        print("=" * 30)
+        if is_debug:
+            enter_debug()
+        net = self.define_net(net_name, config_files=config_files)
+        with self.get_dataset(dataset_name)(filenames=config_files) as dataset:
+            if is_force_load:
+                net.load(is_force=True)
+            if is_reset_lr:
+                net.reset_lr(lrs)
+            if net_name in D_NETS:
+                for i_epoch in range(128):
+                    loss = np.zeros(128)
+                    for i_batch in tqdm(range(128), ascii=True):
+                        s = next(dataset)
+                        loss[i_batch] = net.model('sr').train_on_batch(s[0][1], s[1][0])
+                    print(np.mean(loss))
+                    net.save('sr', 'save-%d.h5'%(i_epoch,))
+                # net.reset_lr([1e-4])
+                # net.model_ae.fit_generator(
+                #     dataset, steps_per_epoch=1875, epochs=40, verbose=1,
+                #     callbacks=[ModelCheckpoint(
+                #         filepath=r"weightsP1.{epoch:02d}-{loss:.5f}.hdf5", period=1)]
+                # )
+                # net.save()
+                # net.reset_lr([1e-5])
+                # net.model_ae.fit_generator(
+                #     dataset, steps_per_epoch=1875, epochs=40, verbose=1,
+                #     callbacks=[ModelCheckpoint(
+                #         filepath=r"weightsP2.{epoch:02d}-{loss:.5f}.hdf5", period=1)]
+                # )
+                # net.save()
+            if net_name == 'CAAE1D':
+                if is_p2:
+                    print('Train CAAE1D in P2')
+                    net.load()
+                    net.fit_p2(dataset, phase=0)
+                    net.save()
+                else:
+                    print('Train CAAE1D in P1')
+                    net.fit_ae(dataset, phase=0)
+                    net.save()
 
     @with_config
     def train(self,
@@ -110,42 +179,42 @@ class DLRun:
         if is_debug:
             enter_debug()
         net = self.define_net(net_name, config_files=config_files)
-        dataset = self.define_dataset(dataset_name, config_files=config_files)
-        if is_force_load:
-            net.load(is_force=True)
-        if is_reset_lr:
-            net.reset_lr(lrs)
-        if net_name == 'AE1D' or net_name == 'VAE1D' or net_name == 'CVAE1D':
-            net.model_ae.fit_generator(
-                dataset, steps_per_epoch=1875, epochs=40, verbose=1,
-                callbacks=[ModelCheckpoint(
-                    filepath=r"weightsP0.{epoch:02d}-{loss:.5f}.hdf5", period=1)]
-            )
-            net.save()
-            net.reset_lr([1e-4])
-            net.model_ae.fit_generator(
-                dataset, steps_per_epoch=1875, epochs=40, verbose=1,
-                callbacks=[ModelCheckpoint(
-                    filepath=r"weightsP1.{epoch:02d}-{loss:.5f}.hdf5", period=1)]
-            )
-            net.save()
-            net.reset_lr([1e-5])
-            net.model_ae.fit_generator(
-                dataset, steps_per_epoch=1875, epochs=40, verbose=1,
-                callbacks=[ModelCheckpoint(
-                    filepath=r"weightsP2.{epoch:02d}-{loss:.5f}.hdf5", period=1)]
-            )
-            net.save()
-        if net_name == 'CAAE1D':
-            if is_p2:
-                print('Train CAAE1D in P2')
-                net.load()
-                net.fit_p2(dataset, phase=0)
+        with self.get_dataset(dataset_name)(filenames=config_files) as dataset:
+            if is_force_load:
+                net.load(is_force=True)
+            if is_reset_lr:
+                net.reset_lr(lrs)
+            if net_name in D_NETS:
+                net.model(0).fit_generator(
+                    dataset, steps_per_epoch=128, epochs=10, verbose=1,
+                    callbacks=[ModelCheckpoint(
+                        filepath=r"weightsP0.{epoch:02d}-{loss:.5f}.hdf5", period=1)]
+                )
                 net.save()
-            else:
-                print('Train CAAE1D in P1')
-                net.fit_ae(dataset, phase=0)
-                net.save()
+                # net.reset_lr([1e-4])
+                # net.model_ae.fit_generator(
+                #     dataset, steps_per_epoch=1875, epochs=40, verbose=1,
+                #     callbacks=[ModelCheckpoint(
+                #         filepath=r"weightsP1.{epoch:02d}-{loss:.5f}.hdf5", period=1)]
+                # )
+                # net.save()
+                # net.reset_lr([1e-5])
+                # net.model_ae.fit_generator(
+                #     dataset, steps_per_epoch=1875, epochs=40, verbose=1,
+                #     callbacks=[ModelCheckpoint(
+                #         filepath=r"weightsP2.{epoch:02d}-{loss:.5f}.hdf5", period=1)]
+                # )
+                # net.save()
+            if net_name == 'CAAE1D':
+                if is_p2:
+                    print('Train CAAE1D in P2')
+                    net.load()
+                    net.fit_p2(dataset, phase=0)
+                    net.save()
+                else:
+                    print('Train CAAE1D in P1')
+                    net.fit_ae(dataset, phase=0)
+                    net.save()
 
     @with_config
     def show_mainfold(self,

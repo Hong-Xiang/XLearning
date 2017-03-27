@@ -1,63 +1,152 @@
+import tensorflow as tf
 from keras.models import Model, Sequential
-from keras.layers import Dense, Activation, Dropout, Input, merge, ELU, LeakyReLU, Convolution2D, UpSampling2D, BatchNormalization, Cropping2D
-from keras.preprocessing.image import ImageDataGenerator
-from keras.engine.topology import Merge
+from keras.layers import Dense, Activation, Dropout, Input, ELU, LeakyReLU, Conv2D, UpSampling2D, BatchNormalization, Cropping2D, add, Lambda
 from xlearn.knet.base import KNet
 import xlearn.kmodel.image as kmi
 import xlearn.utils.xpipes as utp
 
 from keras import backend as K
 from keras.engine.topology import Layer
-from xlearn.kmodel.image import convolution_block, convolution_blocks
 
-from xlearn.reader.srinput import DataSetSuperResolution
+
+from ..utils.general import with_config, enter_debug
+from ..utils.tensor import upsample_shape, downsample_shape
+from ..keras_ext.models import sub
 
 
 def model_srcnn(input_, upratio, cropy, cropx):
-    """ based on arxiv 1501.00092 """
-    x = UpSampling2D(size=upratio)(input_)
-    x = convolution_block(x, 64, 9, 9, id=0)
-    x = convolution_block(x, 32, 1, 1, id=1)
-    x = Convolution2D(1, 5, 5, border_mode='same')(x)
+
     return x
 
 
+IMAGE_SUMMARY_MAX_OUTPUT = 5
+MAX_DOWNSAMPLE = 3
+
+
 class KNetSR(KNet):
+    @with_config
+    def __init__(self,
+                 is_down_sample_0=True,
+                 is_down_sample_1=True,
+                 nb_down_sample=MAX_DOWNSAMPLE,
+                 is_deconv=False,
+                 settings=None,
+                 **kwargs):
+        super(KNetSR, self).__init__(**kwargs)
+        self._settings = settings
+        self._is_down_sample_0 = self._update_settings(
+            'is_down_sample_0', is_down_sample_0)
+        self._is_down_sample_1 = self._update_settings(
+            'is_down_sample_1', is_down_sample_1)
+        self._nb_down_sample = self._update_settings(
+            'nb_down_sample', nb_down_sample)
 
-    def __init__(self, filenames=None, **kwargs):
-        super(KNetSR, self).__init__(filenames=filenames, **kwargs)
-        self._init = None
+        self._is_deconv = self._update_settings('is_deconv', is_deconv)
 
-        self.shape_i = self._settings['shape_i']
-        self.shape_o = self._settings['shape_o']
-        self.downsample_ratio = self._settings['down_sample_ratio']
-        self.n_residual = self._settings['n_resi_block']
-        self.n_resi_c = self._settings['n_resi_channel']
-        self.n_resi_l = self._settings['n_resi_layer']
-        self.n_hidden = self._settings['n_hidden']
-        self.n_layer = self._settings['n_layer']
+        # # Check settings
+        # shape_o_cal = (upsample_shape(
+        #     self._inputs_shapes[0][:2], self._down_sample_ratio))
+        # shape_o_cal = tuple(shape_o_cal)
+        # shape_o_ip = tuple(self._outputs_shapes[0][:2])
+        # if shape_o_cal != shape_o_ip:
+        #     raise ValueError('Inconsistant shape_i: {0}, shape_o: {1}, and ratio: {2}.'.format(
+        #         self._inputs_shapes[0], shape_o_ip, self._down_sample_ratio))
 
-    def _define_model(self):
-        ip_lr = Input(
-            shape=(self.shape_i[0], self.shape_i[1], 1), name='img_lr')
-        x = model_srcnn(ip_lr, self.downsample_ratio[:2], 0, 0)
-        self._model = Model(input=ip_lr, output=x)
+        self._residuals = dict()
+        self._res_inf = None
+        self._res_ref = None
+        self._models_names = ['sr', 'res_itp', 'res_out']
+        self._is_trainable = [True, False, False]
+
+        self._down_sample_ratio = [1, 1]
+        if self._is_down_sample_0:
+            self._down_sample_ratio[0] = 2
+        if self._is_down_sample_1:
+            self._down_sample_ratio[1] = 2
+        self._down_sample_ratio = tuple(self._down_sample_ratio)
+        self._update_settings('down_sample_ratio', self._down_sample_ratio)
+        self._shapes = []
+        self._shapes.append(self._inputs_shapes[0])
+        self._down_sample_ratios = []
+        self._down_sample_ratios.append([1, 1])
+
+        for i in range(self._nb_down_sample):
+            self._shapes.append(downsample_shape(self._shapes[i],
+                                                 list(self._down_sample_ratio) + [1]))
+            self._down_sample_ratios.append(upsample_shape(self._down_sample_ratios[i],
+                                                           self._down_sample_ratio))
+        self._update_settings('shapes', self._shapes)
+        self._update_settings('down_sample_ratios', self._down_sample_ratios)
+
+    def _define_models(self):
+        self._ips = []
+        for i in range(self._nb_down_sample + 1):
+            with tf.name_scope('input_%dx' % (2**i)) as scope:
+                self._ips.append(Input(self._shapes[i]))
+        self._ipn = self._ips[self._nb_down_sample]
+
+        self._ups = []
+        for i in range(self._nb_down_sample):
+            with tf.name_scope('upsample_%dx' % (2**(i + 1))):
+                self._ups.append(UpSampling2D(
+                    size=self._down_sample_ratio)(self._ips[i + 1]))
+        # residual references
+        self._rrs = []
+        for i in range(self._nb_down_sample):
+            with tf.name_scope('residual_reference_%dx' % (2**(i + 1))):
+                self._rrs.append(self._ips[i] - self._ups[i])
+
+        with tf.name_scope('interpolation'):
+            upl = UpSampling2D(
+                size=self._down_sample_ratios[self._nb_down_sample])
+            self._upfull = upl(self._ipn)
+
+        with tf.name_scope('res_itp'):
+            res_itp = sub(self._ips[0], self._upfull)
+        self._models[self.model_id('res_itp')] = Model(self._ips, res_itp)
+
+    @property
+    def nb_down_sample(self):
+        return self._nb_down_sample
 
 
-if __name__ == "__main__":
-    data_train = DataSetSuperResolution(
-        filenames=['./super_resolution.json', './sino_train.json'])
-    data_test = DataSetSuperResolution(
-        filenames=['./super_resolution.json', './sino_test.json'])
+class SRInterp(KNetSR):
+    @with_config
+    def __init__(self, **kwargs):
+        super(SRInterp, self).__init__(**kwargs)
 
-    net = KNetSR(filenames=['./sino_train.json',
-                            './super_resolution.json', './netsr.json'])
-    net.define_net()
-    net.model.fit_generator(data_train, samples_per_epoch=1024,
-                            nb_epoch=100, callbacks=net.callbacks, validation_data=data_test, nb_val_samples=1024)
-    x, y = data_test.next_batch()
-    p = net.model.predict(x)
-    np.save('x.npy', x)
-    np.save('y.npy', y)
-    np.save('p.npy', p)
-    plot(net.model, to_file="model.png")
+    def _define_models(self):
+        super(SRInterp, self)._define_models()
+        with tf.name_scope('inference'):
+            upl = UpSampling2D(
+                size=self._down_sample_ratios[self._nb_down_sample])
+            self._output = upl(self._ipn)
+        with tf.name_scope('res_out'):
+            res_out = sub(self._ips[0], self._output)
+        self._is_trainable = [False, False, False]
+        self._models[self.model_id('sr')] = Model(self._ips, self._output)
+        self._models[self.model_id('res_out')] = Model(self._ips, res_out)
+
+
+class SRDv0(KNetSR):
+    """ based on arxiv 1501.00092 """
+    @with_config
+    def __init__(self, **kwargs):
+        KNetSR.__init__(self, **kwargs)
+
+    def _define_models(self):
+        KNetSR._define_models(self)
+        with tf.name_scope('upsampling'):
+            ups = UpSampling2D(
+                size=self._down_sample_ratios[self._nb_down_sample])(self._ipn)
+        with tf.name_scope('conv_0'):
+            x = Conv2D(64, 9, activation='elu', padding='same')(ups)
+        with tf.name_scope('conv_1'):
+            x = Conv2D(32, 1, activation='elu', padding='same')(x)
+        with tf.name_scope('output'):
+            res_inf = Conv2D(1, 5, padding='same')(x)
+            img_inf = add([res_inf, ups])
+        with tf.name_scope('res_out'):
+            res_out = sub(self._ips[0], img_inf)
+        self._models[self.model_id('sr')] = Model(self._ipn, img_inf)
+        self._models[self.model_id('res_out')] = Model([self._ips[0], self._ipn], res_out)
