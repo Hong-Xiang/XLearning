@@ -1,22 +1,18 @@
 import tensorflow as tf
 from keras.models import Model, Sequential
 from keras.layers import Dense, Activation, Dropout, Input, ELU, LeakyReLU, Conv2D, UpSampling2D, BatchNormalization, Cropping2D, add, Lambda
-from xlearn.knet.base import KNet
-import xlearn.kmodel.image as kmi
-import xlearn.utils.xpipes as utp
 
 from keras import backend as K
 from keras.engine.topology import Layer
 
 
+from xlearn.knet.base import KNet
+
+import xlearn.utils.xpipes as utp
 from ..utils.general import with_config, enter_debug
 from ..utils.tensor import upsample_shape, downsample_shape
 from ..keras_ext.models import sub
-
-
-def model_srcnn(input_, upratio, cropy, cropx):
-
-    return x
+from ..kmodel.image import conv_blocks
 
 
 IMAGE_SUMMARY_MAX_OUTPUT = 5
@@ -149,4 +145,109 @@ class SRDv0(KNetSR):
         with tf.name_scope('res_out'):
             res_out = sub(self._ips[0], img_inf)
         self._models[self.model_id('sr')] = Model(self._ipn, img_inf)
-        self._models[self.model_id('res_out')] = Model([self._ips[0], self._ipn], res_out)
+        self._models[self.model_id('res_out')] = Model(
+            [self._ips[0], self._ipn], res_out)
+
+
+class SRDv1(KNetSR):
+    """ based on arxiv Accurate Image Super-Resolution Using Very Deep Convolutional Networks """
+    @with_config
+    def __init__(self, **kwargs):
+        KNetSR.__init__(self, **kwargs)
+
+    def _define_models(self):
+        KNetSR._define_models(self)
+        with tf.name_scope('upsampling'):
+            ups = UpSampling2D(
+                size=self._down_sample_ratios[self._nb_down_sample])(self._ipn)
+        x = ups
+        for i in range(20):
+            with tf.name_scope('conv_%d' % i):
+                x = Conv2D(64, 3, activation='elu', padding='same')(x)
+        with tf.name_scope('output'):
+            res_inf = Conv2D(1, 3, padding='same')(x)
+            img_inf = add([res_inf, ups])
+        with tf.name_scope('res_out'):
+            res_out = sub(self._ips[0], img_inf)
+        self._models[self.model_id('sr')] = Model(self._ipn, img_inf)
+        self._models[self.model_id('res_out')] = Model(
+            [self._ips[0], self._ipn], res_out)
+
+
+class SRDv1b(KNetSR):
+    """ based on arxiv Accurate Image Super-Resolution Using Very Deep Convolutional Networks, with batch norm. """
+    @with_config
+    def __init__(self, **kwargs):
+        KNetSR.__init__(self, **kwargs)
+
+    def _define_models(self):
+        KNetSR._define_models(self)
+        with tf.name_scope('upsampling'):
+            ups = UpSampling2D(
+                size=self._down_sample_ratios[self._nb_down_sample])(self._ipn)
+        x = ups
+        for i in range(20):
+            with tf.name_scope('conv_%d' % i):
+                x = Conv2D(64, 3, activation='elu', padding='same')(x)
+                x = BatchNormalization()(x)
+        with tf.name_scope('output'):
+            res_inf = Conv2D(1, 3, padding='same')(x)
+            img_inf = add([res_inf, ups])
+        with tf.name_scope('res_out'):
+            res_out = sub(self._ips[0], img_inf)
+        self._models[self.model_id('sr')] = Model(self._ipn, img_inf)
+        self._models[self.model_id('res_out')] = Model(
+            [self._ips[0], self._ipn], res_out)
+
+
+class SRDMultiScale(KNetSR):
+    @with_config
+    def __init__(self,
+                 nb_kernels=[64]*20,
+                 **kwargs):
+        KNetSR.__init__(self, **kwargs)
+
+    def _define_models(self):
+        KNetSR._define_models(self)
+        with tf.name_scope('up_1'):
+            x = UpSampling2D(size=self._down_sample_ratio)(self._ipn)
+
+        x = ups
+        for i in range(20):
+            with tf.name_scope('conv_%d' % i):
+                x = Conv2D(64, 3, activation='elu', padding='same')(x)
+                x = BatchNormalization()(x)
+        with tf.name_scope('output'):
+            res_inf = Conv2D(1, 3, padding='same')(x)
+            img_inf = add([res_inf, ups])
+        with tf.name_scope('res_out'):
+            res_out = sub(self._ips[0], img_inf)
+        self._models[self.model_id('sr')] = Model(self._ipn, img_inf)
+        self._models[self.model_id('res_out')] = Model(
+            [self._ips[0], self._ipn], res_out)
+
+# class SRSCAAE(KNetSR):
+#     """ Super resolution based on conditional adverserial autoencoders. """
+#     @with_config
+#     def __init__(self,
+#                  **kwargs):
+#         KNetSR.__init__(self, **kwargs)
+
+#     def _define_models(self):
+#         KNetSR._define_models(self)
+#         with tf.name_scope('upsampling'):
+#             ups = UpSampling2D(
+#                 size=self._down_sample_ratios[self._nb_down_sample])(self._ipn)
+#         x = ups
+#         for i in range(20):
+#             with tf.name_scope('conv_%d' % i):
+#                 x = Conv2D(64, 3, activation='elu', padding='same')(x)
+#                 x = BatchNormalization()(x)
+#         with tf.name_scope('output'):
+#             res_inf = Conv2D(1, 3, padding='same')(x)
+#             img_inf = add([res_inf, ups])
+#         with tf.name_scope('res_out'):
+#             res_out = sub(self._ips[0], img_inf)
+#         self._models[self.model_id('sr')] = Model(self._ipn, img_inf)
+#         self._models[self.model_id('res_out')] = Model(
+#             [self._ips[0], self._ipn], res_out)

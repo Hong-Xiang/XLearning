@@ -11,7 +11,7 @@ matplotlib.use('agg')
 import matplotlib.pyplot as plt
 import fire
 from tqdm import tqdm
-
+from scipy.misc import imresize
 from keras.callbacks import ModelCheckpoint
 
 from xlearn.dataset.mnist import MNIST, MNISTImage, MNIST2
@@ -21,12 +21,12 @@ from xlearn.dataset.celeba import Celeba
 
 from xlearn.nets.super_resolution import SRNetInterp, SRSimple, SRF3D, SRClassic
 from xlearn.knet.ae1d import AE1D, VAE1D, CVAE1D, CAAE1D
-from xlearn.knet.sr import SRInterp, SRDv0
+from xlearn.knet.sr import SRInterp, SRDv0, SRDv1, SRDv1b
 from xlearn.utils.general import with_config, empty_list, enter_debug
 from xlearn.utils.image import subplot_images
 
 
-D_NETS = ['SRInterp', 'SRDv0', 'AE1D']
+D_NETS = ['SRInterp', 'SRDv0', 'SRDv1', 'SRDv1b', 'AE1D']
 
 
 class DLRun:
@@ -77,6 +77,10 @@ class DLRun:
             net = SRInterp(filenames=config_files)
         elif net_name == 'SRDv0':
             net = SRDv0(filenames=config_files)
+        elif net_name == 'SRDv1':
+            net = SRDv1(filenames=config_files)
+        elif net_name == 'SRDv1b':
+            net = SRDv1b(filenames=config_files)
         elif net_name == 'sr_classic':
             net = SRClassic(filenames=config_files)
         if net is None:
@@ -96,6 +100,8 @@ class DLRun:
                  lrs=None,
                  settings=None,
                  filenames=None,
+                 nb_epoch=128,
+                 nb_sample_epoch=128,
                  is_p2=False,
                  **kwargs):
         net_name = settings.get('net_name', net_name)
@@ -105,6 +111,8 @@ class DLRun:
         is_reset_lr = settings.get('is_reset_lr', is_reset_lr)
         is_force_load = settings.get('is_force_load', is_force_load)
         is_p2 = settings.get('is_p2', is_p2)
+        nb_epoch = settings.get('nb_epoch', nb_epoch)
+        nb_sample_epoch = settings.get('nb_sample_epoch', nb_sample_epoch)
         lrs = settings.get('lrs', lrs)
         print("=" * 30)
         print("Train with setttings")
@@ -119,37 +127,14 @@ class DLRun:
             if is_reset_lr:
                 net.reset_lr(lrs)
             if net_name in D_NETS:
-                for i_epoch in range(128):
-                    loss = np.zeros(128)
-                    for i_batch in tqdm(range(128), ascii=True):
+                for i_epoch in range(nb_epoch):
+                    loss = np.zeros(nb_sample_epoch)
+                    for i_batch in tqdm(range(nb_sample_epoch), ascii=True):
                         s = next(dataset)
-                        loss[i_batch] = net.model('sr').train_on_batch(s[0][1], s[1][0])
+                        loss[i_batch] = net.model(
+                            'sr').train_on_batch(s[0][net._nb_down_sample], s[1][0])
                     print(np.mean(loss))
-                    net.save('sr', 'save-%d.h5'%(i_epoch,))
-                # net.reset_lr([1e-4])
-                # net.model_ae.fit_generator(
-                #     dataset, steps_per_epoch=1875, epochs=40, verbose=1,
-                #     callbacks=[ModelCheckpoint(
-                #         filepath=r"weightsP1.{epoch:02d}-{loss:.5f}.hdf5", period=1)]
-                # )
-                # net.save()
-                # net.reset_lr([1e-5])
-                # net.model_ae.fit_generator(
-                #     dataset, steps_per_epoch=1875, epochs=40, verbose=1,
-                #     callbacks=[ModelCheckpoint(
-                #         filepath=r"weightsP2.{epoch:02d}-{loss:.5f}.hdf5", period=1)]
-                # )
-                # net.save()
-            if net_name == 'CAAE1D':
-                if is_p2:
-                    print('Train CAAE1D in P2')
-                    net.load()
-                    net.fit_p2(dataset, phase=0)
-                    net.save()
-                else:
-                    print('Train CAAE1D in P1')
-                    net.fit_ae(dataset, phase=0)
-                    net.save()
+                    net.save('sr', 'save-%d.h5' % (i_epoch,))
 
     @with_config
     def train(self,
@@ -296,6 +281,57 @@ class DLRun:
             np.save('generate_output.npy', p)
 
     @with_config
+    def predict_sr(self,
+                   net_name=None,
+                   dataset_name=None,
+                   is_debug=False,
+                   config_files=None,
+                   path_save='./predict',
+                   is_visualize=False,
+                   is_save=False,
+                   save_filename='predict.png',
+                   settings=None,
+                   filenames=None,
+                   **kwargs):
+        print("Predict routine is called.")
+        net_name = settings.get('net_name', net_name)
+        dataset_name = settings.get('dataset_name', dataset_name)
+        is_debug = settings.get('is_debug', is_debug)
+        config_files = settings.get('config_files', config_files)
+        path_save = settings.get('path_save', path_save)
+        is_visualize = settings.get('is_visualize', is_visualize)
+        is_save = settings.get('is_save', is_save)
+        save_filename = settings.get('save_filename', save_filename)
+        if is_debug:
+            enter_debug()
+        net = self.define_net(net_name, config_files=config_files)
+        net_interp = SRInterp(filenames=config_files)
+        net_interp.define_net()
+        with self.get_dataset(dataset_name)(filenames=config_files) as dataset:
+            net.load(is_force=True)
+            s = next(dataset)
+            p = net.model('sr').predict(
+                s[0][net._nb_down_sample], batch_size=net.batch_size)
+            p_it = net_interp.model('sr').predict(
+                s[0], batch_size=net.batch_size)
+            hr = dataset.visualize(s[1][0], is_no_change=True)
+            lr = dataset.visualize(s[0][1], is_no_change=True)
+            sr = dataset.visualize(p, is_no_change=True)
+            it = dataset.visualize(p_it, is_no_change=True)
+            res_sr = p - s[1][0]
+            res_it = p_it - s[1][0]
+            res_sr_l = dataset.visualize(res_sr, is_no_change=True)
+            res_it_l = dataset.visualize(res_it, is_no_change=True)
+            window = [(-0.5, 0.5), (-0.5, 0.5), (-0.5, 0.5),
+                      (-0.5, 0.5), (-0.5, 0.5), (-0.5, 0.5)]
+            subplot_images((hr, lr, sr, it, res_sr_l, res_it_l), is_gray=True, size=3.0, tight_c=0.5,
+                           is_save=True, filename=save_filename, window=window)
+
+            np.save('predict_hr.npy', s[1][0])
+            np.save('predict_lr.npy', s[0][1])
+            np.save('predict_sr.npy', p)
+
+    @with_config
     def predict(self,
                 net_name=None,
                 dataset_name=None,
@@ -307,7 +343,6 @@ class DLRun:
                 save_filename='predict.png',
                 settings=None,
                 filenames=None,
-
                 **kwargs):
         print("Predict routine is called.")
         net_name = settings.get('net_name', net_name)
@@ -348,7 +383,16 @@ class DLRun:
             np.save('predict_output.npy', p)
 
     @with_config
-    def test_dataset(self, dataset_name, config_files=None, nb_images=64, data_type='data', img_filename='result.png', is_save=False,  filenames=None, settings=None, **kwargs):
+    def test_dataset(self,
+                     dataset_name,
+                     config_files=None,
+                     nb_images=64,
+                     data_type='data',
+                     img_filename='result.png',
+                     is_save=False,
+                     filenames=None,
+                     settings=None,
+                     **kwargs):
         if self._is_debug:
             enter_debug()
         config_files = settings.get('config_files', config_files)

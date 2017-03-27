@@ -1,0 +1,10 @@
+{
+    "net_name": "SRDv1",
+    "dataset_name": "celeba",
+    "config_files": [
+        "./srdv1.json", 
+        "./celeba.json"
+    ],
+    "nb_epoch": 32,
+    "nb_sample_epoch": 128
+}

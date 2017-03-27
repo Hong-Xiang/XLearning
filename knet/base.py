@@ -12,6 +12,7 @@ import numpy as np
 import json
 import matplotlib.pyplot as plt
 from IPython import display
+import tensorflow as tf
 
 from keras.optimizers import Adam, RMSprop
 from keras.callbacks import TensorBoard, ReduceLROnPlateau, ModelCheckpoint

@@ -1,4 +1,4 @@
 {
-    "inputs_shapes": [[216, 176, 1]],
+    "inputs_shapes": [[64, 64, 1]],
     "nb_down_sample": 1
 }

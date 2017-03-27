@@ -232,7 +232,8 @@ class MNIST2(DataSetImages):
         DataSetBase.__init__(self, **kwargs)
         self._settings = settings
         self._is_flatten = self._update_settings('is_flatten', is_flatten)
-        self._is_only_label = self._update_settings('is_only_label', is_only_label)
+        self._is_only_label = self._update_settings(
+            'is_only_label', is_only_label)
         self._fin = h5py.File(os.path.join(PATH_DATASETS, 'mnist2.h5'), 'r')
         if self._is_train:
             self._dataset = self._fin['train']
@@ -247,12 +248,12 @@ class MNIST2(DataSetImages):
             self._nb_data = 1
         else:
             self._nb_data = 2
-    
+
     def visualize(self, image, data_type='data'):
         image = np.float32(image)
         if self._is_flatten:
             if data_type == 'data':
-                output = image.reshape([-1, 28*2, 28*2])
+                output = image.reshape([-1, 28 * 2, 28 * 2])
             else:
                 output = image.reshape([-1, 28, 28])
         else:
@@ -260,7 +261,6 @@ class MNIST2(DataSetImages):
         if self._is_batch:
             output = list(output)
         return output
-
 
     def _sample_data_label_weight(self):
         id_ = next(self._sampler)

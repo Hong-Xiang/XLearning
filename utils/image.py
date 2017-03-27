@@ -21,7 +21,7 @@ import xlearn.utils.general as utg
 import xlearn.utils.tensor as utt
 
 
-def subplot_images(images, nb_max_row=8, cmap=None, is_gray=False, size=1.0, is_axis=False, tight_c=1.08, is_save=False, filename='images.png'):
+def subplot_images(images, nb_max_row=8, cmap=None, is_gray=False, size=1.0, is_axis=False, tight_c=1.08, is_save=False, filename='images.png', window=None):
     """ subplot list of images of multiple categories into grid subplots
     Args:
         images: tuple of list of images
@@ -35,14 +35,17 @@ def subplot_images(images, nb_max_row=8, cmap=None, is_gray=False, size=1.0, is_
     nb_row = nb_images // nb_max_row
     nb_row = max(nb_row, 1)
     cid = 1
-    fig = plt.figure(figsize=(nb_max_row*size, nb_row*nb_cata*size))
+    fig = plt.figure(figsize=(nb_max_row * size, nb_row * nb_cata * size))
+    if window is None:
+        window = [(None, None)] * nb_cata
     for i in range(nb_row):
         for k in range(nb_cata):
             for j in range(nb_max_row):
                 id_img = i * nb_max_row + j
                 id_img = min(id_img, nb_images - 1)
                 ax = plt.subplot(nb_row * nb_cata, nb_max_row, cid)
-                plt.imshow(images[k][id_img], cmap=cmap)
+                plt.imshow(images[k][id_img], cmap=cmap,
+                           vmin=window[k][0], vmax=window[k][1])
                 if is_gray:
                     plt.gray()
                 if not is_axis:

@@ -193,10 +193,10 @@ class DataSetBase(object):
         samples = []
         x = empty_list(self._nb_data)
         for j in range(self._nb_data):
-            x[j] = []
+            tmp = []
             for i in range(self._batch_size):
-                x[j].append(all_example[i][0][j])
-            x[j] = numpy.array(x[j], dtype=DDTYPE)
+                tmp.append(all_example[i][0][j])
+            x[j] = numpy.array(tmp, dtype=DDTYPE)
         samples.append(x)
         if self._is_label:
             y = empty_list(self._nb_label)
@@ -308,23 +308,29 @@ class DataSetImages(DataSetBase):
         if self._is_down_sample:
             self._nb_data = self._nb_down_sample + 1
 
-    def _crop(self, image):
+    def _crop(self, image_ip):
         """ crop image into small patch """
-        image = numpy.array(image, dtype=image.dtype)
+        image = numpy.array(image_ip, dtype=image_ip.dtype)
         target_shape = self._crop_target_shape
         offsets = list(self._crop_offset)
         is_crop_random = self._is_crop_random
         if is_crop_random:
             offsets[0] += self.randint(minv=0,
-                                       maxv=image.shape[0] - target_shape[0])
+                                       maxv=image.shape[0] - target_shape[0] - 1)
             offsets[1] += self.randint(minv=0,
-                                       maxv=image.shape[1] - target_shape[1])
+                                       maxv=image.shape[1] - target_shape[1] - 1)
         if len(image.shape) == 3:
             image = image[offsets[0]:offsets[0] +
                           target_shape[0], offsets[1]:offsets[1] + target_shape[1], :]
         else:
             image = image[offsets[0]:offsets[0] +
                           target_shape[0], offsets[1]:offsets[1] + target_shape[1]]
+        if image.shape[0] != self._crop_target_shape[0]:
+            raise ValueError('Wrong shape, image.shape {0}, targe_shape {1}'.format(
+                image.shape, self._crop_target_shape))
+        if image.shape[1] != self._crop_target_shape[1]:
+            raise ValueError('Wrong shape, image.shape {0}, targe_shape {1}'.format(
+                image.shape, self._crop_target_shape))
         return image
 
     def _downsample(self, image):
@@ -334,7 +340,7 @@ class DataSetImages(DataSetBase):
             self._down_sample_ratio) + [1], method=self._down_sample_method)
         return image_d
 
-    def visualize(self, sample):
+    def visualize(self, sample, is_no_change=False):
         """ convert numpy.ndarray data into list of plotable images """
         # Decouple visualization of data
 
@@ -347,11 +353,11 @@ class DataSetImages(DataSetBase):
             images = images
 
         # Inverse normalization
-        if self._is_norm:
+        if self._is_norm and not is_no_change:
             images += 0.5
             images *= self._norm_c
 
-        if self._is_uint8:
+        if self._is_uint8 and not is_no_change:
             images = numpy.array(images, dtype=numpy.uint8)
         # Divide batched numpy.ndarray into list of images
         if self._is_batch:
