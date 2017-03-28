@@ -21,8 +21,8 @@ from xlearn.dataset.celeba import Celeba
 
 from xlearn.nets.super_resolution import SRNetInterp, SRSimple, SRF3D, SRClassic
 from xlearn.knet.ae1d import AE1D, VAE1D, CVAE1D, CAAE1D
-from xlearn.knet.sr import SRInterp, SRDv0, SRDv1, SRDv1b
-from xlearn.utils.general import with_config, empty_list, enter_debug
+from xlearn.knet.sr import SRInterp, SRDv0, SRDv0b, SRDv1, SRDv1b
+from xlearn.utils.general import with_config, empty_list, enter_debug, ProgressTimer
 from xlearn.utils.image import subplot_images
 
 
@@ -77,6 +77,8 @@ class DLRun:
             net = SRInterp(filenames=config_files)
         elif net_name == 'SRDv0':
             net = SRDv0(filenames=config_files)
+        elif net_name == 'SRDv0b':
+            net = SRDv0b(filenames=config_files)
         elif net_name == 'SRDv1':
             net = SRDv1(filenames=config_files)
         elif net_name == 'SRDv1b':
@@ -84,7 +86,7 @@ class DLRun:
         elif net_name == 'sr_classic':
             net = SRClassic(filenames=config_files)
         if net is None:
-            raise ValueError('Unknown net_name {0:s}.'.format(net_name))
+            raise ValueError('Unknown net_name {0}.'.format(net_name))
         print(net.pretty_settings())
         net.define_net()
         return net
@@ -100,8 +102,8 @@ class DLRun:
                  lrs=None,
                  settings=None,
                  filenames=None,
-                 nb_epoch=128,
-                 nb_sample_epoch=128,
+                 nb_epoch=32,
+                 nb_sample_epoch=32,
                  is_p2=False,
                  **kwargs):
         net_name = settings.get('net_name', net_name)
@@ -126,14 +128,20 @@ class DLRun:
                 net.load(is_force=True)
             if is_reset_lr:
                 net.reset_lr(lrs)
-            if net_name in D_NETS:
+            if net_name in D_NETS or True:
+                pt = ProgressTimer(nb_epoch * nb_sample_epoch)
                 for i_epoch in range(nb_epoch):
-                    loss = np.zeros(nb_sample_epoch)
-                    for i_batch in tqdm(range(nb_sample_epoch), ascii=True):
+                    loss = None
+                    for i_batch in range(nb_sample_epoch):
                         s = next(dataset)
-                        loss[i_batch] = net.model(
+                        loss_v = net.model(
                             'sr').train_on_batch(s[0][net._nb_down_sample], s[1][0])
-                    print(np.mean(loss))
+                        if loss is None:
+                            loss = loss_v
+                        else:
+                            loss = 0.6 * loss + 0.4 * loss_v
+                        msg = 'loss= {0:5f}'.format(loss)
+                        pt.event(i_batch + i_epoch * nb_sample_epoch, msg)
                     net.save('sr', 'save-%d.h5' % (i_epoch,))
 
     @with_config
@@ -323,13 +331,19 @@ class DLRun:
             res_sr_l = dataset.visualize(res_sr, is_no_change=True)
             res_it_l = dataset.visualize(res_it, is_no_change=True)
             window = [(-0.5, 0.5), (-0.5, 0.5), (-0.5, 0.5),
-                      (-0.5, 0.5), (-0.5, 0.5), (-0.5, 0.5)]
+                      (-0.5, 0.5), (-0.1, 0.1), (-0.1, 0.1)]
             subplot_images((hr, lr, sr, it, res_sr_l, res_it_l), is_gray=True, size=3.0, tight_c=0.5,
                            is_save=True, filename=save_filename, window=window)
 
-            np.save('predict_hr.npy', s[1][0])
-            np.save('predict_lr.npy', s[0][1])
-            np.save('predict_sr.npy', p)
+            # np.save('predict_hr.npy', s[1][0])
+            # np.save('predict_lr.npy', s[0][1])
+            # np.save('predict_sr.npy', p)
+            # np.save('predict_res_sr.npy', res_sr)
+            # np.save('predict_res_it.npy', res_it)
+            res_sr_v = np.sqrt(np.mean(np.square(res_sr)))
+            res_it_v = np.sqrt(np.mean(np.square(res_it)))
+            print('res_sr: {0:10f}, res_it: {1:10f}'.format(
+                res_sr_v, res_it_v))
 
     @with_config
     def predict(self,

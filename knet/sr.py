@@ -149,6 +149,32 @@ class SRDv0(KNetSR):
             [self._ips[0], self._ipn], res_out)
 
 
+class SRDv0b(KNetSR):
+    @with_config
+    def __init__(self, **kwargs):
+        KNetSR.__init__(self, **kwargs)
+
+    def _define_models(self):
+        KNetSR._define_models(self)
+        with tf.name_scope('upsampling'):
+            ups = UpSampling2D(
+                size=self._down_sample_ratios[self._nb_down_sample])(self._ipn)
+        with tf.name_scope('conv_0'):
+            x = Conv2D(64, 9, activation='elu', padding='same')(ups)
+            x = BatchNormalization()(x)
+        with tf.name_scope('conv_1'):
+            x = Conv2D(32, 1, activation='elu', padding='same')(x)
+            x = BatchNormalization()(x)
+        with tf.name_scope('output'):
+            res_inf = Conv2D(1, 5, padding='same')(x)
+            img_inf = add([res_inf, ups])
+        with tf.name_scope('res_out'):
+            res_out = sub(self._ips[0], img_inf)
+        self._models[self.model_id('sr')] = Model(self._ipn, img_inf)
+        self._models[self.model_id('res_out')] = Model(
+            [self._ips[0], self._ipn], res_out)
+
+
 class SRDv1(KNetSR):
     """ based on arxiv Accurate Image Super-Resolution Using Very Deep Convolutional Networks """
     @with_config
@@ -203,14 +229,20 @@ class SRDv1b(KNetSR):
 class SRDMultiScale(KNetSR):
     @with_config
     def __init__(self,
-                 nb_kernels=[64]*20,
+                 nb_kernels=[64] * 20,
                  **kwargs):
         KNetSR.__init__(self, **kwargs)
+        self._models_names = ['sr']
+        for i in range(self._nb_down_sample):
+            self._models_names.append(['sr_%d' % i])
+        self._is_trainable = [True] * (self._nb_down_sample + 1)
 
     def _define_models(self):
         KNetSR._define_models(self)
-        with tf.name_scope('up_1'):
-            x = UpSampling2D(size=self._down_sample_ratio)(self._ipn)
+        x = self._ipn
+        for i_up in range(self._nb_down_sample):
+            with tf.name_scope('up_%d' % i_up):
+                x = UpSampling2D(size=self._down_sample_ratio)(self._ip)
 
         x = ups
         for i in range(20):
