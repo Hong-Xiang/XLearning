@@ -187,9 +187,9 @@ class SRDv1(KNetSR):
             ups = UpSampling2D(
                 size=self._down_sample_ratios[self._nb_down_sample])(self._ipn)
         x = ups
-        for i in range(20):
+        for i, nc in enumerate(self._hiddens):
             with tf.name_scope('conv_%d' % i):
-                x = Conv2D(64, 3, activation='elu', padding='same')(x)
+                x = Conv2D(nc, 3, activation='elu', padding='same')(x)
         with tf.name_scope('output'):
             res_inf = Conv2D(1, 3, padding='same')(x)
             img_inf = add([res_inf, ups])
@@ -212,10 +212,38 @@ class SRDv1b(KNetSR):
             ups = UpSampling2D(
                 size=self._down_sample_ratios[self._nb_down_sample])(self._ipn)
         x = ups
-        for i in range(20):
+        for i, nc in enumerate(self._hiddens):
             with tf.name_scope('conv_%d' % i):
-                x = Conv2D(64, 3, activation='elu', padding='same')(x)
+                x = Conv2D(nc, 3, activation='elu', padding='same')(x)
                 x = BatchNormalization()(x)
+        with tf.name_scope('output'):
+            res_inf = Conv2D(1, 3, padding='same')(x)
+            img_inf = add([res_inf, ups])
+        with tf.name_scope('res_out'):
+            res_out = sub(self._ips[0], img_inf)
+        self._models[self.model_id('sr')] = Model(self._ipn, img_inf)
+        self._models[self.model_id('res_out')] = Model(
+            [self._ips[0], self._ipn], res_out)
+
+
+class SRDv2(KNetSR):
+    """ UpSampling2D in the end"""
+    @with_config
+    def __init__(self, **kwargs):
+        KNetSR.__init__(self, **kwargs)
+
+    def _define_models(self):
+        KNetSR._define_models(self)
+
+        x = self._ipn
+        for i, nc in enumerate(self._hiddens):
+            with tf.name_scope('conv_%d' % i):
+                x = Conv2D(nc, 3, activation='elu', padding='same')(x)
+        with tf.name_scope('upsampling'):
+            x = UpSampling2D(
+                size=self._down_sample_ratios[self._nb_down_sample])(x)
+        with tf.name_scope('conv_end'):
+            x = Conv2D(self._hiddens[-1], 3, activation='elu', padding='same')(x)
         with tf.name_scope('output'):
             res_inf = Conv2D(1, 3, padding='same')(x)
             img_inf = add([res_inf, ups])

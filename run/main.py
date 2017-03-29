@@ -11,7 +11,6 @@ matplotlib.use('agg')
 import matplotlib.pyplot as plt
 import fire
 from tqdm import tqdm
-from scipy.misc import imresize
 from keras.callbacks import ModelCheckpoint
 
 from xlearn.dataset.mnist import MNIST, MNISTImage, MNIST2

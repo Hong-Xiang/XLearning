@@ -77,6 +77,7 @@ class KNet(object):
                  is_trainable=(True,),
                  is_save=(True,),
                  is_load=(False,),
+                 is_bn=True,
                  path_saves=('./model.ckpt',),
                  path_loads=('./model.ckpt',),
                  path_summary=('./log',),
@@ -132,6 +133,7 @@ class KNet(object):
             'is_dropout', is_dropout)
         self._dropout_rate = self._update_settings(
             'dropout_rate', dropout_rate)
+        self._is_bn = self._update_settings('is_bn', is_bn)
         self._filenames = self._update_settings('filenames', None)
 
         self._epochs = self._update_settings('epochs', epochs)
