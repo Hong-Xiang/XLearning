@@ -134,7 +134,7 @@ class SRDv0(NetSR):
             x = Conv2D(32, 1, padding='same')(x)
             if self._is_bn:
                 x = BatchNormalization()(x)
-            x = ELU(x)
+            x = ELU()(x)
         with tf.name_scope('output'):
             res_inf = Conv2D(1, 5, padding='same')(x)
             img_inf = add([res_inf, ups])
@@ -192,7 +192,7 @@ class SRDv2(NetSR):
                 x = Conv2D(nc, 3, padding='same')(x)
                 if self._is_bn:
                     x = BatchNormalization()(x)
-                x = ELU(x)
+                x = ELU()(x)
         with tf.name_scope('upsampling'):
             x = UpSampling2D(
                 size=self._down_sample_ratios[self._nb_down_sample])(x)
