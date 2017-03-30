@@ -14,6 +14,7 @@ import logging
 import time
 import datetime
 import tensorflow as tf
+import click
 
 
 
@@ -289,6 +290,6 @@ class ProgressTimer:
             time_eta = 'UKN'
         else:
             time_eta = str(datetime.timedelta(seconds=int(eta)))
-        print("i=%6d, %s/it [%s<%s] :" %
-              (step, time_int, time_pas, time_eta), msg)
+        click.echo("i=%6d, %s/it [%s<%s] :" %
+              (step, time_int, time_pas, time_eta) + msg)
         self._pre = self._elaps
