@@ -114,19 +114,26 @@ def train_sr(config, **kwargs):
     fns = config_from_dicts('filenames', [kwargs, config], mode='append')
     epochs = config_from_dicts('epochs', [kwargs, config])
     steps_per_epoch = config_from_dicts('steps_per_epoch', [kwargs, config])
-
+    load_step = config_from_dicts('load_step', [kwargs, config])
     dsc = getattr(xlearn.datasets, dataset_name)
     netc = getattr(xlearn.nets, net_name)
-    with dsc(filenames=fns) as dataset:
-        load_step = kwargs.get('load_step', config.get('load_step'))
+    run_para = {'dataset_name': dataset_name, 'net_name': net_name,
+                'filenames': fns, 'epochs': epochs, 'steps_per_epoch': steps_per_epoch,
+                'load_step': load_step}
+    click.secho('='*10+'TRAIN_SR_PARAS'+'='*10, fg='yellow')
+    click.echo(json.dumps(run_para, separators=[' :', ','], indent=4))
+    click.secho('='*10+'TRAIN_SR_PARAS'+'='*10, fg='yellow')
+    with dsc(filenames=fns) as dataset:        
         net_settings = {'filenames': fns}
         if load_step is not None:
             net_settings.update({'init_step': load_step})
         net = netc(**net_settings)
-        net.define_net()
+        net.define_net()        
         if load_step is not None:
             if load_step > 0:
+                click.secho('='*5+'LOAD PRE TRAIN WEIGHTS OF {0:7d} STEPS.'.format(load_step)+'='*5, fg='yellow')
                 net.load(step=load_step, is_force=True)
+                net.global_step=load_step
         click.secho(net.pretty_settings())
         pt = ProgressTimer(epochs * steps_per_epoch)
         for _ in range(epochs):
@@ -134,8 +141,9 @@ def train_sr(config, **kwargs):
                 s = next(dataset)
                 loss = net.train_on_batch('sr', s[0], s[1])
                 msg = "model:{0:5s}, loss={1:10e}, gs={2:7d}.".format('sr', loss, net.global_step)
-                pt.event(msg=msg)
+                pt.event(msg=msg)                
         net.save(step=net.global_step)
+        net.dump_loss()
 
 
 if __name__ == '__main__':
