@@ -263,7 +263,7 @@ class Net(object):
                     self.model(model_id).load_weights(file_path, by_name=True)                    
     
     def dump_loss(self, filename='loss.npy'):
-        loss_t = np.zeros(shape=(self.global_step, self._nb_model))
+        loss_t = np.zeros(shape=(self.global_step+10, self._nb_model))
         eps = 1e-7
         for i in range(self._nb_model):
             for k, v in self._loss_records[i].items():
@@ -272,7 +272,7 @@ class Net(object):
             for j in range(self.global_step-1):
                 if abs(loss_t[j+1, i]) < eps:
                     loss_t[j+1, i] = loss_t[j, i]
-        np.save(loss_t, filename)
+        np.save(filename, loss_t)
 
     def define_net(self):
         """ Compile the model"""
