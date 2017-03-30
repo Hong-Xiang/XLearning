@@ -1,0 +1,9 @@
+{
+    "net_name": "SRDv0",
+    "dataset_name": "celeba",
+    "is_dataset_content": true,
+    "config_files": [
+        "./srdv0.json", 
+        "./celeba.json"
+    ]
+}

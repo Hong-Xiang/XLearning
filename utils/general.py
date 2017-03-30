@@ -15,51 +15,25 @@ import time
 import datetime
 import tensorflow as tf
 
+
+
 def setting_with_priority(settings_list):
     for setting in settings_list:
         if setting is not None:
             return setting
     return None
 
+
 def print_global_vars():
     for v in tf.global_variables():
         print(v.name)
 
-class ProgressTimer:
-    def __init__(self, nb_steps=100, min_elp=1.0):
-        self._nb_steps = nb_steps
-        self._start = None
-        self._elaps = None
-        self._pre = None
-        self._min_elp = min_elp
-        self.reset()
 
-    def reset(self):
-        self._start = time.time()
-        self._pre = 0.0
-
-    def event(self, step, msg='None'):
-        self._elaps = time.time() - self._start
-        if self._elaps - self._pre < self._min_elp:
-            return
-        comp_percen = float(step)/float(self._nb_steps)
-        if comp_percen > 0:        
-            eta = (1-comp_percen)*self._elaps/comp_percen
-        else:
-            eta = None
-
-        time_pas = str(datetime.timedelta(seconds=int(self._elaps)))
-        time_int = str(datetime.timedelta(seconds=int(self._elaps/(step+1.0))))
-        if eta is None:
-            time_eta = 'UKN'
-        else:
-            time_eta = str(datetime.timedelta(seconds=int(eta)))
-        print("i=%6d, %s/it [%s<%s] :"%(step, time_int, time_pas, time_eta), msg)
-        self._pre = self._elaps
 
 
 class Sentinel:
     pass
+
 
 def zip_equal(*iterables):
     sen = Sentinel()
@@ -99,8 +73,10 @@ class ExceptionHook:
                                                 color_scheme='Linux', call_pdb=1)
         return self.instance(*args, **kwargs)
 
+
 def enter_debug():
     sys.excepthook = ExceptionHook()
+
 
 def show_debug_logs():
     """ print debug logging info """
@@ -193,7 +169,8 @@ def with_config(func):
     @wraps(func)
     def wrapper(*args, **kwargs):
         fns = kwargs.pop('filenames', None)
-        sets = merge_settings(settings=kwargs.pop('settings', None), filenames=fns, default_settings=kwargs.pop('default_settings', None), **kwargs)
+        sets = merge_settings(settings=kwargs.pop('settings', None), filenames=fns,
+                              default_settings=kwargs.pop('default_settings', None), **kwargs)
         logging.getLogger(__name__).debug(
             "After merge_settings, settings:" + str(sets) + "\nkwargs:" + str(kwargs))
         logging.getLogger(__name__).debug(
@@ -253,3 +230,45 @@ def filename_filter(filenames, prefix, suffix):
             else:
                 files.append(path_full)
     return files, dirs
+
+class ProgressTimer:
+    def __init__(self, nb_steps=100, min_elp=1.0):
+        self._nb_steps = nb_steps
+        self._step = 0
+        self._start = None
+        self._elaps = None
+        self._pre = None
+        self._min_elp = min_elp
+        self.reset()
+
+    def reset(self):
+        self._start = time.time()
+        self._pre = 0.0
+        self._step = 0
+
+    def event(self, step=None, msg='None'):
+        if step is None:
+            step = self._step
+            self._step += 1
+        else:
+            self._step = step
+
+        self._elaps = time.time() - self._start
+        if self._elaps - self._pre < self._min_elp:
+            return
+        comp_percen = float(step) / float(self._nb_steps)
+        if comp_percen > 0:
+            eta = (1 - comp_percen) * self._elaps / comp_percen
+        else:
+            eta = None
+
+        time_pas = str(datetime.timedelta(seconds=int(self._elaps)))
+        time_int = str(datetime.timedelta(
+            seconds=int(self._elaps / (step + 1.0))))
+        if eta is None:
+            time_eta = 'UKN'
+        else:
+            time_eta = str(datetime.timedelta(seconds=int(eta)))
+        print("i=%6d, %s/it [%s<%s] :" %
+              (step, time_int, time_pas, time_eta), msg)
+        self._pre = self._elaps

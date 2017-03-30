@@ -21,7 +21,7 @@ import xlearn.utils.general as utg
 import xlearn.utils.tensor as utt
 
 
-def subplot_images(images, nb_max_row=8, cmap=None, is_gray=False, size=1.0, is_axis=False, tight_c=1.08, is_save=False, filename='images.png', window=None):
+def subplot_images(images, nb_max_row=8, cmap=None, is_gray=True, size=2.0, is_axis=False, tight_c=0.3, is_save=False, filename='images.png', window=None):
     """ subplot list of images of multiple categories into grid subplots
     Args:
         images: tuple of list of images

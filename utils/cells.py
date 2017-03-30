@@ -89,8 +89,8 @@ class Counter(Cell):
     def state(self):
         return self._state
 
-    def reset(self):
-        self._state = 0
+    def reset(self, value=0):
+        self._state = value
 
 
 class Sampler(Cell):

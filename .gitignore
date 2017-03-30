@@ -1,2 +1,8 @@
 *.jpg
 *.pyc
+xlearn.egg-info/
+xln.egg-info/
+**/__pycache__/
+.idea/
+.spyproject/
+.vscode/

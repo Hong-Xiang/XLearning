@@ -6,8 +6,6 @@ import datetime
 import os
 import sys
 import numpy as np
-import matplotlib
-matplotlib.use('agg')
 import matplotlib.pyplot as plt
 import fire
 from tqdm import tqdm
@@ -19,10 +17,11 @@ from xlearn.dataset.flickr import Flickr25k
 from xlearn.dataset.celeba import Celeba
 
 from xlearn.nets.super_resolution import SRNetInterp, SRSimple, SRF3D, SRClassic
-from xlearn.knet.ae1d import AE1D, VAE1D, CVAE1D, CAAE1D
-from xlearn.knet.sr import SRInterp, SRDv0, SRDv0b, SRDv1, SRDv1b
+import xlearn.nets
+import xlearn.datasets
 from xlearn.utils.general import with_config, empty_list, enter_debug, ProgressTimer
 from xlearn.utils.image import subplot_images
+
 
 
 D_NETS = ['SRInterp', 'SRDv0', 'SRDv1', 'SRDv1b', 'AE1D']

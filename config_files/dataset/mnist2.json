@@ -1,8 +1,0 @@
-{
-    "is_batch": true,
-    "is_flatten": true,
-    "is_only_label": false,
-    "batch_size": 32,
-    "epochs": 40,
-    "steps_per_epoch": 1835
-}
