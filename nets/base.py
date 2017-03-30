@@ -79,7 +79,7 @@ class Net(object):
                  is_load=(False,),
                  is_bn=True,
                  path_save='save',
-                 save_freq=16,
+                 save_freq=1000,
                  path_load='save',
                  path_summary=('./log',),
                  summary_freq=100,
@@ -260,7 +260,7 @@ class Net(object):
                 if flag or is_force:
                     print("Loading model: {0:10} from {1:10}.".format(
                         model_name, file_path))
-                    self.model(model_id).load_weights(file_path, by_name=True)
+                    self.model(model_id).load_weights(file_path, by_name=True)                    
 
     def define_net(self):
         """ Compile the model"""

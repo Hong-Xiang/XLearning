@@ -1,0 +1,8 @@
+{
+    "dataset_name": "Celeba",
+    "net_name": "SRDv0",
+    "filenames": ["celeba.json",
+                  "srdv0.json"],
+    "epochs": 1024,
+    "steps_per_epoch": 512
+}

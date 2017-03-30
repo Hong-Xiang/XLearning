@@ -23,6 +23,26 @@ def setting_with_priority(settings_list):
             return setting
     return None
 
+def config_from_dicts(key, dicts, mode='first'):
+    value = None
+    for d in dicts:
+        tmp = d.get(key)
+        if mode == 'first':
+            value = tmp
+            if value is not None:
+                break
+        elif mode == 'append':
+            if value is None:
+                if isinstance(tmp, (list, tuple)):
+                    value = list(tmp)
+                else:
+                    value = [tmp]
+            else:
+                if isinstance(tmp, (list, tuple)):
+                    value += list(tmp)
+                else:
+                    value.append(tmp)
+    return value
 
 def print_global_vars():
     for v in tf.global_variables():

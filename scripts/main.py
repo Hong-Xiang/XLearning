@@ -15,7 +15,7 @@ import json
 
 import xlearn.datasets
 import xlearn.nets
-from xlearn.utils.general import with_config, empty_list, enter_debug, ProgressTimer
+from xlearn.utils.general import with_config, empty_list, enter_debug, ProgressTimer, config_from_dicts
 from xlearn.utils.image import subplot_images
 
 
@@ -43,7 +43,7 @@ pass_config = click.make_pass_decorator(Config, ensure=True)
 def xln(config, cfg, filenames, debug):
     config.config = cfg
     config.load()
-    config['filenames'] = []
+    config['filenames'] = config.get('filenames', [])
     config['filenames'] += list(filenames)
     if debug:
         print("ENTER DEBUG MODE")
@@ -97,6 +97,7 @@ def test_dataset(config, **kwargs):
                     imgss.append(dataset.visualize(s[0][i]))
                 subplot_images(imgss, is_save=True, filename='images.png')
 
+
 @xln.command()
 @click.option('--dataset_name', '-dn', type=str)
 @click.option('--net_name', '-nn', type=str)
@@ -108,15 +109,14 @@ def test_dataset(config, **kwargs):
 def train_sr(config, **kwargs):
     """ train super resolution net
     """
-    dataset_name = kwargs.get('dataset_name', config.get('dataset_name'))
-    net_name = kwargs.get('net_name', config.get('net_name'))
-    fns = config.get('filenames', [])
-    fns += list(kwargs['filenames'])    
-    epochs = kwargs.get('epochs', config.get('epochs'))
-    steps_per_epoch = kwargs.get('steps_per_epoch', config.get('steps_per_epoch'))
+    dataset_name = config_from_dicts('dataset_name', [kwargs, config])
+    net_name = config_from_dicts('net_name', [kwargs, config])
+    fns = config_from_dicts('filenames', [kwargs, config], mode='append')
+    epochs = config_from_dicts('epochs', [kwargs, config])
+    steps_per_epoch = config_from_dicts('steps_per_epoch', [kwargs, config])
 
     dsc = getattr(xlearn.datasets, dataset_name)
-    netc = getattr(xlearn.nets, net_name)    
+    netc = getattr(xlearn.nets, net_name)
     with dsc(filenames=fns) as dataset:
         load_step = kwargs.get('load_step', config.get('load_step'))
         net_settings = {'filenames': fns}
@@ -125,16 +125,18 @@ def train_sr(config, **kwargs):
         net = netc(**net_settings)
         net.define_net()
         if load_step is not None:
-            net.load(step=load_step, is_force=True)
+            if load_step > 0:
+                net.load(step=load_step, is_force=True)
         click.secho(net.pretty_settings())
-        pt = ProgressTimer(epochs*steps_per_epoch)
+        pt = ProgressTimer(epochs * steps_per_epoch)
         for _ in range(epochs):
             for _ in range(steps_per_epoch):
                 s = next(dataset)
                 loss = net.train_on_batch('sr', s[0], s[1])
-                msg = "model:{0:10s}, loss={1:10f}".format('sr', loss)
+                msg = "model:{0:5s}, loss={1:10e}, gs={2:7d}.".format('sr', loss, net.global_step)
                 pt.event(msg=msg)
-        net.save(step='end')
+        net.save(step=net.global_step)
+
 
 if __name__ == '__main__':
     xln()
