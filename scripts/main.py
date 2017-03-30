@@ -102,8 +102,8 @@ def test_dataset(config, **kwargs):
 @click.option('--dataset_name', '-dn', type=str)
 @click.option('--net_name', '-nn', type=str)
 @click.option('--filenames', '-fn', multiple=True, type=str)
-@click.option('--epochs', default=2, type=int)
-@click.option('--steps_per_epoch', default=16, type=int)
+@click.option('--epochs', type=int)
+@click.option('--steps_per_epoch', type=int)
 @click.option('--load_step', type=int)
 @pass_config
 def train_sr(config, **kwargs):
