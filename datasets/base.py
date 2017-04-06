@@ -13,7 +13,7 @@ from ..utils.tensor import down_sample_nd
 from ..utils.cells import Sampler
 
 PATH_DATASETS = os.environ['PATH_DATASETS']
-DDTYPE = numpy.float16
+DDTYPE = numpy.float32
 
 
 class DataSetBase(object):
@@ -364,10 +364,17 @@ class DataSetImages(DataSetBase):
             images = list(images)
         return images
 
-    def _sample_data_label_weight(self):
-        """ read from dataset HDF5 file and perform necessary preprocessings """
+    def _load_sample(self):
         idx = next(self._sampler)[0]
         image = numpy.array(self._dataset[idx], dtype=DDTYPE)
+
+        if len(image.shape) == 2:
+            image = image.reshape([image.shape[0], image.shape[1], 1])
+        return image
+
+    def _sample_data_label_weight(self):
+        """ read from dataset HDF5 file and perform necessary preprocessings """
+        image = self._load_sample()
         if self._is_crop:
             # read next example until image large enough
             failed = 0

@@ -11,7 +11,7 @@ from ..nets.base import Net
 from ..utils.general import with_config, enter_debug
 from ..utils.tensor import upsample_shape, downsample_shape
 from ..models.merge import sub
-from ..models.image import conv_blocks
+from ..models.image import conv_blocks, conv_f
 
 
 IMAGE_SUMMARY_MAX_OUTPUT = 5
@@ -109,6 +109,9 @@ class NetSR(Net):
         self._models[self.model_id('res_itp')] = Model(
             [self._ip0, self._ipn], self._res_itp)
 
+    def dummy_label(self, model_id):
+        pass
+
     @property
     def nb_down_sample(self):
         return self._nb_down_sample
@@ -117,6 +120,19 @@ class NetSR(Net):
     def crop_size(self):
         return self._crop_size
 
+
+    def _train_model_on_batch(self, model_id, inputs, outputs):
+        cpx, cpy = self.crop_size
+        loss_v = self.model(model_id).train_on_batch(
+            inputs[self._nb_down_sample], outputs[0][:, cpx:-cpx, cpy:-cpy, :])
+        return loss_v
+
+    def _predict(self, model_id, inputs):
+        if model_id == 'sr':
+            return self.model(model_id).predict(inputs[self._nb_down_sample], batch_size=self._batch_size)
+        elif model_id == 'itp' or model_id == 'res_itp' or model_id == 'res_out':
+            ips = [inputs[0], inputs[self._nb_down_sample]]
+            return self.model(model_id).predict(ips, batch_size=self._batch_size)
 
 class SRInterp(NetSR):
     @with_config
@@ -209,15 +225,22 @@ class SRDv1(NetSR):
 class SRDv2(NetSR):
     """ UpSampling2D in the end"""
     @with_config
-    def __init__(self, **kwargs):
+    def __init__(self,
+                 h_pre,
+                 h_post,
+                 **kwargs):
         NetSR.__init__(self, **kwargs)
+        self._h_pre = h_pre
+        self._h_post = h_post
 
     def _define_models(self):
         NetSR._define_models(self)
-
+        with tf.name_scope('upsampling_ip'):
+            ups = UpSampling2D(
+                size=self._down_sample_ratios[self._nb_down_sample])(self._ipn)
         x = self._ipn
-        for i, nc in enumerate(self._hiddens):
-            with tf.name_scope('conv_%d' % i):
+        for i, nc in enumerate(self._h_pre):
+            with tf.name_scope('conv_pre_%d' % i):
                 x = Conv2D(nc, 3, padding='same')(x)
                 if self._is_bn:
                     x = BatchNormalization()(x)
@@ -225,17 +248,18 @@ class SRDv2(NetSR):
         with tf.name_scope('upsampling'):
             x = UpSampling2D(
                 size=self._down_sample_ratios[self._nb_down_sample])(x)
-        with tf.name_scope('conv_end'):
-            x = Conv2D(self._hiddens[-1], 5,
-                       activation='elu', padding='same')(x)
-            x = Conv2D(self._hiddens[-1], 5,
-                       activation='elu', padding='same')(x)
+        for i, nc in enumerate(self._h_post):
+            with tf.name_scope('conv_post_%d' % i):
+                x = Conv2D(nc, 3, padding='same')(x)
+                if self._is_bn:
+                    x = BatchNormalization()(x)
+                x = ELU()(x)
         with tf.name_scope('output'):
             res_inf = Conv2D(1, 3, padding='same')(x)
             img_inf = add([res_inf, ups])
             img_crop = Cropping2D(self._crop_size)(img_inf)
         with tf.name_scope('res_out'):
-            res_out = sub(self._ip0_c, img_inf)
+            res_out = sub(self._ip0_c, img_crop)
         self._models[self.model_id('sr')] = Model(self._ipn, img_crop)
         self._models[self.model_id('res_out')] = Model(
             [self._ip0, self._ipn], res_out)

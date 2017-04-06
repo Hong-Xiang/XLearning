@@ -80,7 +80,7 @@ class Net(object):
                  is_load=(False,),
                  is_bn=True,
                  path_save='save',
-                 save_freq=1000,
+                 save_freq=100,
                  path_load='save',
                  path_summary=('./log',),
                  summary_freq=100,
@@ -137,7 +137,7 @@ class Net(object):
 
         self._skipkeys = ['_c', '_skipkeys', '_models', '_optims',
                           '_losses', '_labels', '_outputs', '_loss_records', '_metrxs', '_inputs', '_callbacks']
-        
+
         self._last_save = None
 
     def _initialize(self):
@@ -161,10 +161,10 @@ class Net(object):
         prefix = "=" * LEN + "\n"
         prefix += str(self.__class__) + " settings:" + "\n"
         prefix += "." * LEN + "\n"
-        sets = json.dumps(self._c, sort_keys=True, indent=4, separators=(',', ': '))
+        sets = json.dumps(self._c, sort_keys=True,
+                          indent=4, separators=(',', ': '))
         suffix = "\n" + "=" * LEN
         return prefix + sets + suffix
-
 
     def _before_defines(self):
         # extent shareable parameters
@@ -291,19 +291,19 @@ class Net(object):
         self._define_callbks()
         self.load()
 
-    def _train_model_on_batch(self, model, inputs, outputs):
-        loss_v = model.train_on_batch(inputs, outputs)
+    def _train_model_on_batch(self, model_id, inputs, outputs):
+        m = self.model(model_id)
+        loss_v = m.train_on_batch(inputs, outputs)
         return loss_v
 
     def train_on_batch(self, model_id, inputs, outputs, **kwargs):
-        m = self.model(model_id)
-        loss_now = self._train_model_on_batch(m, inputs, outputs)
+        loss_now = self._train_model_on_batch(model_id, inputs, outputs)
         self.global_step += 1
         if isinstance(model_id, str):
             model_id = self._models_names.index(model_id)
         self._loss_records[model_id].update({self.global_step: loss_now})
         # self._loss_records[model_id].append(loss_now)
-        save_flag = False        
+        save_flag = False
         if self._save_freq > 0:
             if self.global_step % self._save_freq == 0:
                 save_flag = True
@@ -311,14 +311,14 @@ class Net(object):
             self._last_save = time.time()
         else:
             delta = time.time() - self._last_save
-            if delta > 10.0*60.0:
+            if delta > 10.0 * 60.0:
                 save_flag = True
         if save_flag:
             self.save(step=self.global_step)
             self._last_save = time.time()
         if self._summary_freq > 0:
             if self.global_step % self._summary_freq == 0:
-                self.dump_loss()        
+                self.dump_loss()
         return loss_now
 
     def reset_lr(self, lrs):
@@ -381,8 +381,11 @@ class Net(object):
     def fit_full(self, data_generator):
         raise NotImplementedError('No fit_full implementation.')
 
-    def predict(self, model_id, inputs):
+    def _predict(self, model_id, inputs):
         return self.model(model_id).predict(inputs, batch_size=self._batch_size)
+
+    def predict(self, model_id, inputs):
+        return self._predict(model_id, inputs)
 
 
 class KAE(Net):

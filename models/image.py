@@ -1,5 +1,5 @@
 from keras.models import Model, Sequential
-from keras.layers import Dense, Activation, Dropout, Convolution2D, BatchNormalization, merge, ELU, LeakyReLU, UpSampling2D, Conv2D, Concatenate
+from keras.layers import Dense, Activation, Dropout, Convolution2D, BatchNormalization, merge, ELU, LeakyReLU, UpSampling2D, Conv2D, Concatenate, add
 import keras.backend as K
 
 
@@ -72,7 +72,7 @@ def CELU():
     def celu_kernel(x):
         pos = K.elu(x)
         neg = K.elu(-x)
-        return K.concatenate([pos, neg], axis=1)
+        return K.concatenate([pos, neg], axis=-1)
 
     def celu_output_shape(input_shape):
         shape = list(input_shape)
@@ -84,6 +84,50 @@ def CELU():
 
     return Lambda(celu_kernel, output_shape=celu_output_shape)
 
+def conv_f(x, filters, kernel_size, is_active=True, name='conv_f'):
+    with tf.name_scope(name):
+        x = Conv2D(filters, kernel_size=kernel_size, padding='same')
+        if is_active:
+            x = CELU(x)
+            x = BatchNormalization(x)
+    return x
+
+def conv_block(x, filters, name='conv_block'):
+    with tf.name_scope(name):
+        t0 = x
+        rep1 = x
+        for i in range(5):
+            rep1 = conv_f(rep1, filters*4, 1, True, 'conv_1_%d'%i)
+        rep3 = x
+        for i in range(3):
+            rep3 = conv_f(rep3, filters*2, 3, True, 'conv_1_%d'%j)
+        rep5 = conv_f(rep3, filters, 5, True, 'conv_1_%d'%j)
+        x = Concatenate(name='cat1')([x, rep1, rep3, rep5])
+        x = conv_f(filters, filters, 1, False, name='conv_cat_1')
+        t1 = add([t0, x])
+        x = t1
+        rep1 = x
+        for i in range(5):
+            rep1 = conv_f(rep1, filters*4, 1, True, 'conv_2_%d'%i)
+        rep3 = x
+        for i in range(3):
+            rep3 = conv_f(rep3, filters*2, 3, True, 'conv_2_%d'%j)
+        rep5 = conv_f(rep3, filters, 5, True, 'conv_2_%d'%j)
+        x = Concatenate(name='cat2')([x, rep1, rep3, rep5])
+        x = conv_f(filters, filters, 1, False, name='conv_cat_2')
+        t2 = add([t1, x])
+        x = t2
+        rep1 = x
+        for i in range(5):
+            rep1 = conv_f(rep1, filters*4, 1, True, 'conv_3_%d'%i)
+        rep3 = x
+        for i in range(3):
+            rep3 = conv_f(rep3, filters*2, 3, True, 'conv_3_%d'%j)
+        rep5 = conv_f(rep3, filters, 5, True, 'conv_3_%d'%j)
+        x = Concatenate(name='cat3')([x, rep1, rep3, rep5])
+        x = conv_f(filters, filters, 1, False, name='conv_cat_3')
+        t3 = add([t2, x])
+        x = Concatenate()([t0, t1, t2, t3])
 
 def convolution_block(ip, nb_filter, nb_row, nb_col, subsample=(1, 1), id=0, border_mode='same', scope=''):
     """ standard convolution block """

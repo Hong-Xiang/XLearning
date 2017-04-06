@@ -135,6 +135,8 @@ def train_sr_d(dataset_name,
             net_settings.update({'init_step': load_step})
         net = netc(**net_settings)
         net.define_net()
+        if load_step > 0:
+            net.load(step=load_step)
         cpx, cpy = net.crop_size
         if load_step is not None:
             if load_step > 0:
@@ -148,7 +150,7 @@ def train_sr_d(dataset_name,
             for _ in range(steps_per_epoch):
                 s = next(dataset)
                 loss = net.train_on_batch(
-                    'sr', s[0][1], s[1][0][:, cpx:-cpx, cpy:-cpy, :])
+                    'sr', s[0], s[1])
                 msg = "model:{0:5s}, loss={1:10e}, gs={2:7d}.".format(
                     'sr', loss, net.global_step)
                 pt.event(msg=msg)
@@ -186,16 +188,15 @@ def predict_sr(net_name=None,
         net_interp = xlearn.nets.SRInterp(filenames=filenames)
         net_interp.define_net()
         s = next(dataset)
-        p = net.model('sr').predict(
-            s[0][net._nb_down_sample], batch_size=net.batch_size)
-        p_it = net_interp.model('sr').predict(
-            s[0], batch_size=net.batch_size)
-        hr = dataset.visualize(s[1][0], is_no_change=True)
-        lr = dataset.visualize(s[0][1], is_no_change=True)
+        p = net.predict('sr', s[0])
+        p_it = net_interp.predict('sr', s[0])                    
+        _, hr_t = net.predict('itp', s[0])
+        res_sr = net.predict('res_out', s[0])
+        res_it = net.predict('res_itp', s[0])
+        hr = dataset.visualize(hr_t, is_no_change=True)
+        lr = dataset.visualize(s[0][-1], is_no_change=True)
         sr = dataset.visualize(p, is_no_change=True)
         it = dataset.visualize(p_it, is_no_change=True)
-        res_sr = p - s[1][0]
-        res_it = p_it - s[1][0]
         res_sr_l = dataset.visualize(res_sr, is_no_change=True)
         res_it_l = dataset.visualize(res_it, is_no_change=True)
         window = [(-0.5, 0.5), (-0.5, 0.5), (-0.5, 0.5),
