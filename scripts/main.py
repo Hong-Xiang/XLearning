@@ -184,7 +184,8 @@ def predict_sr(net_name=None,
         net = netc(**net_settings)
         net.define_net()
         click.echo(net.pretty_settings())
-        net.load(is_force=True, step=load_step)
+        if load_step is not None:
+            net.load(is_force=True, step=load_step)
         net_interp = xlearn.nets.SRInterp(filenames=filenames)
         net_interp.define_net()
         s = next(dataset)
