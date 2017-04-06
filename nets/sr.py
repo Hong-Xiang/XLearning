@@ -97,8 +97,8 @@ class NetSR(Net):
         with tf.name_scope('interpolation'):
             itp = UpSampling2D(size=self._down_sample_ratios[-1])(self._ipn)
             self._itp = Cropping2D(self._crop_size)(itp)
-        self._models[self.model_id('itp')] = Model([self._ip0, self._ipn], [self._itp, self._ip0_c])
-
+        self._models[self.model_id('itp')] = Model(
+            [self._ip0, self._ipn], [self._itp, self._ip0_c])
 
         with tf.name_scope('res_itp'):
             #     res_itp = []
@@ -113,6 +113,10 @@ class NetSR(Net):
     def nb_down_sample(self):
         return self._nb_down_sample
 
+    @property
+    def crop_size(self):
+        return self._crop_size
+
 
 class SRInterp(NetSR):
     @with_config
@@ -123,7 +127,7 @@ class SRInterp(NetSR):
         return tf.image.resize_bicubic(x, size=self._shapes[0][0:2])
 
     def image_output_shape(self, input_shape):
-        return [None]+list(self._shapes[0])
+        return [None] + list(self._shapes[0])
 
     def ly_resize(self):
         return Lambda(function=self.image_resize, output_shape=self.image_output_shape)
@@ -137,7 +141,8 @@ class SRInterp(NetSR):
             res_out = sub(self._ip0_c, self._output)
         self._is_trainable = [False, False, False]
         self._models[self.model_id('sr')] = Model(self._ipn, self._output)
-        self._models[self.model_id('res_out')] = Model([self._ip0, self._ipn], res_out)
+        self._models[self.model_id('res_out')] = Model(
+            [self._ip0, self._ipn], res_out)
 
 
 class SRDv0(NetSR):
@@ -171,9 +176,6 @@ class SRDv0(NetSR):
         self._models[self.model_id('res_out')] = Model(
             [self._ip0, self._ipn], res_out)
 
-    def _train_model_on_batch(self, model, inputs, labels):
-        return model.train_on_batch(inputs[1], labels[0])
-
 
 class SRDv1(NetSR):
     """ based on arxiv Accurate Image Super-Resolution Using Very Deep Convolutional Networks """
@@ -202,9 +204,6 @@ class SRDv1(NetSR):
         self._models[self.model_id('sr')] = Model(self._ipn, img_crop)
         self._models[self.model_id('res_out')] = Model(
             [self._ip0, self._ipn], res_out)
-
-    def _train_model_on_batch(self, model, inputs, labels):
-        return model.train_on_batch(inputs[1], labels[0])
 
 
 class SRDv2(NetSR):
@@ -240,9 +239,6 @@ class SRDv2(NetSR):
         self._models[self.model_id('sr')] = Model(self._ipn, img_crop)
         self._models[self.model_id('res_out')] = Model(
             [self._ip0, self._ipn], res_out)
-
-    def _train_model_on_batch(self, model, inputs, labels):
-        return model.train_on_batch(inputs[1], labels[0])
 
 # class SRDMultiScale(NetSR):
 #     @with_config

@@ -59,6 +59,7 @@ def test_net_define(net_name,
 
     click.echo(net.pretty_settings())
 
+
 @xln.command()
 @click.option('--kind', '-k', type=str)
 @click.option('--name', '-n', type=str)
@@ -129,11 +130,12 @@ def train_sr_d(dataset_name,
     netc = getattr(xlearn.nets, net_name)
     print_pretty_args(train_sr_d, locals())
     with dsc(filenames=filenames) as dataset:
-        net_settings = dict()
+        net_settings = {'filenames': filenames}
         if load_step is not None:
             net_settings.update({'init_step': load_step})
         net = netc(**net_settings)
         net.define_net()
+        cpx, cpy = net.crop_size
         if load_step is not None:
             if load_step > 0:
                 click.secho(
@@ -144,8 +146,8 @@ def train_sr_d(dataset_name,
         pt = ProgressTimer(epochs * steps_per_epoch)
         for _ in range(epochs):
             for _ in range(steps_per_epoch):
-                s = next(dataset)
-                loss = net.train_on_batch('sr', s[0], s[1])
+                s = next(dataset)                
+                loss = net.train_on_batch('sr', s[0][1], s[1][0][:,cpx:-cpx,cpy:-cpy,:])
                 msg = "model:{0:5s}, loss={1:10e}, gs={2:7d}.".format(
                     'sr', loss, net.global_step)
                 pt.event(msg=msg)
