@@ -120,7 +120,6 @@ class NetSR(Net):
     def crop_size(self):
         return self._crop_size
 
-
     def _train_model_on_batch(self, model_id, inputs, outputs):
         cpx, cpy = self.crop_size
         loss_v = self.model(model_id).train_on_batch(
@@ -133,6 +132,7 @@ class NetSR(Net):
         elif model_id == 'itp' or model_id == 'res_itp' or model_id == 'res_out':
             ips = [inputs[0], inputs[self._nb_down_sample]]
             return self.model(model_id).predict(ips, batch_size=self._batch_size)
+
 
 class SRInterp(NetSR):
     @with_config
