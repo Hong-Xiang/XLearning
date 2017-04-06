@@ -5,7 +5,7 @@ matplotlib.use('agg')
 # import datetime
 from pathlib import Path
 import shutil
-# import numpy as np
+import numpy as np
 # import matplotlib.pyplot as plt
 from tqdm import tqdm
 import os
@@ -15,7 +15,7 @@ import json
 
 import xlearn.datasets
 import xlearn.nets
-from xlearn.utils.general import with_config, empty_list, enter_debug, ProgressTimer, config_from_dicts
+from xlearn.utils.general import with_config, empty_list, enter_debug, ProgressTimer, config_from_dicts, print_pretty_args
 from xlearn.utils.image import subplot_images
 
 
@@ -37,26 +37,36 @@ pass_config = click.make_pass_decorator(Config, ensure=True)
 
 @click.group()
 @click.option('--cfg', default='config.json')
-@click.option('--filenames', '-fn', multiple=True, type=str)
 @click.option('--debug', is_flag=True, default=False)
 @pass_config
-def xln(config, cfg, filenames, debug):
+def xln(config, cfg, debug):
     config.config = cfg
     config.load()
-    config['filenames'] = config.get('filenames', [])
-    config['filenames'] += list(filenames)
     if debug:
         print("ENTER DEBUG MODE")
         enter_debug()
 
 
 @xln.command()
-@pass_config
-@click.option('--kind', type=str)
-@click.option('--name', type=str)
-def cpcfg(config, kind, name):
-    kind = config.get('kind', kind)
-    name = config.get('name', name)
+@click.option('--net_name', '-nn', type=str)
+@click.option('--filenames', '-fn', multiple=True, type=str)
+def test_net_define(net_name,
+                    filenames=[],
+                    **kwargs):
+    netc = getattr(xlearn.nets, net_name)
+    net = netc(filenames=filenames)
+    net.define_net()
+
+    click.echo(net.pretty_settings())
+
+@xln.command()
+@click.option('--kind', '-k', type=str)
+@click.option('--name', '-n', type=str)
+@click.option('--filenames', '-fn', multiple=True, type=str)
+@with_config
+def cpcfg(kind, name, **kwargs):
+    """ copy config files """
+    print_pretty_args(cpcfg, locals())
     name += '.json'
     cfg_file = Path(os.environ['PATH_XLEARN']) / 'configs' / kind / name
     shutil.copy(cfg_file, name)
@@ -65,11 +75,16 @@ def cpcfg(config, kind, name):
 @xln.command()
 @click.option('--dataset_name', '-dn', type=str)
 @click.option('--filenames', '-fn', multiple=True, type=str)
+@click.option('--is_save', type=bool)
 @click.option('--nb_sample', default=1, type=int)
-@click.option('--report_shape', is_flag=True, default=False)
-@click.option('--plot', is_flag=True, default=False)
-@pass_config
-def test_dataset(config, **kwargs):
+@click.option('--report_shape', is_flag=True)
+def test_dataset(dataset_name,
+                 filenames=[],
+                 is_save=True,
+                 nb_samples=32,
+                 report_shape=False,
+                 is_plot=False,
+                 **kwargs):
     """ test datasets
     Args:
         dataset_name
@@ -77,21 +92,16 @@ def test_dataset(config, **kwargs):
         nb_sample
         report_shape
     """
-    dataset_name = config.get('dataset_name', kwargs['dataset_name'])
-    fns = config.get('filenames', [])
-    fns += list(kwargs['filenames'])
-    click.echo("Test_dataset called with following parameters:")
-    click.echo("dataset_name: {0}".format(dataset_name))
-    click.echo("filenames: {0}".format(fns))
+    print_pretty_args(test_dataset, locals())
     dsc = getattr(xlearn.datasets, dataset_name)
-    with dsc(filenames=fns) as dataset:
+    with dsc(filenames=filenames) as dataset:
         for i in tqdm(range(kwargs['nb_sample']), ascii=True):
             s = next(dataset)
-            if kwargs['report_shape']:
+            if report_shape:
                 print(len(s))
                 print(len(s[0]))
                 print(s[0][0].shape)
-            if kwargs['plot']:
+            if is_save:
                 imgss = []
                 for i in range(len(s[0])):
                     imgss.append(dataset.visualize(s[0][i]))
@@ -105,45 +115,135 @@ def test_dataset(config, **kwargs):
 @click.option('--epochs', type=int)
 @click.option('--steps_per_epoch', type=int)
 @click.option('--load_step', type=int)
-@pass_config
-def train_sr(config, **kwargs):
+@with_config
+def train_sr_d(dataset_name,
+               net_name,
+               epochs,
+               steps_per_epoch,
+               load_step=-1,
+               filenames=[],
+               **kwargs):
     """ train super resolution net
     """
-    dataset_name = config_from_dicts('dataset_name', [kwargs, config])
-    net_name = config_from_dicts('net_name', [kwargs, config])
-    fns = config_from_dicts('filenames', [kwargs, config], mode='append')
-    epochs = config_from_dicts('epochs', [kwargs, config])
-    steps_per_epoch = config_from_dicts('steps_per_epoch', [kwargs, config])
-    load_step = config_from_dicts('load_step', [kwargs, config])
     dsc = getattr(xlearn.datasets, dataset_name)
     netc = getattr(xlearn.nets, net_name)
-    run_para = {'dataset_name': dataset_name, 'net_name': net_name,
-                'filenames': fns, 'epochs': epochs, 'steps_per_epoch': steps_per_epoch,
-                'load_step': load_step}
-    click.secho('='*10+'TRAIN_SR_PARAS'+'='*10, fg='yellow')
-    click.echo(json.dumps(run_para, separators=[' :', ','], indent=4))
-    click.secho('='*10+'TRAIN_SR_PARAS'+'='*10, fg='yellow')
-    with dsc(filenames=fns) as dataset:        
-        net_settings = {'filenames': fns}
+    print_pretty_args(train_sr_d, locals())
+    with dsc(filenames=filenames) as dataset:
+        net_settings = dict()
         if load_step is not None:
             net_settings.update({'init_step': load_step})
         net = netc(**net_settings)
-        net.define_net()        
+        net.define_net()
         if load_step is not None:
             if load_step > 0:
-                click.secho('='*5+'LOAD PRE TRAIN WEIGHTS OF {0:7d} STEPS.'.format(load_step)+'='*5, fg='yellow')
+                click.secho(
+                    '=' * 5 + 'LOAD PRE TRAIN WEIGHTS OF {0:7d} STEPS.'.format(load_step) + '=' * 5, fg='yellow')
                 net.load(step=load_step, is_force=True)
-                net.global_step=load_step
+                net.global_step = load_step
         click.secho(net.pretty_settings())
         pt = ProgressTimer(epochs * steps_per_epoch)
         for _ in range(epochs):
             for _ in range(steps_per_epoch):
                 s = next(dataset)
                 loss = net.train_on_batch('sr', s[0], s[1])
-                msg = "model:{0:5s}, loss={1:10e}, gs={2:7d}.".format('sr', loss, net.global_step)
-                pt.event(msg=msg)                
+                msg = "model:{0:5s}, loss={1:10e}, gs={2:7d}.".format(
+                    'sr', loss, net.global_step)
+                pt.event(msg=msg)
         net.save(step=net.global_step)
         net.dump_loss()
+
+
+@xln.command()
+@click.option('--dataset_name', '-dn', type=str)
+@click.option('--net_name', '-nn', type=str)
+@click.option('--filenames', '-fn', multiple=True, type=str)
+@click.option('--load_step', type=int)
+@with_config
+def predict_sr(net_name=None,
+               dataset_name=None,
+               path_save='./predict',
+               is_visualize=False,
+               is_save=False,
+               save_filename='predict.png',
+               filenames=[],
+               load_step=None,
+               **kwargs):
+    print_pretty_args(predict_sr, locals())
+    dsc = getattr(xlearn.datasets, dataset_name)
+    netc = getattr(xlearn.nets, net_name)
+
+    with dsc(filenames=filenames) as dataset:
+        net_settings = {'filenames': filenames}
+        if load_step is not None:
+            net_settings.update({'init_step': load_step})
+        net = netc(**net_settings)
+        net.define_net()
+        click.echo(net.pretty_settings())
+        net.load(is_force=True, step=load_step)
+        net_interp = xlearn.nets.SRInterp(filenames=filenames)
+        net_interp.define_net()
+        s = next(dataset)
+        p = net.model('sr').predict(
+            s[0][net._nb_down_sample], batch_size=net.batch_size)
+        p_it = net_interp.model('sr').predict(
+            s[0], batch_size=net.batch_size)
+        hr = dataset.visualize(s[1][0], is_no_change=True)
+        lr = dataset.visualize(s[0][1], is_no_change=True)
+        sr = dataset.visualize(p, is_no_change=True)
+        it = dataset.visualize(p_it, is_no_change=True)
+        res_sr = p - s[1][0]
+        res_it = p_it - s[1][0]
+        res_sr_l = dataset.visualize(res_sr, is_no_change=True)
+        res_it_l = dataset.visualize(res_it, is_no_change=True)
+        window = [(-0.5, 0.5), (-0.5, 0.5), (-0.5, 0.5),
+                  (-0.5, 0.5), (-0.1, 0.1), (-0.1, 0.1)]
+        subplot_images((hr, lr, sr, it, res_sr_l, res_it_l), is_gray=True, size=3.0, tight_c=0.5,
+
+                       is_save=True, filename=save_filename, window=window)
+
+        # np.save('predict_hr.npy', s[1][0])
+        # np.save('predict_lr.npy', s[0][1])
+        # np.save('predict_sr.npy', p)
+        # np.save('predict_res_sr.npy', res_sr)
+        # np.save('predict_res_it.npy', res_it)
+        res_sr_v = np.sqrt(np.mean(np.square(res_sr)))
+        res_it_v = np.sqrt(np.mean(np.square(res_it)))
+        print('res_sr: {0:10f}, res_it: {1:10f}'.format(
+            res_sr_v, res_it_v))
+
+
+@xln.command()
+@click.option('--dataset_name', '-dn', type=str)
+@click.option('--filenames', '-fn', multiple=True, type=str)
+@click.option('--nb_images', type=int)
+@click.option('--data_type', type=str, multiple=True)
+@click.option('--img_filename', type=str)
+@click.option('--is_save', type=bool)
+@with_config
+def test_dataset_image(dataset_name,
+                       filenames=[],
+                       nb_images=64,
+                       data_type=['data', 'label'],
+                       img_filename='test_dataset_image.png',
+                       is_save=True,
+                       **kwargs):
+    if not isinstance(data_type, (list, tuple)):
+        data_type = [data_type]
+    nb_data_cata = len(data_type)
+    dsc = getattr(xlearn.datasets, dataset_name)
+    with dsc(filenames=filenames) as dataset:
+        for i in range(int(np.ceil(nb_images / dataset.batch_size))):
+            s = next(dataset)
+            print(s[0].shape)
+            print(s[1].shape)
+            for i, ctype in enumerate(data_type):
+                img_tensor = dataset.data_from_sample(
+                    s, data_type=ctype)
+                imgs = dataset.visualize(img_tensor)
+                if imgs_all[i] is None:
+                    imgs_all[i] = imgs
+                else:
+                    imgs_all[i].append(imgs)
 
 
 if __name__ == '__main__':
@@ -412,62 +512,6 @@ if __name__ == '__main__':
 #             np.save('generate_input.npy', z)
 #             np.save('generate_output.npy', p)
 
-#     @with_config
-#     def predict_sr(self,
-#                    net_name=None,
-#                    dataset_name=None,
-#                    is_debug=False,
-#                    config_files=None,
-#                    path_save='./predict',
-#                    is_visualize=False,
-#                    is_save=False,
-#                    save_filename='predict.png',
-#                    settings=None,
-#                    filenames=None,
-#                    **kwargs):
-#         print("Predict routine is called.")
-#         net_name = settings.get('net_name', net_name)
-#         dataset_name = settings.get('dataset_name', dataset_name)
-#         is_debug = settings.get('is_debug', is_debug)
-#         config_files = settings.get('config_files', config_files)
-#         path_save = settings.get('path_save', path_save)
-#         is_visualize = settings.get('is_visualize', is_visualize)
-#         is_save = settings.get('is_save', is_save)
-#         save_filename = settings.get('save_filename', save_filename)
-#         if is_debug:
-#             enter_debug()
-#         net = self.define_net(net_name, config_files=config_files)
-#         net_interp = SRInterp(filenames=config_files)
-#         net_interp.define_net()
-#         with self.get_dataset(dataset_name)(filenames=config_files) as dataset:
-#             net.load(is_force=True)
-#             s = next(dataset)
-#             p = net.model('sr').predict(
-#                 s[0][net._nb_down_sample], batch_size=net.batch_size)
-#             p_it = net_interp.model('sr').predict(
-#                 s[0], batch_size=net.batch_size)
-#             hr = dataset.visualize(s[1][0], is_no_change=True)
-#             lr = dataset.visualize(s[0][1], is_no_change=True)
-#             sr = dataset.visualize(p, is_no_change=True)
-#             it = dataset.visualize(p_it, is_no_change=True)
-#             res_sr = p - s[1][0]
-#             res_it = p_it - s[1][0]
-#             res_sr_l = dataset.visualize(res_sr, is_no_change=True)
-#             res_it_l = dataset.visualize(res_it, is_no_change=True)
-#             window = [(-0.5, 0.5), (-0.5, 0.5), (-0.5, 0.5),
-#                       (-0.5, 0.5), (-0.1, 0.1), (-0.1, 0.1)]
-#             subplot_images((hr, lr, sr, it, res_sr_l, res_it_l), is_gray=True, size=3.0, tight_c=0.5,
-# is_save=True, filename=save_filename, window=window)
-
-#             # np.save('predict_hr.npy', s[1][0])
-#             # np.save('predict_lr.npy', s[0][1])
-#             # np.save('predict_sr.npy', p)
-#             # np.save('predict_res_sr.npy', res_sr)
-#             # np.save('predict_res_it.npy', res_it)
-#             res_sr_v = np.sqrt(np.mean(np.square(res_sr)))
-#             res_it_v = np.sqrt(np.mean(np.square(res_it)))
-#             print('res_sr: {0:10f}, res_it: {1:10f}'.format(
-#                 res_sr_v, res_it_v))
 
 #     @with_config
 #     def predict(self,
@@ -520,42 +564,6 @@ if __name__ == '__main__':
 #             np.save('predict_label.npy', s[0][1])
 #             np.save('predict_output.npy', p)
 
-
-#     @with_config
-#     def test_dataset_image(self,
-#                            dataset_name,
-#                            config_files=None,
-#                            nb_images=64,
-#                            data_type=['data', 'label'],
-#                            img_filename='test_dataset_image.png',
-#                            is_save=True,
-#                            filenames=None,
-#                            settings=None,
-#                            **kwargs):
-#         if self._is_debug:
-#             enter_debug()
-#         config_files = settings.get('config_files', config_files)
-#         nb_images = settings.get('nb_images', nb_images)
-#         data_type = settings.get('data_type', data_type)
-#         img_filename = settings.get('img_filename', img_filename)
-#         is_save = settings.get('is_save', is_save)
-#         if not isinstance(data_type, (list, tuple)):
-#             data_type = [data_type]
-#         nb_data_cata = len(data_type)
-#         if dataset_name == 'celeba':
-#             with Celeba(filenames=config_files) as dataset:
-#                 for i in range(int(np.ceil(nb_images / dataset.batch_size))):
-#                     s = next(dataset)
-#                     print(s[0].shape)
-#                     print(s[1].shape)
-#                     for i, ctype in enumerate(data_type):
-#                         img_tensor = dataset.data_from_sample(
-#                             s, data_type=ctype)
-#                         imgs = dataset.visualize(img_tensor)
-#                         if imgs_all[i] is None:
-#                             imgs_all[i] = imgs
-#                         else:
-#                             imgs_all[i].append(imgs)
 
 #     def test_run(self, **kwargs):
 #         print('Test run called.')

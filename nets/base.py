@@ -21,7 +21,7 @@ from keras.models import Model, Sequential
 from keras import backend as K
 import keras.utils.vis_utils as kvu
 
-from ..utils.general import with_config, extend_list, zip_equal, empty_list
+from ..utils.general import with_config, extend_list, zip_equal, empty_list, get_args
 
 
 class Net(object):
@@ -90,60 +90,42 @@ class Net(object):
                  is_dropout=False,
                  dropout_rate=0.5,
                  init_step=0,
-                 settings=None,
+                 filenames=[],
                  **kwargs):
-        self._settings = settings
-        if '_c' not in vars(self):
-            self._c = dict()
-        self._inputs_shapes = self._update_settings(
-            'inputs_shapes', inputs_shapes)
-        self._outputs_shapes = self._update_settings(
-            'outputs_shapes', outputs_shapes)
-        self._batch_size = self._update_settings(
-            'batch_size', batch_size)
-        self._summary_freq = self._update_settings(
-            'summary_freq', summary_freq)
+        self._inputs_shapes = inputs_shapes
+        self._outputs_shapes = outputs_shapes
+        self._batch_size = batch_size
+        self._summary_freq = summary_freq
 
-        self._optims_names = self._update_settings(
-            'optims_names', optims_names)
-        self._losses_names = self._update_settings(
-            'losses_names', losses_names)
-        self._metrxs_names = self._update_settings(
-            'metrxs_names', metrxs_names)
-        self._lrs = self._update_settings('lrs', lrs)
+        self._optims_names = optims_names
+        self._losses_names = losses_names
+        self._metrxs_names = metrxs_names
+        self._lrs = lrs
 
-        self._is_trainable = self._update_settings(
-            'is_trainable', is_trainable)
+        self._is_trainable = is_trainable
 
-        self._is_save = self._update_settings('is_save', is_save)
-        self._is_load = self._update_settings('is_load', is_load)
+        self._is_save = is_save
+        self._is_load = is_load
 
-        self._path_save = self._update_settings(
-            'path_save', path_save)
-        self._save_freq = self._update_settings('save_freq', save_freq)
-        self._path_load = self._update_settings(
-            'path_load', path_load)
-        self._path_summary = self._update_settings(
-            'path_summary', path_summary)
+        self._path_save = path_save
+        self._save_freq = save_freq
+        self._path_load = path_load
+        self._path_summary = path_summary
 
-        self._arch = self._update_settings('arch', arch)
-        self._activ = self._update_settings('activ', activ)
-        self._var_init = self._update_settings('var_init', var_init)
-        self._hiddens = self._update_settings('hiddens', hiddens)
-        self._is_dropout = self._update_settings(
-            'is_dropout', is_dropout)
-        self._dropout_rate = self._update_settings(
-            'dropout_rate', dropout_rate)
-        self._is_bn = self._update_settings('is_bn', is_bn)
+        self._arch = arch
+        self._activ = activ
+        self._var_init = var_init
+        self._hiddens = hiddens
+        self._is_dropout = is_dropout
+        self._dropout_rate = dropout_rate
+        self._is_bn = is_bn
 
-        self._init_step = self._update_settings('init_step', init_step)
-        self._filenames = self._update_settings('filenames', None)
+        self._init_step = init_step
+        self._filenames = filenames
 
         # Special variable, printable, but don't input by settings.
-        self._models_names = self._update_settings(
-            'model_names', ['Model'])
-        self._nb_model = self._update_settings(
-            'model_names', len(self._models_names))
+        self._models_names = ['Model']
+        self._nb_model = len(self._models_names)
 
         self._callbacks = []
         self._is_init = False
@@ -152,17 +134,34 @@ class Net(object):
 
         self.global_step = 0
 
+        self._skipkeys = ['_c', '_skipkeys', '_models', '_optims',
+                          '_losses', '_labels', '_outputs', '_loss_records', '_metrxs', '_inputs', '_callbacks']
+
     def _initialize(self):
         pass
 
-    def _update_settings(self, name, value=None):
-        output = self._settings.get(name, value)
-        self._c.update({name: output})
-        return output
+    def _update_settings(self):
+        self._c = dict()
+
+        for v in vars(self):
+            if v[0] != "_":
+                continue
+            if v[1] == "_":
+                continue
+            if v in self._skipkeys:
+                continue
+            self._c.update({v[1:]: getattr(self, v)})
 
     def pretty_settings(self):
         """ print all settings in pretty JSON fashion """
-        return json.dumps(self._c, sort_keys=True, indent=4, separators=(',', ':'))
+        LEN = 50
+        prefix = "=" * LEN + "\n"
+        prefix += str(self.__class__) + " settings:" + "\n"
+        prefix += "." * LEN + "\n"
+        sets = json.dumps(self._c, sort_keys=True, indent=4, separators=(',', ': '))
+        suffix = "\n" + "=" * LEN
+        return prefix + sets + suffix
+
 
     def _before_defines(self):
         # extent shareable parameters
@@ -175,6 +174,7 @@ class Net(object):
         self._path_summary = extend_list(self._path_summary, self._nb_model)
         self._is_trainable = extend_list(self._is_trainable, self._nb_model)
         self._is_load = extend_list(self._is_load, self._nb_model)
+        self._is_save = extend_list(self._is_save, self._nb_model)
 
         self._inputs = empty_list(self._nb_model)
         self._outputs = empty_list(self._nb_model)
@@ -186,6 +186,8 @@ class Net(object):
 
         for i in range(self._nb_model):
             self._loss_records.append({})
+
+        self._update_settings()
 
     def _define_models(self):
         """ define model """
@@ -211,7 +213,7 @@ class Net(object):
     def _compile_models(self):
         for md, opt, loss, metric in zip(self._models, self._optims, self._losses, self._metrxs):
             md.compile(optimizer=opt, loss=loss, metrics=metric)
-            md.summary()
+            # md.summary()
 
     def _define_callbks(self):
         # for pathsave in self._path_saves:
@@ -236,6 +238,7 @@ class Net(object):
             if isinstance(model_id, str):
                 model_id = self._models_names.index(model_id)
             model_name = self._models_names[model_id]
+            flag = self._is_save[model_id]
             if file_path is None:
                 file_path = "{0}-{1}-{2}".format(self._path_save,
                                                  model_name, step)
@@ -260,18 +263,18 @@ class Net(object):
                 if flag or is_force:
                     print("Loading model: {0:10} from {1:10}.".format(
                         model_name, file_path))
-                    self.model(model_id).load_weights(file_path, by_name=True)                    
-    
+                    self.model(model_id).load_weights(file_path, by_name=True)
+
     def dump_loss(self, filename='loss.npy'):
-        loss_t = np.zeros(shape=(self.global_step+10, self._nb_model))
+        loss_t = np.zeros(shape=(self.global_step + 10, self._nb_model))
         eps = 1e-7
         for i in range(self._nb_model):
             for k, v in self._loss_records[i].items():
                 loss_t[k, i] = v
         for i in range(self._nb_model):
-            for j in range(self.global_step-1):
-                if abs(loss_t[j+1, i]) < eps:
-                    loss_t[j+1, i] = loss_t[j, i]
+            for j in range(self.global_step - 1):
+                if abs(loss_t[j + 1, i]) < eps:
+                    loss_t[j + 1, i] = loss_t[j, i]
         np.save(filename, loss_t)
 
     def define_net(self):

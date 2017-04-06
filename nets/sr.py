@@ -1,6 +1,6 @@
 import tensorflow as tf
 from keras.models import Model, Sequential
-from keras.layers import Dense, Activation, Dropout, Input, ELU, LeakyReLU, Conv2D, UpSampling2D, BatchNormalization, Cropping2D, add, Lambda
+from keras.layers import Dense, Activation, Dropout, Input, ELU, LeakyReLU, Conv2D, UpSampling2D, BatchNormalization, Cropping2D, add, Lambda, Cropping2D
 
 from keras import backend as K
 from keras.engine.topology import Layer
@@ -25,24 +25,25 @@ class NetSR(Net):
                  is_down_sample_1=True,
                  nb_down_sample=MAX_DOWNSAMPLE,
                  is_deconv=False,
-                 settings=None,
+                 crop_size=None,
                  **kwargs):
         super(NetSR, self).__init__(**kwargs)
-        self._settings = settings
-        self._is_down_sample_0 = self._update_settings(
-            'is_down_sample_0', is_down_sample_0)
-        self._is_down_sample_1 = self._update_settings(
-            'is_down_sample_1', is_down_sample_1)
-        self._nb_down_sample = self._update_settings(
-            'nb_down_sample', nb_down_sample)
 
-        self._is_deconv = self._update_settings('is_deconv', is_deconv)
+        self._is_down_sample_0 = is_down_sample_0
+        self._is_down_sample_1 = is_down_sample_1
+        self._nb_down_sample = nb_down_sample
 
-        self._residuals = dict()
+        if crop_size is None:
+            crop_size = (0, 0)
+        self._crop_size = crop_size
+
+        self._is_deconv = is_deconv
+
         self._res_inf = None
         self._res_ref = None
-        self._models_names = ['sr', 'res_itp', 'res_out']
-        self._is_trainable = [True, False, False]
+        self._models_names = ['sr', 'itp', 'res_itp', 'res_out']
+        self._is_trainable = [True, False, False, False]
+        self._is_save = [True, False, False, False]
 
         self._down_sample_ratio = [1, 1]
         if self._is_down_sample_0:
@@ -50,9 +51,9 @@ class NetSR(Net):
         if self._is_down_sample_1:
             self._down_sample_ratio[1] = 2
         self._down_sample_ratio = tuple(self._down_sample_ratio)
-        self._update_settings('down_sample_ratio', self._down_sample_ratio)
         self._shapes = []
         self._shapes.append(self._inputs_shapes[0])
+
         self._down_sample_ratios = []
         self._down_sample_ratios.append([1, 1])
 
@@ -61,35 +62,52 @@ class NetSR(Net):
                                                  list(self._down_sample_ratio) + [1]))
             self._down_sample_ratios.append(upsample_shape(self._down_sample_ratios[i],
                                                            self._down_sample_ratio))
-        self._update_settings('shapes', self._shapes)
-        self._update_settings('down_sample_ratios', self._down_sample_ratios)
+        self._shapes_cropped = []
+        for i, s in enumerate(self._shapes):
+            shape_new = [self._shapes[i][0] - 2 * self._crop_size[0],
+                         self._shapes[i][1] - 2 * self._crop_size[1],
+                         self._shapes[i][2]]
+            self._shapes_cropped.append(shape_new)
 
     def _define_models(self):
-        self._ips = []
-        for i in range(self._nb_down_sample + 1):
-            with tf.name_scope('input_%dx' % (2**i)) as scope:
-                self._ips.append(Input(self._shapes[i]))
-        self._ipn = self._ips[self._nb_down_sample]
+        # self._ips = []
+        # for i in range(self._nb_down_sample + 1):
+        #     with tf.name_scope('input_%dx' % (2**i)) as scope:
+        #         self._ips.append(Input(self._shapes[i]))
+        # self._ipn = self._ips[self._nb_down_sample]
+        with tf.name_scope('input') as scope:
+            self._ipn = Input(self._shapes[-1])
+            self._ip0 = Input(self._shapes[0])
+        # self._ups = []
+        # for i in range(self._nb_down_sample):
+        #     with tf.name_scope('upsample_%dx' % (2**(i + 1))):
+        #         self._ups.append(UpSampling2D(
+        #             size=self._down_sample_ratio)(self._ips[i + 1]))
 
-        self._ups = []
-        for i in range(self._nb_down_sample):
-            with tf.name_scope('upsample_%dx' % (2**(i + 1))):
-                self._ups.append(UpSampling2D(
-                    size=self._down_sample_ratio)(self._ips[i + 1]))
-        # residual references
-        self._rrs = []
-        for i in range(self._nb_down_sample):
-            with tf.name_scope('residual_reference_%dx' % (2**(i + 1))):
-                self._rrs.append(self._ips[i] - self._ups[i])
+        # # cropped residual references
+        # self._rrs = []
+        # for i in range(self._nb_down_sample):
+        #     with tf.name_scope('residual_reference_%dx' % (2**(i + 1))):
+        #         self._rrs.append(sub(self._ips[i], self._ups[i]))
+
+        # self._ups = []
+        with tf.name_scope('ip_c'):
+            self._ip0_c = Cropping2D(self._crop_size)(self._ip0)
 
         with tf.name_scope('interpolation'):
-            upl = UpSampling2D(
-                size=self._down_sample_ratios[self._nb_down_sample])
-            self._upfull = upl(self._ipn)
+            itp = UpSampling2D(size=self._down_sample_ratios[-1])(self._ipn)
+            self._itp = Cropping2D(self._crop_size)(itp)
+        self._models[self.model_id('itp')] = Model([self._ip0, self._ipn], [self._itp, self._ip0_c])
+
 
         with tf.name_scope('res_itp'):
-            res_itp = sub(self._ips[0], self._upfull)
-        self._models[self.model_id('res_itp')] = Model(self._ips, res_itp)
+            #     res_itp = []
+            #     for i in range(self._nb_down_sample + 1):
+            #         res_itp.append(sub(self._ips[0], self._ups[i]))
+            # self._models[self.model_id('res_itp')] = Model(self._ips, res_itp)
+            self._res_itp = sub(self._ip0_c, self._itp)
+        self._models[self.model_id('res_itp')] = Model(
+            [self._ip0, self._ipn], self._res_itp)
 
     @property
     def nb_down_sample(self):
@@ -101,17 +119,25 @@ class SRInterp(NetSR):
     def __init__(self, **kwargs):
         super(SRInterp, self).__init__(**kwargs)
 
+    def image_resize(self, x):
+        return tf.image.resize_bicubic(x, size=self._shapes[0][0:2])
+
+    def image_output_shape(self, input_shape):
+        return [None]+list(self._shapes[0])
+
+    def ly_resize(self):
+        return Lambda(function=self.image_resize, output_shape=self.image_output_shape)
+
     def _define_models(self):
         super(SRInterp, self)._define_models()
         with tf.name_scope('inference'):
-            upl = UpSampling2D(
-                size=self._down_sample_ratios[self._nb_down_sample])
-            self._output = upl(self._ipn)
+            upl = self.ly_resize()(self._ipn)
+            self._output = Cropping2D(self._crop_size)(upl)
         with tf.name_scope('res_out'):
-            res_out = sub(self._ips[0], self._output)
+            res_out = sub(self._ip0_c, self._output)
         self._is_trainable = [False, False, False]
-        self._models[self.model_id('sr')] = Model(self._ips, self._output)
-        self._models[self.model_id('res_out')] = Model(self._ips, res_out)
+        self._models[self.model_id('sr')] = Model(self._ipn, self._output)
+        self._models[self.model_id('res_out')] = Model([self._ip0, self._ipn], res_out)
 
 
 class SRDv0(NetSR):
@@ -138,14 +164,16 @@ class SRDv0(NetSR):
         with tf.name_scope('output'):
             res_inf = Conv2D(1, 5, padding='same')(x)
             img_inf = add([res_inf, ups])
+            img_crop = Cropping2D(self._crop_size)(img_inf)
         with tf.name_scope('res_out'):
-            res_out = sub(self._ips[0], img_inf)
-        self._models[self.model_id('sr')] = Model(self._ipn, img_inf)
+            res_out = sub(self._ip0_c, img_crop)
+        self._models[self.model_id('sr')] = Model(self._ipn, img_crop)
         self._models[self.model_id('res_out')] = Model(
-            [self._ips[0], self._ipn], res_out)
+            [self._ip0, self._ipn], res_out)
 
     def _train_model_on_batch(self, model, inputs, labels):
         return model.train_on_batch(inputs[1], labels[0])
+
 
 class SRDv1(NetSR):
     """ based on arxiv Accurate Image Super-Resolution Using Very Deep Convolutional Networks """
@@ -168,14 +196,16 @@ class SRDv1(NetSR):
         with tf.name_scope('output'):
             res_inf = Conv2D(1, 5, padding='same')(x)
             img_inf = add([res_inf, ups])
+            img_crop = Cropping2D(self._crop_size)(img_inf)
         with tf.name_scope('res_out'):
-            res_out = sub(self._ips[0], img_inf)
-        self._models[self.model_id('sr')] = Model(self._ipn, img_inf)
+            res_out = sub(self._ip0_c, img_crop)
+        self._models[self.model_id('sr')] = Model(self._ipn, img_crop)
         self._models[self.model_id('res_out')] = Model(
-            [self._ips[0], self._ipn], res_out)
-    
+            [self._ip0, self._ipn], res_out)
+
     def _train_model_on_batch(self, model, inputs, labels):
         return model.train_on_batch(inputs[1], labels[0])
+
 
 class SRDv2(NetSR):
     """ UpSampling2D in the end"""
@@ -204,14 +234,16 @@ class SRDv2(NetSR):
         with tf.name_scope('output'):
             res_inf = Conv2D(1, 3, padding='same')(x)
             img_inf = add([res_inf, ups])
+            img_crop = Cropping2D(self._crop_size)(img_inf)
         with tf.name_scope('res_out'):
-            res_out = sub(self._ips[0], img_inf)
-        self._models[self.model_id('sr')] = Model(self._ipn, img_inf)
+            res_out = sub(self._ip0_c, img_inf)
+        self._models[self.model_id('sr')] = Model(self._ipn, img_crop)
         self._models[self.model_id('res_out')] = Model(
-            [self._ips[0], self._ipn], res_out)
+            [self._ip0, self._ipn], res_out)
 
     def _train_model_on_batch(self, model, inputs, labels):
         return model.train_on_batch(inputs[1], labels[0])
+
 # class SRDMultiScale(NetSR):
 #     @with_config
 #     def __init__(self,

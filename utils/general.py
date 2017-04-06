@@ -15,7 +15,33 @@ import time
 import datetime
 import tensorflow as tf
 import click
+from inspect import getfullargspec, signature
+from functools import wraps
 
+def get_args(func, all_vars):
+    d = {}
+    sig = signature(func)
+    for param in sig.parameters.values():
+        if param.kind == param.VAR_POSITIONAL or param.kind == param.VAR_KEYWORD:
+            continue
+        d.update({param.name: all_vars[param.name]})
+    return d
+
+def print_pretty_args(func, all_vars):    
+    if isinstance(func, click.core.Command):
+        func = func.callback
+    sig = signature(func)
+    d = {}
+    for param in sig.parameters.values():
+        if param.kind == param.VAR_POSITIONAL or param.kind == param.VAR_KEYWORD:
+            continue
+        d.update({param.name: all_vars[param.name]})
+    prefix = "=" * 30 + "\n"
+    prefix += str(func.__name__) + " args:" + "\n"
+    prefix += "." * 30 + "\n"
+    sets = json.dumps(d, indent=4, separators=[',', ': '], sort_keys=True)
+    suffix = "\n" + "=" * 30
+    click.echo(prefix + sets + suffix)
 
 
 def setting_with_priority(settings_list):
@@ -23,6 +49,7 @@ def setting_with_priority(settings_list):
         if setting is not None:
             return setting
     return None
+
 
 def config_from_dicts(key, dicts, mode='first'):
     value = None
@@ -45,11 +72,10 @@ def config_from_dicts(key, dicts, mode='first'):
                     value.append(tmp)
     return value
 
+
 def print_global_vars():
     for v in tf.global_variables():
         print(v.name)
-
-
 
 
 class Sentinel:
@@ -186,7 +212,7 @@ def label_name(data_name, case_digit=None, label_prefix=None):
 #     return
 
 
-def with_config(func):
+def with_config_old(func):
     @wraps(func)
     def wrapper(*args, **kwargs):
         fns = kwargs.pop('filenames', None)
@@ -198,6 +224,37 @@ def with_config(func):
             "args:" + str(args))
         kwargs['filenames'] = fns
         return func(*args,  settings=sets, **kwargs)
+    return wrapper
+
+
+def with_config(func):
+    """ add support to read keywargs from .json file
+    Add a preserved keyword 'filenames' for .json files.
+    """
+    @wraps(func)
+    def wrapper(*args, filenames=None, **kwargs):
+        if isinstance(filenames, str):
+            filenames = [filenames]
+        if filenames is None:
+            filenames = []
+        paras = getfullargspec(func)
+        json_dicts = []
+        for fn in filenames:
+            with open(fn, 'r') as fin:
+                json_dicts.append(json.load(fin))
+        key_args = paras.args[len(args):]
+        nb_def = len(key_args)
+        if paras.defaults is not None:
+            def_args = paras.defaults[-nb_def:]
+        else:
+            def_args = empty_list(nb_def)
+        def_dict = {k: v for k, v in zip(key_args, def_args)}
+        for k in def_dict:
+            v = config_from_dicts(k, [kwargs] + json_dicts + [def_dict])
+            kwargs.update({k: v})
+        kwargs.update({'filenames':filenames})
+        kwargs.pop('filenames')
+        return func(*args, filenames=filenames, **kwargs)
     return wrapper
 
 
@@ -252,6 +309,7 @@ def filename_filter(filenames, prefix, suffix):
                 files.append(path_full)
     return files, dirs
 
+
 class ProgressTimer:
     def __init__(self, nb_steps=100, min_elp=1.0):
         self._nb_steps = nb_steps
@@ -291,5 +349,5 @@ class ProgressTimer:
         else:
             time_eta = str(datetime.timedelta(seconds=int(eta)))
         click.echo("i=%6d, %s/it [%s<%s] :" %
-              (step, time_int, time_pas, time_eta) + msg)
+                   (step, time_int, time_pas, time_eta) + msg)
         self._pre = self._elaps

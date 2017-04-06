@@ -43,10 +43,10 @@ class DataSetBase(object):
                  is_finite=True,
                  file_data=None,
                  dataset_name='images',
-                 settings=None,
+                 settings={},
                  **kwargs):
-        self._c = dict()
         self._settings = settings
+        self._c = dict()
 
         self._is_batch = self._update_settings('is_batch', is_batch)
         self._batch_size = self._update_settings('batch_size', batch_size)
@@ -154,7 +154,7 @@ class DataSetBase(object):
 
     def pretty_settings(self):
         """ return settings in pretty .json string """
-        return json.dumps(self._c, sort_keys=True, indent=4, separators=(',', ':'))
+        return json.dumps(self._c, sort_keys=True, indent=4, separators=(',', ': '))
 
     def visualize(self, sample):
         """ Convert sample into visualizeable format """
@@ -264,7 +264,7 @@ class DataSetImages(DataSetBase):
                  is_down_sample_0=True,
                  is_down_sample_1=True,
                  down_sample_method='mean',
-                 settings=None,
+                 settings={},
                  **kwargs):
         super(DataSetImages, self).__init__(**kwargs)
         self._settings = settings
