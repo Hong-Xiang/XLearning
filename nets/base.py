@@ -311,7 +311,7 @@ class Net(object):
             self._last_save = time.time()
         else:
             delta = time.time() - self._last_save
-            if delta > 10.0 * 60.0:
+            if delta > 30.0 * 60.0:
                 save_flag = True
         if save_flag:
             self.save(step=self.global_step)
