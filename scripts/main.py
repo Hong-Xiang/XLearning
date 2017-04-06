@@ -146,8 +146,9 @@ def train_sr_d(dataset_name,
         pt = ProgressTimer(epochs * steps_per_epoch)
         for _ in range(epochs):
             for _ in range(steps_per_epoch):
-                s = next(dataset)                
-                loss = net.train_on_batch('sr', s[0][1], s[1][0][:,cpx:-cpx,cpy:-cpy,:])
+                s = next(dataset)
+                loss = net.train_on_batch(
+                    'sr', s[0][1], s[1][0][:, cpx:-cpx, cpy:-cpy, :])
                 msg = "model:{0:5s}, loss={1:10e}, gs={2:7d}.".format(
                     'sr', loss, net.global_step)
                 pt.event(msg=msg)

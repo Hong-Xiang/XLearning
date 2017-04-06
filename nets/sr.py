@@ -240,6 +240,64 @@ class SRDv2(NetSR):
         self._models[self.model_id('res_out')] = Model(
             [self._ip0, self._ipn], res_out)
 
+
+class SRAEv0(NetSR):
+    """ Super resolution based on autoencoder"""
+    @with_config
+    def __init__(self,
+                 latent_dim,
+                 h_enc,
+                 h_enc_cond,
+                 h_dec,
+                 h_dec_cond,
+                 **kwargs):
+        NetSR.__init__(self, **kwargs)
+        self._h_enc = h_enc
+        self._h_enc_cond = h_enc_cond
+        self._h_dec = h_dec
+        self._h_dec_cond = h_dec_cond
+
+    def _define_models(self):
+        NetSR._define_models(self)
+
+        with tf.name_scope('encoder_hr'):
+            x = self._ip0
+            for i, nc in enumerate(self._h_enc):
+                with tf.name_scope('conv_%d' % i):
+                    x = Conv2D(nc, 3, padding='same')(x)
+                    if self._is_bn:
+                        x = BatchNormalization()(x)
+                    x = ELU()(x)
+            with tf.name_scope('conv_enc'):
+                x = Conv2D(latent_dim, 3, padding='same')(x)
+        with tf.name_scope('encoder_cond'):
+            x = self._ipn
+            for i, nc in enumerate(self._h_enc):
+                with tf.name_scope('conv_%d' % i):
+                    x = Conv2D(nc, 3, padding='same')(x)
+                    if self._is_bn:
+                        x = BatchNormalization()(x)
+                    x = ELU()(x)
+            with tf.name_scope('conv_enc'):
+                x = Conv2D(latent_dim, 3, padding='same')(x)
+        with tf.name_scope('upsampling'):
+            x = UpSampling2D(
+                size=self._down_sample_ratios[self._nb_down_sample])(x)
+        with tf.name_scope('conv_end'):
+            x = Conv2D(self._hiddens[-1], 5,
+                       activation='elu', padding='same')(x)
+            x = Conv2D(self._hiddens[-1], 5,
+                       activation='elu', padding='same')(x)
+        with tf.name_scope('output'):
+            res_inf = Conv2D(1, 3, padding='same')(x)
+            img_inf = add([res_inf, ups])
+            img_crop = Cropping2D(self._crop_size)(img_inf)
+        with tf.name_scope('res_out'):
+            res_out = sub(self._ip0_c, img_inf)
+        self._models[self.model_id('sr')] = Model(self._ipn, img_crop)
+        self._models[self.model_id('res_out')] = Model(
+            [self._ip0, self._ipn], res_out)
+
 # class SRDMultiScale(NetSR):
 #     @with_config
 #     def __init__(self,

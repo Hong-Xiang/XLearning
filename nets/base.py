@@ -20,6 +20,7 @@ from keras.models import Model, Sequential
 # from keras.losses import mean_square_error
 from keras import backend as K
 import keras.utils.vis_utils as kvu
+import time
 
 from ..utils.general import with_config, extend_list, zip_equal, empty_list, get_args
 
@@ -136,6 +137,8 @@ class Net(object):
 
         self._skipkeys = ['_c', '_skipkeys', '_models', '_optims',
                           '_losses', '_labels', '_outputs', '_loss_records', '_metrxs', '_inputs', '_callbacks']
+        
+        self._last_save = None
 
     def _initialize(self):
         pass
@@ -300,12 +303,22 @@ class Net(object):
             model_id = self._models_names.index(model_id)
         self._loss_records[model_id].update({self.global_step: loss_now})
         # self._loss_records[model_id].append(loss_now)
+        save_flag = False        
         if self._save_freq > 0:
             if self.global_step % self._save_freq == 0:
-                self.save(step=self.global_step)
+                save_flag = True
+        if self._last_save is None:
+            self._last_save = time.time()
+        else:
+            delta = time.time() - self._last_save
+            if delta > 10.0*60.0:
+                save_flag = True
+        if save_flag:
+            self.save(step=self.global_step)
+            self._last_save = time.time()
         if self._summary_freq > 0:
             if self.global_step % self._summary_freq == 0:
-                self.dump_loss()
+                self.dump_loss()        
         return loss_now
 
     def reset_lr(self, lrs):
