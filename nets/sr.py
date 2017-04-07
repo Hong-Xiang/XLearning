@@ -11,7 +11,7 @@ from ..nets.base import Net
 from ..utils.general import with_config, enter_debug
 from ..utils.tensor import upsample_shape, downsample_shape
 from ..models.merge import sub
-from ..models.image import conv_blocks, conv_f
+from ..models.image import conv_blocks, conv_f, sr_base
 
 
 IMAGE_SUMMARY_MAX_OUTPUT = 5
@@ -70,14 +70,15 @@ class NetSR(Net):
             self._shapes_cropped.append(shape_new)
 
     def _define_models(self):
-        # self._ips = []
-        # for i in range(self._nb_down_sample + 1):
-        #     with tf.name_scope('input_%dx' % (2**i)) as scope:
-        #         self._ips.append(Input(self._shapes[i]))
-        # self._ipn = self._ips[self._nb_down_sample]
-        with tf.name_scope('input') as scope:
-            self._ipn = Input(self._shapes[-1])
-            self._ip0 = Input(self._shapes[0])
+        self._ips = []
+        for i in range(self._nb_down_sample + 1):
+            with tf.name_scope('input_%dx' % (2**i)) as scope:
+                self._ips.append(Input(self._shapes[i]))
+        self._ipn = self._ips[self._nb_down_sample]
+        self._ip0 = self._ips[0]
+        # with tf.name_scope('input') as scope:
+        #     self._ipn = Input(self._shapes[-1])
+        #     self._ip0 = Input(self._shapes[0])
         # self._ups = []
         # for i in range(self._nb_down_sample):
         #     with tf.name_scope('upsample_%dx' % (2**(i + 1))):
@@ -122,8 +123,12 @@ class NetSR(Net):
 
     def _train_model_on_batch(self, model_id, inputs, outputs):
         cpx, cpy = self.crop_size
-        loss_v = self.model(model_id).train_on_batch(
-            inputs[self._nb_down_sample], outputs[0][:, cpx:-cpx, cpy:-cpy, :])
+        if cpx > 0:
+            loss_v = self.model(model_id).train_on_batch(
+                inputs[self._nb_down_sample], outputs[0][:, cpx:-cpx, cpy:-cpy, :])
+        else:
+            loss_v = self.model(model_id).train_on_batch(
+                inputs[self._nb_down_sample], outputs[0][:, :, cpy:-cpy, :])
         return loss_v
 
     def _predict(self, model_id, inputs):
@@ -264,6 +269,30 @@ class SRDv2(NetSR):
         self._models[self.model_id('res_out')] = Model(
             [self._ip0, self._ipn], res_out)
 
+
+class SRDv3(NetSR):
+    """ UpSampling2D in the end"""
+    @with_config
+    def __init__(self,
+                 **kwargs):
+        NetSR.__init__(self, **kwargs)
+
+    def _define_models(self):
+        NetSR._define_models(self)
+        with tf.name_scope('upsampling_ip'):
+            ups = UpSampling2D(
+                size=self._down_sample_ratios[self._nb_down_sample])(self._ipn)
+        x = self._ipn
+        x = sr_base(x, self._down_sample_ratio[0], self._down_sample_ratio[1])
+        with tf.name_scope('output'):
+            res_inf = Conv2D(1, 3, padding='same')(x)
+            img_inf = add([res_inf, ups])
+            img_crop = Cropping2D(self._crop_size)(img_inf)
+        with tf.name_scope('res_out'):
+            res_out = sub(self._ip0_c, img_crop)
+        self._models[self.model_id('sr')] = Model(self._ipn, img_crop)
+        self._models[self.model_id('res_out')] = Model(
+            [self._ip0, self._ipn], res_out)
 
 class SRAEv0(NetSR):
     """ Super resolution based on autoencoder"""

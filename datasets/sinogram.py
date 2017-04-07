@@ -10,7 +10,7 @@ from ..utils.general import with_config
 
 class Sinograms(DataSetImages):
     """ Load HDF5 dataset of sinograms.
-    Sinograms are saved in dataset = fin.get('sinograms'), with shape (nb_sinograms, nb_sensors, nb_views).
+    Sinograms are saved in dataset = fin.get('sinograms'), with shape (nb_sinograms, nb_sensors, nb_views, 1).
     """
     @with_config
     def __init__(self,
@@ -27,7 +27,7 @@ class Sinograms(DataSetImages):
         idx = next(self._sampler)[0]
         image = np.array(self._dataset[idx])
         image = image[:, :360, :]
-        image += 1
+        image += 1.0
         image = np.log(image)
 
         if len(image.shape) == 2:

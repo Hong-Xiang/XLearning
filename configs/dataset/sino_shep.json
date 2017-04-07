@@ -12,6 +12,6 @@
     "is_down_sample": true,
     "is_down_sample_0": false,
     "is_down_sample_1": true,
-    "nb_down_sample": 3,
+    "nb_down_sample": 1,
     "down_sample_method": "mean"
 }

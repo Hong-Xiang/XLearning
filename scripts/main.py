@@ -1,6 +1,7 @@
 """ General entry for xlearn """
 import matplotlib
 matplotlib.use('agg')
+import scipy.io
 # import argparse
 # import datetime
 from pathlib import Path
@@ -18,6 +19,7 @@ import xlearn.datasets
 import xlearn.nets
 from xlearn.utils.general import with_config, empty_list, enter_debug, ProgressTimer, config_from_dicts, print_pretty_args
 from xlearn.utils.image import subplot_images
+import h5py
 
 
 class Config(dict):
@@ -277,6 +279,54 @@ def clean(no_save, no_out=True):
         if perr.match(f):
             os.remove(os.path.abspath(f))
 
+@xln.command()
+@click.option('--dataset_name', '-dn', type=str)
+@click.option('--net_name', '-nn', type=str)
+@click.option('--filenames', '-fn', multiple=True, type=str)
+@click.option('--load_step', type=int)
+@with_config
+def sino4matlab(dataset_name,
+                net_name,
+                filenames,
+                load_step):
+    print_pretty_args(sino4matlab, locals())
+    dsc = getattr(xlearn.datasets, dataset_name)
+    netc = getattr(xlearn.nets, net_name)
+
+    with dsc(filenames=filenames) as dataset:
+        net_settings = {'filenames': filenames}
+        if load_step is not None:
+            net_settings.update({'init_step': load_step})
+        net = netc(**net_settings)
+        net.define_net()
+        click.echo(net.pretty_settings())
+        if load_step is not None:
+            net.load(is_force=True, step=load_step)
+        net_interp = xlearn.nets.SRInterp(filenames=filenames)
+        net_interp.define_net()
+        s = next(dataset)
+        p = net.predict('sr', s[0])
+        p_it = net_interp.predict('sr', s[0])
+        print(np.mean(p))
+        print(np.mean(p_it))
+        _, hr_t = net.predict('itp', s[0])
+        print(np.mean(hr_t))
+        sr_t = np.exp((p + 0.5)*6.0)-1.0
+        it_t = np.exp((p_it + 0.5)*6.0)-1.0
+        hr_t = np.exp((hr_t + 0.5)*6.0)-1.0
+        lr_t = np.exp((s[0][net.nb_down_sample] + 0.5)*6.0)-1.0
+        # sr_t = p
+        # it_t = p_it
+        # hr_t = hr_t
+        # lr_t = s[0][net.nb_down_sample]
+        save_dict = {
+            'sino_sr': sr_t,
+            'sino_it': it_t,
+            'sino_high': hr_t,
+            'sino_low': lr_t,
+            'crop_size': np.array(net.crop_size)
+        }
+        scipy.io.savemat('sinos.mat', save_dict)  
 
 if __name__ == '__main__':
     xln()
