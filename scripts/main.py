@@ -11,6 +11,7 @@ from tqdm import tqdm
 import os
 import click
 import json
+import re
 
 
 import xlearn.datasets
@@ -248,7 +249,32 @@ def test_dataset_image(dataset_name,
                 else:
                     imgs_all[i].append(imgs)
 
-
+@xln.command()
+@click.option('--no_save', is_flag=True)
+@click.option('--no_out', is_flag=True)
+def clean(no_save, no_out=True):
+    files = os.listdir('.')
+    save_re = r'save-.*-([0-9]+)'    
+    prog = re.compile(save_re)
+    max_step = -1
+    for f in files:
+        m = prog.match(f)
+        if m:
+            step = int(m.group(1))
+            if step > max_step:
+                max_step = step
+    for f in files:
+        m = prog.match(f)
+        if m:
+            step = int(m.group(1))
+            if step < max_step:
+                os.remove(os.path.abspath(f))
+        pout = re.compile(r'[0-9]+\.out')
+        if pout.match(f) and no_out:
+            os.remove(os.path.abspath(f))
+        perr = re.compile(r'[0-9]+\.err')
+        if perr.match(f):
+            os.remove(os.path.abspath(f))
 if __name__ == '__main__':
     xln()
 
