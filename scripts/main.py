@@ -135,7 +135,7 @@ def train_sr_d(dataset_name,
         if load_step is not None:
             net_settings.update({'init_step': load_step})
         net = netc(**net_settings)
-        net.define_net()        
+        net.define_net()
         cpx, cpy = net.crop_size
         if load_step is not None:
             if load_step > 0:
@@ -189,7 +189,7 @@ def predict_sr(net_name=None,
         net_interp.define_net()
         s = next(dataset)
         p = net.predict('sr', s[0])
-        p_it = net_interp.predict('sr', s[0])                    
+        p_it = net_interp.predict('sr', s[0])
         _, hr_t = net.predict('itp', s[0])
         res_sr = net.predict('res_out', s[0])
         res_it = net.predict('res_itp', s[0])
@@ -249,12 +249,13 @@ def test_dataset_image(dataset_name,
                 else:
                     imgs_all[i].append(imgs)
 
+
 @xln.command()
 @click.option('--no_save', is_flag=True)
 @click.option('--no_out', is_flag=True)
 def clean(no_save, no_out=True):
     files = os.listdir('.')
-    save_re = r'save-.*-([0-9]+)'    
+    save_re = r'save-.*-([0-9]+)'
     prog = re.compile(save_re)
     max_step = -1
     for f in files:
@@ -275,6 +276,8 @@ def clean(no_save, no_out=True):
         perr = re.compile(r'[0-9]+\.err')
         if perr.match(f):
             os.remove(os.path.abspath(f))
+
+
 if __name__ == '__main__':
     xln()
 

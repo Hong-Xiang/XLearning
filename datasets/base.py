@@ -300,9 +300,10 @@ class DataSetImages(DataSetBase):
         self._sampler = None
         self._dataset = None
 
+        
         if self._is_uint8:
             self._norm_c = 256.0
-        else:
+        elif self._norm_c is None:
             self._norm_c = 1.0
 
         if self._is_down_sample:
@@ -392,10 +393,11 @@ class DataSetImages(DataSetBase):
 
         if self._is_gray:
             image = numpy.mean(image, axis=-1, keepdims=True)
-
+                
         if self._is_norm:
             image /= self._norm_c
             image -= 0.5
+        
 
         # Down sample
         if self._is_down_sample:
