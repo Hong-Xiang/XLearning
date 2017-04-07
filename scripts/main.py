@@ -134,9 +134,7 @@ def train_sr_d(dataset_name,
         if load_step is not None:
             net_settings.update({'init_step': load_step})
         net = netc(**net_settings)
-        net.define_net()
-        if load_step > 0:
-            net.load(step=load_step)
+        net.define_net()        
         cpx, cpy = net.crop_size
         if load_step is not None:
             if load_step > 0:
