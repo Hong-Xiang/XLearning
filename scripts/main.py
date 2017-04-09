@@ -363,6 +363,24 @@ def cres_all():
         if os.path.isdir(p):
             os.system('cd '+p +'; cres.sh')
 
+@xln.command()
+@click.option('--loss_index', type=int)
+def merge_loss(loss_index=0):
+    loss_names = []
+    loss_merged = []
+    dirs = os.listdir('.')
+    paths = [os.path.abspath(d) for d in dirs]
+    for p in paths:
+        if os.path.isdir(p):
+            loss_file = os.path.join(p,'loss.npy')
+            loss_tmp = np.load(loss_file)[:,loss_index]
+            loss_merged.append(loss_tmp)
+            loss_names.append(os.path.basename(p))
+    loss_merged = np.array(loss_merged)
+    np.save('loss_merged.npy', loss_merged)
+    with open('loss_names.json', 'w') as fout:
+        json.dump(loss_names, fout)
+
 if __name__ == '__main__':
     xln()
 
