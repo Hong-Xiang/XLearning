@@ -345,7 +345,7 @@ def sbatch_all():
     paths = [os.path.abspath(d) for d in dirs]
     for p in paths:
         if os.path.isdir(p):
-            os.system('cd '+p +'; sbatch k80.slurm')
+            os.system('cd '+p +'; chmod +x work.sh; sbatch k80.slurm')
             # os.system('pwd')
 
 if __name__ == '__main__':
