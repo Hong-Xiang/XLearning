@@ -235,13 +235,13 @@ class Net(object):
     def save(self, model_id=None, file_path=None, step='ukn'):
         if model_id is None:
             for i in range(self._nb_model):
-                self.save(self._models_names[i],
-                          file_path=file_path, step=step)
+                if self._is_save[i]:
+                    self.save(self._models_names[i],
+                              file_path=file_path, step=step)
         else:
             if isinstance(model_id, str):
                 model_id = self._models_names.index(model_id)
             model_name = self._models_names[model_id]
-            flag = self._is_save[model_id]
             if file_path is None:
                 file_path = "{0}-{1}-{2}".format(self._path_save,
                                                  model_name, step)
@@ -253,8 +253,9 @@ class Net(object):
         """ load weight from file """
         if model_id is None:
             for i in range(self._nb_model):
-                self.load(
-                    self._models_names[i], file_path=file_path, step=step, is_force=is_force)
+                if self._is_load[i] or is_force:
+                    self.load(
+                        self._models_names[i], file_path=file_path, step=step, is_force=is_force)
         else:
             if file_path is None:
                 if isinstance(model_id, str):
@@ -262,11 +263,9 @@ class Net(object):
                 model_name = self._models_names[model_id]
                 file_path = "{0}-{1}-{2}".format(self._path_save,
                                                  model_name, step)
-                flag = self._is_load[model_id]
-                if flag or is_force:
-                    print("Loading model: {0:10} from {1:10}.".format(
-                        model_name, file_path))
-                    self.model(model_id).load_weights(file_path, by_name=True)
+                print("Loading model: {0:10} from {1:10}.".format(
+                    model_name, file_path))
+                self.model(model_id).load_weights(file_path, by_name=True)
 
     def dump_loss(self, filename='loss.npy'):
         loss_t = np.zeros(shape=(self.global_step + 10, self._nb_model))

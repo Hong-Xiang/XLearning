@@ -214,9 +214,8 @@ def predict_sr(net_name=None,
         res_sr_l = dataset.visualize(res_sr, is_no_change=True)
         res_it_l = dataset.visualize(res_it, is_no_change=True)
         window = [(-0.5, 0.5), (-0.5, 0.5), (-0.5, 0.5),
-                  (-0.5, 0.5), (-0.1, 0.1), (-0.1, 0.1)]
-        subplot_images((hr, lr, sr, it, res_sr_l, res_it_l), is_gray=True, size=3.0, tight_c=0.5,
-
+                  (-0.5, 0.5), (-0.01, 0.01), (-0.01, 0.01)]
+        subplot_images((hr, lr, sr, it, res_sr_l, res_it_l), size=3.0, tight_c=0.5,
                        is_save=True, filename=save_filename, window=window)
 
         # np.save('predict_hr.npy', s[1][0])
@@ -338,7 +337,16 @@ def sino4matlab(dataset_name,
             'sino_low': lr_t,
             'crop_size': np.array(net.crop_size)
         }
-        scipy.io.savemat('sinos.mat', save_dict)  
+        scipy.io.savemat('sinos.mat', save_dict)
+
+@xln.command()
+def sbatch_all():
+    dirs = os.listdir('.')
+    paths = [os.path.abspath(d) for d in dirs]
+    for p in paths:
+        if os.path.isdir(p):
+            os.system('cd '+p +'; sbatch k80.slurm')
+            # os.system('pwd')
 
 if __name__ == '__main__':
     xln()

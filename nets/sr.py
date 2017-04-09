@@ -280,25 +280,56 @@ class SRDv3(NetSR):
     """ UpSampling2D in the end"""
     @with_config
     def __init__(self,
+                 is_celu=False,
                  **kwargs):
         NetSR.__init__(self, **kwargs)
+        self._is_celu = is_celu
 
     def _define_models(self):
-        NetSR._define_models(self)
+        self._ips = []
+        for i in range(self._nb_down_sample + 1):
+            with tf.name_scope('input_%dx' % (2**i)) as scope:
+                self._ips.append(Input(self._shapes[i]))
+        self._ipn = self._ips[self._nb_down_sample]
+        self._ip0 = self._ips[0]
+
         with tf.name_scope('upsampling_ip'):
             ups = UpSampling2D(
                 size=self._down_sample_ratios[self._nb_down_sample])(self._ipn)
-        x = self._ipn
-        x = sr_base(x, self._down_sample_ratio[0], self._down_sample_ratio[1])
+        x = ups
+        # x = sr_base(x, self._down_sample_ratio[0], self._down_sample_ratio[1])
+        mc = conv_blocks(x.shape.as_list()[
+                         1:], self._hiddens, 3, is_celu=self._is_celu)
+        with tf.name_scope('infer'):
+            x = mc(x)
         with tf.name_scope('output'):
-            res_inf = Conv2D(1, 3, padding='same')(x)
-            img_inf = add([res_inf, ups])
-            img_crop = Cropping2D(self._crop_size)(img_inf)
+            res_inf = Conv2D(1, 3, padding='valid')(x)
+            spo = res_inf.shape.as_list()[1:3]
+            spi = ups.shape.as_list()[1:3]
+            cpx = (spi[0] - spo[0]) // 2
+            cpy = (spi[1] - spo[1]) // 2
+            self._crop_size = (cpx, cpy)
+            ups_c = Cropping2D(self._crop_size)(ups)
+            img_inf = add([res_inf, ups_c])
+            img_crop = img_inf
         with tf.name_scope('res_out'):
+            with tf.name_scope('ip_c'):
+                self._ip0_c = Cropping2D(self._crop_size)(self._ip0)
             res_out = sub(self._ip0_c, img_crop)
         self._models[self.model_id('sr')] = Model(self._ipn, img_crop)
         self._models[self.model_id('res_out')] = Model(
             [self._ip0, self._ipn], res_out)
+
+        with tf.name_scope('interpolation'):
+            itp = UpSampling2D(size=self._down_sample_ratios[-1])(self._ipn)
+            self._itp = Cropping2D(self._crop_size)(itp)
+        self._models[self.model_id('itp')] = Model(
+            [self._ip0, self._ipn], [self._itp, self._ip0_c])
+
+        with tf.name_scope('res_itp'):
+            self._res_itp = sub(self._ip0_c, self._itp)
+        self._models[self.model_id('res_itp')] = Model(
+            [self._ip0, self._ipn], self._res_itp)
 
 
 class SRDv4(NetSR):
@@ -306,6 +337,10 @@ class SRDv4(NetSR):
     def __init__(self,
                  **kwargs):
         NetSR.__init__(self, **kwargs)
+        self._models_names = ['sr', 'itp', 'res_itp',
+                              'res_out', 'sr1', 'sr2', 'sr3']
+        self._is_trainable = [False, False, False, False, True, True, True]
+        self._is_save = [True, False, False, False, False, False, False]
 
     def _define_models(self):
         NetSR._define_models(self)

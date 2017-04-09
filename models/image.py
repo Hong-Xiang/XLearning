@@ -52,20 +52,28 @@ def upscale_block(input_, rx, ry, channel, id=0):
 #                               scope=scope + "convolutions%d/" % id)
 #     return x
 
-def conv_blocks(input_shape, nb_filters, kernel_size, id=0, padding='same'):
+def conv_blocks(input_shape, nb_filters, kernel_size, id=0, padding='valid', is_celu=False, is_final_active=False):
+    if is_celu:
+        activ = CELU
+    else:
+        activ = ELU
     nb_layers = len(nb_filters)
     if nb_layers < 2:
         raise ValueError(
             "conv_blocks requires nb_layers >= 2, while input is {0}.".format(nb_filters))
     m = Sequential()
     m.add(Conv2D(nb_filters[0], kernel_size=kernel_size,
-                 padding=padding,  input_shape=input_shape, activation='elu'))
-    m.add(BatchNormalization())
+                 padding=padding,  input_shape=input_shape))
+    m.add(activ())
+    # m.add(BatchNormalization())
     for i in range(nb_layers - 2):
         m.add(Conv2D(
             nb_filters[i + 1], kernel_size=kernel_size, padding=padding, activation='elu'))
-        m.add(BatchNormalization())
+        m.add(activ())
+        # m.add(BatchNormalization())
     m.add(Conv2D(nb_filters[-1], kernel_size=kernel_size, padding=padding))
+    if is_final_active:
+        m.add(activ())
     return m
 
 
@@ -85,23 +93,25 @@ def CELU():
 
     return Lambda(celu_kernel, output_shape=celu_output_shape)
 
+
 def conv_f(x, filters, kernel_size, is_active=True, name='conv_f'):
     with tf.name_scope(name):
-        x = Conv2D(filters, kernel_size=kernel_size, padding='same')(x)
+        x = Conv2D(filters, kernel_size=kernel_size, padding='valid')(x)
         if is_active:
             x = CELU()(x)
             x = BatchNormalization()(x)
     return x
+
 
 def conv_block(x, filters, name='conv_block'):
     with tf.name_scope(name):
         t0 = x
         rep1 = x
         for i in range(5):
-            rep1 = conv_f(rep1, filters*4, 1, True, 'conv_1_1_%d'%i)
+            rep1 = conv_f(rep1, filters * 4, 1, True, 'conv_1_1_%d' % i)
         rep3 = x
         for i in range(3):
-            rep3 = conv_f(rep3, filters*2, 3, True, 'conv_1_3_%d'%i)
+            rep3 = conv_f(rep3, filters * 2, 3, True, 'conv_1_3_%d' % i)
         rep5 = conv_f(rep3, filters, 5, True, 'conv_1_5_0')
         x = Concatenate(name='cat1')([x, rep1, rep3, rep5])
         x = conv_f(filters, filters, 1, False, name='conv_cat_1')
@@ -109,10 +119,10 @@ def conv_block(x, filters, name='conv_block'):
         x = t1
         rep1 = x
         for i in range(5):
-            rep1 = conv_f(rep1, filters*4, 1, True, 'conv_2_1_%d'%i)
+            rep1 = conv_f(rep1, filters * 4, 1, True, 'conv_2_1_%d' % i)
         rep3 = x
         for i in range(3):
-            rep3 = conv_f(rep3, filters*2, 3, True, 'conv_2_3_%d'%i)
+            rep3 = conv_f(rep3, filters * 2, 3, True, 'conv_2_3_%d' % i)
         rep5 = conv_f(rep3, filters, 5, True, 'conv_2_5_0')
         x = Concatenate(name='cat2')([x, rep1, rep3, rep5])
         x = conv_f(filters, filters, 1, False, name='conv_cat_2')
@@ -120,16 +130,17 @@ def conv_block(x, filters, name='conv_block'):
         x = t2
         rep1 = x
         for i in range(5):
-            rep1 = conv_f(rep1, filters*4, 1, True, 'conv_3_1_%d'%i)
+            rep1 = conv_f(rep1, filters * 4, 1, True, 'conv_3_1_%d' % i)
         rep3 = x
         for i in range(3):
-            rep3 = conv_f(rep3, filters*2, 3, True, 'conv_3_3_%d'%i)
+            rep3 = conv_f(rep3, filters * 2, 3, True, 'conv_3_3_%d' % i)
         rep5 = conv_f(rep3, filters, 5, True, 'conv_3_5_0')
         x = Concatenate(name='cat3')([x, rep1, rep3, rep5])
         x = conv_f(filters, filters, 1, False, name='conv_cat_3')
         t3 = add([t2, x])
         x = Concatenate()([t0, t1, t2, t3])
     return x
+
 
 def sr_base(x, down0, down1, name='sr2x'):
     with tf.name_scope(name):
@@ -139,6 +150,7 @@ def sr_base(x, down0, down1, name='sr2x'):
         res_inf = conv_f(rep_ups, 1, 5, False, name='res_inf')
         inf = add([ups, res_inf])
     return inf
+
 
 def convolution_block(ip, nb_filter, nb_row, nb_col, subsample=(1, 1), id=0, border_mode='same', scope=''):
     """ standard convolution block """

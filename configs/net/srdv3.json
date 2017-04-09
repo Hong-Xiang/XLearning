@@ -1,8 +1,8 @@
 {
     "optims_names": ["Adam"],
-    "is_bn": true,
     "inputs_shapes": [[363, 360, 1]],
     "nb_down_sample": 1,
-    "lrs": [1e-4],
-    "crop_size": [0, 16]
+    "hiddens": [128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128],
+    "is_celu": true,
+    "lrs": [1e-4]    
 }
