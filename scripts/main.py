@@ -346,7 +346,22 @@ def sbatch_all():
     for p in paths:
         if os.path.isdir(p):
             os.system('cd '+p +'; chmod +x work.sh; sbatch k80.slurm')
-            # os.system('pwd')
+
+@xln.command()
+def clean_all():
+    dirs = os.listdir('.')
+    paths = [os.path.abspath(d) for d in dirs]
+    for p in paths:
+        if os.path.isdir(p):
+            os.system('cd '+p +'; xln clean')
+
+@xln.command()
+def cres_all():
+    dirs = os.listdir('.')
+    paths = [os.path.abspath(d) for d in dirs]
+    for p in paths:
+        if os.path.isdir(p):
+            os.system('cd '+p +'; cres.sh')
 
 if __name__ == '__main__':
     xln()
