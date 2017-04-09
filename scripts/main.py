@@ -177,6 +177,18 @@ def predict_sr(net_name=None,
     print_pretty_args(predict_sr, locals())
     dsc = getattr(xlearn.datasets, dataset_name)
     netc = getattr(xlearn.nets, net_name)
+    if load_step is None:
+        files = os.listdir('.')
+        save_re = r'save-.*-([0-9]+)'
+        prog = re.compile(save_re)
+        max_step = -1
+        for f in files:
+            m = prog.match(f)
+            if m:
+                step = int(m.group(1))
+                if step > max_step:
+                    max_step = step
+        load_step = max_step
 
     with dsc(filenames=filenames) as dataset:
         net_settings = {'filenames': filenames}

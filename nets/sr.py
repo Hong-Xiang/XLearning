@@ -123,12 +123,18 @@ class NetSR(Net):
 
     def _train_model_on_batch(self, model_id, inputs, outputs):
         cpx, cpy = self.crop_size
-        if cpx > 0:
+        if cpx > 0 and cpy > 0:
             loss_v = self.model(model_id).train_on_batch(
                 inputs[self._nb_down_sample], outputs[0][:, cpx:-cpx, cpy:-cpy, :])
-        else:
+        elif cpy > 0:
             loss_v = self.model(model_id).train_on_batch(
                 inputs[self._nb_down_sample], outputs[0][:, :, cpy:-cpy, :])
+        elif cpx > 0:
+            loss_v = self.model(model_id).train_on_batch(
+                inputs[self._nb_down_sample], outputs[0][:, cpx:-cpx, :, :])
+        else:
+            loss_v = self.model(model_id).train_on_batch(
+                inputs[self._nb_down_sample], outputs[0])
         return loss_v
 
     def _predict(self, model_id, inputs):
@@ -293,6 +299,17 @@ class SRDv3(NetSR):
         self._models[self.model_id('sr')] = Model(self._ipn, img_crop)
         self._models[self.model_id('res_out')] = Model(
             [self._ip0, self._ipn], res_out)
+
+
+class SRDv4(NetSR):
+    @with_config
+    def __init__(self,
+                 **kwargs):
+        NetSR.__init__(self, **kwargs)
+
+    def _define_models(self):
+        NetSR._define_models(self)
+
 
 class SRAEv0(NetSR):
     """ Super resolution based on autoencoder"""
