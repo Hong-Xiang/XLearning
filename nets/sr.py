@@ -1,6 +1,6 @@
 import tensorflow as tf
 from keras.models import Model, Sequential
-from keras.layers import Dense, Activation, Dropout, Input, ELU, LeakyReLU, Conv2D, UpSampling2D, BatchNormalization, Cropping2D, add, Lambda, Cropping2D
+from keras.layers import Dense, Activation, Dropout, Input, ELU, LeakyReLU, Conv2D, UpSampling2D, BatchNormalization, Cropping2D, add, Lambda, Cropping2D, ZeroPadding2D
 
 from keras import backend as K
 from keras.engine.topology import Layer
@@ -11,7 +11,7 @@ from ..nets.base import Net
 from ..utils.general import with_config, enter_debug
 from ..utils.tensor import upsample_shape, downsample_shape
 from ..models.merge import sub
-from ..models.image import conv_blocks, conv_f, sr_base
+from ..models.image import conv_blocks, conv_f, sr_base, sr_end
 
 
 IMAGE_SUMMARY_MAX_OUTPUT = 5
@@ -68,6 +68,9 @@ class NetSR(Net):
                          self._shapes[i][1] - 2 * self._crop_size[1],
                          self._shapes[i][2]]
             self._shapes_cropped.append(shape_new)
+
+    def _scadule_model(self):
+        return 'sr'
 
     def _define_models(self):
         self._ips = []
@@ -335,15 +338,180 @@ class SRDv3(NetSR):
 class SRDv4(NetSR):
     @with_config
     def __init__(self,
+                 nb_phase=32,
                  **kwargs):
         NetSR.__init__(self, **kwargs)
-        self._models_names = ['sr', 'itp', 'res_itp',
-                              'res_out', 'sr1', 'sr2', 'sr3']
-        self._is_trainable = [False, False, False, False, True, True, True]
-        self._is_save = [True, False, False, False, False, False, False]
+        self._models_names = ['sr',  'sr1', 'sr2', 'sr3',
+                              'res_out', 'res_out_1', 'res_out_2', 'res_out_3',
+                              'res_itp', 'res_itp_1', 'res_itp_2', 'res_itp_3',
+                              'itp']
+        self._is_trainable = [True, True, True, True,
+                              False, False, False, False,
+                              False, False, False, False,
+                              False]
+        self._is_save = [True, False, False, False,
+                         False, False, False, False,
+                         False, False, False, False,
+                         False]
+        self._nb_phase = nb_phase
 
     def _define_models(self):
-        NetSR._define_models(self)
+        ips = []
+        for i in range(self._nb_down_sample + 1):
+            with tf.name_scope('input_%dx' % (2**i)) as scope:
+                ips.append(Input(self._shapes[i], name='input_%dx' % i))
+        ip3 = ips[3]
+        ip2 = ips[2]
+        ip1 = ips[1]
+        ip0 = ips[0]
+
+        with tf.name_scope('net_8x'):
+
+            up3 = UpSampling2D(size=self._down_sample_ratio,
+                               name='up_ip8x')(ip3)
+            m3 = conv_blocks(ips[3].shape.as_list()[1:],
+                             self._hiddens, 3, name='def_conv_8x')
+            with tf.name_scope('conv_8x'):
+                res3 = m3(up3)
+            inf3, cs3, res_inf3, res_itp3 = sr_end(
+                res3, up3, ips[2], name='outputs_8x')
+            self._models[self.model_id('sr3')] = Model(ip3, inf3)
+            self._models[self.model_id('res_out_3')] = Model([
+                ip3, ip2], res_inf3)
+            self._models[self.model_id('res_itp_3')] = Model([
+                ip3, ip2], res_itp3)
+            self._crop_size_4x = cs3
+
+        with tf.name_scope('net_4x'):
+            up2 = UpSampling2D(size=self._down_sample_ratio,
+                               name='up_ip4x')(ip2)
+            shape_4x_input = ip2.shape.as_list()
+            shape_4x_cropped = [shape_4x_input[1] - 2 * self._crop_size_4x[0],
+                                shape_4x_input[2] - 2 * self._crop_size_4x[1],
+                                1]
+            up2c = Cropping2D(self._crop_size_4x, name='up_4x_cropped')(up2)
+            m2 = conv_blocks(shape_4x_cropped, self._hiddens,
+                             3, name='def_conv_4x')
+            with tf.name_scope('conv_4x'):
+                res2 = m2(up2c)
+            inf2, cs2, res_inf2, res_itp2 = sr_end(
+                res2, up2, ips[1], name='outputs_4x')
+            self._models[self.model_id('sr2')] = Model(ip2, inf2)
+            self._models[self.model_id('res_out_2')] = Model([
+                ip2, ip1], res_inf2)
+            self._models[self.model_id('res_itp_2')] = Model([
+                ip2, ip1], res_itp2)
+            self._crop_size_2x = cs2
+
+        with tf.name_scope('net_2x'):
+            up1 = UpSampling2D(size=self._down_sample_ratio,
+                               name='up_ip2x')(ip1)
+            up1c = Cropping2D(self._crop_size_2x, name='up_4x_cropped')(up1)
+            shape_2x_input = ip1.shape.as_list()
+            shape_2x_cropped = [shape_2x_input[1] - 2 * self._crop_size_2x[0],
+                                shape_2x_input[2] - 2 * self._crop_size_2x[1],
+                                1]
+            m1 = conv_blocks(shape_2x_cropped, self._hiddens,
+                             3, name='def_conv_2x')
+            with tf.name_scope('conv_2x'):
+                res1 = m1(up1c)
+            inf1, cs1, res_inf1, res_itp1 = sr_end(
+                res1, up1, ips[0], name='outputs_2x')
+            self._models[self.model_id('sr1')] = Model(ip1, inf1)
+            self._models[self.model_id('res_out_1')] = Model([
+                ip1, ip0], res_inf1)
+            self._models[self.model_id('res_itp_1')] = Model([
+                ip1, ip0], res_itp1)
+            self._crop_size_1x = cs1
+
+        self._crop_size = cs1
+        with tf.name_scope('net_full'):
+            with tf.name_scope('net_4x_to_2x'):
+                with tf.name_scope('inf_4x_cropped'):
+                    inf_4x = inf3
+                    inf_4x_p = ZeroPadding2D(
+                        self._crop_size_4x, name='pad_inf_4x')(inf_4x)
+                    up_2x = UpSampling2D(
+                        size=self._down_sample_ratio, name='up_inf_4x')(inf_4x_p)
+                    up_2x_c = Cropping2D(
+                        self._crop_size_4x, name='crop_4x')(up_2x)
+                with tf.name_scope('conv_4x'):
+                    res_2x = m2(up_2x_c)
+            inf_2x, _, _, _ = sr_end(
+                res_2x, up_2x, ip1, name='outputs_4x_to_2x', is_res=False)
+            with tf.name_scope('net_2x_to_1x'):
+                with tf.name_scope('inf_2x_cropped'):
+                    inf_2x_p = ZeroPadding2D(
+                        self._crop_size_2x, name='pad_inf_2x')(inf_2x)
+                    up_1x = UpSampling2D(
+                        size=self._down_sample_ratio, name='up_inf_2x')(inf_2x_p)
+                    up_1x_c = Cropping2D(
+                        self._crop_size_2x, name='crop_2x')(up_1x)
+                with tf.name_scope('conv_2x'):
+                    res_1x = m1(up_1x_c)
+            inft, cst, res_inft, _ = sr_end(
+                res_1x, up_1x, ip0, name='outputs_2x_to_1x')
+        self._models[self.model_id('sr')] = Model(ip3, inft)
+        self._models[self.model_id('res_out')] = Model([ip3, ip0], res_inft)
+
+        with tf.name_scope('res_itp'):
+            with tf.name_scope('interpolation'):
+                ipt_full = UpSampling2D(
+                    size=self._down_sample_ratios[-1], name='up_full')(ip3)
+                ipt_full_c = Cropping2D(self._crop_size_1x, name='crop_full')(ipt_full)
+            ip0_c = Cropping2D(self._crop_size_1x, name='input_1x_cropped')(ips[0])
+            with tf.name_scope('res_full'):
+                res_ipt_f = sub(ip0_c, ipt_full_c)
+        # self._models[self.model_id('itp')] = Model(ip3, ipt_full_c)
+        self._models[self.model_id('res_itp')] = Model([ip3, ip0], res_ipt_f)
+        self._models[self.model_id('itp')] = Model([ip3, ip0], [ipt_full_c, ip0_c])
+
+    def _train_model_on_batch(self, model_id, inputs, outputs):
+        if model_id == 'sr1':
+            cpx, cpy = self._crop_size_1x
+            loss_v = self.model(model_id).train_on_batch(
+                inputs[1], inputs[0][:, cpx:-cpx, cpy:-cpy, :])
+        elif model_id == 'sr2':
+            cpx, cpy = self._crop_size_2x
+            loss_v = self.model(model_id).train_on_batch(
+                inputs[2], inputs[1][:, cpx:-cpx, cpy:-cpy, :])
+        elif model_id == 'sr3':
+            cpx, cpy = self._crop_size_4x
+            loss_v = self.model(model_id).train_on_batch(
+                inputs[3], inputs[2][:, cpx:-cpx, cpy:-cpy, :])
+        elif model_id == 'sr':
+            cpx, cpy = self._crop_size_1x
+            loss_v = self.model(model_id).train_on_batch(
+                inputs[self._nb_down_sample], outputs[0][:, cpx:-cpx, cpy:-cpy, :])
+        else:
+            raise ValueError(
+                'Invalid or non-trainable model id {0}.'.format(model_id))
+        return loss_v
+
+    def _scadule_model(self):
+        id_phase = self.global_step // self._nb_phase
+        if id_phase >= 3:
+            return 'sr'
+        else:
+            return 'sr%d' % (id_phase + 1)
+
+    def _predict(self, model_id, inputs):
+        if model_id == 'sr3':
+            return self.model(model_id).predict(inputs[3], batch_size=self._batch_size)
+        elif model_id in ['res_out_3', 'res_itp_3']:
+            return self.model(model_id).predict([inputs[3], inputs[2]], batch_size=self._batch_size)
+        elif model_id == 'sr2':
+            return self.model(model_id).predict(inputs[2], batch_size=self._batch_size)
+        elif model_id in ['res_out_2', 'res_itp_2']:
+            return self.model(model_id).predict([inputs[2], inputs[1]], batch_size=self._batch_size)
+        elif model_id == 'sr1':
+            return self.model(model_id).predict(inputs[1], batch_size=self._batch_size)
+        elif model_id in ['res_out_1', 'res_itp_1']:
+            return self.model(model_id).predict([inputs[1], inputs[0]], batch_size=self._batch_size)
+        elif model_id in ['sr']:
+            return self.model(model_id).predict(inputs[3], batch_size=self._batch_size)
+        elif model_id in ['res_out', 'res_itp', 'itp']:
+            return self.model(model_id).predict([inputs[3], inputs[0]], batch_size=self._batch_size)
 
 
 class SRAEv0(NetSR):

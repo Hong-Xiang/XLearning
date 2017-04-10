@@ -1,7 +1,8 @@
 from keras.models import Model, Sequential
-from keras.layers import Dense, Activation, Dropout, Convolution2D, BatchNormalization, merge, ELU, LeakyReLU, UpSampling2D, Conv2D, Concatenate, add, Lambda
+from keras.layers import Dense, Activation, Dropout, Convolution2D, BatchNormalization, merge, ELU, LeakyReLU, UpSampling2D, Conv2D, Concatenate, add, Lambda, Cropping2D
 import keras.backend as K
 import tensorflow as tf
+from ..models.merge import sub
 
 
 def residual_block(input_, channels, kxs=None, kys=None, id=0, cat=False, scope=''):
@@ -52,29 +53,56 @@ def upscale_block(input_, rx, ry, channel, id=0):
 #                               scope=scope + "convolutions%d/" % id)
 #     return x
 
-def conv_blocks(input_shape, nb_filters, kernel_size, id=0, padding='valid', is_celu=False, is_final_active=False):
-    if is_celu:
-        activ = CELU
-    else:
-        activ = ELU
-    nb_layers = len(nb_filters)
-    if nb_layers < 2:
-        raise ValueError(
-            "conv_blocks requires nb_layers >= 2, while input is {0}.".format(nb_filters))
-    m = Sequential()
-    m.add(Conv2D(nb_filters[0], kernel_size=kernel_size,
-                 padding=padding,  input_shape=input_shape))
-    m.add(activ())
-    # m.add(BatchNormalization())
-    for i in range(nb_layers - 2):
-        m.add(Conv2D(
-            nb_filters[i + 1], kernel_size=kernel_size, padding=padding, activation='elu'))
+def conv_blocks(input_shape, nb_filters, kernel_size, id=0, padding='valid', is_celu=False, is_final_active=False, name='conv_blocks'):
+    with tf.name_scope(name):
+        if is_celu:
+            activ = CELU
+        else:
+            activ = ELU
+        nb_layers = len(nb_filters)
+        if nb_layers < 2:
+            raise ValueError(
+                "conv_blocks requires nb_layers >= 2, while input is {0}.".format(nb_filters))
+        m = Sequential(name=name)
+        m.add(Conv2D(nb_filters[0], kernel_size=kernel_size,
+                     padding=padding,  input_shape=input_shape))
         m.add(activ())
         # m.add(BatchNormalization())
-    m.add(Conv2D(nb_filters[-1], kernel_size=kernel_size, padding=padding))
-    if is_final_active:
-        m.add(activ())
+        for i in range(nb_layers - 2):
+            m.add(Conv2D(
+                nb_filters[i + 1], kernel_size=kernel_size, padding=padding, activation='elu'))
+            m.add(activ())
+            # m.add(BatchNormalization())
+        m.add(Conv2D(nb_filters[-1], kernel_size=kernel_size, padding=padding))
+        if is_final_active:
+            m.add(activ())
     return m
+
+
+def sr_end(res, itp, ip_h, name='sr_end', is_res=True):
+    """ Assuming shape(itp) == shape(ip_h)
+    reps is center croped shape of itp/ip_h
+    """
+    with tf.name_scope(name):
+        spo = res.shape.as_list()[1:3]
+        spi = itp.shape.as_list()[1:3]
+        cpx = (spi[0] - spo[0]) // 2
+        cpy = (spi[1] - spo[1]) // 2
+        crop_size = (cpx, cpy)
+        itp_c = Cropping2D(crop_size)(itp)
+        with tf.name_scope('output'):
+            inf = add([res, itp_c])
+        if is_res:
+            with tf.name_scope('label_cropped'):
+                ip_c = Cropping2D(crop_size)(ip_h)
+            with tf.name_scope('res_out'):
+                res_inf = sub(ip_c, inf)
+            with tf.name_scope('res_itp'):
+                res_itp = sub(ip_c, itp_c)
+        else:
+            res_inf = None
+            res_itp = None
+        return (inf, crop_size, res_inf, res_itp)
 
 
 def CELU():

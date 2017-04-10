@@ -14,6 +14,8 @@ import click
 import json
 import re
 
+import keras.backend as K
+import tensorflow as tf
 
 import xlearn.datasets
 import xlearn.nets
@@ -59,7 +61,9 @@ def test_net_define(net_name,
     netc = getattr(xlearn.nets, net_name)
     net = netc(filenames=filenames)
     net.define_net()
-
+    tf.summary.FileWriter('./log', K.get_session().graph)
+    for m in net._models:
+        m.summary()
     click.echo(net.pretty_settings())
 
 
@@ -150,13 +154,126 @@ def train_sr_d(dataset_name,
         for _ in range(epochs):
             for _ in range(steps_per_epoch):
                 s = next(dataset)
-                loss = net.train_on_batch(
-                    'sr', s[0], s[1])
+                loss = net.train_on_batch(inputs=s[0], outputs=s[1])
                 msg = "model:{0:5s}, loss={1:10e}, gs={2:7d}.".format(
-                    'sr', loss, net.global_step)
+                    net._scadule_model(), loss, net.global_step)
                 pt.event(msg=msg)
         net.save(step=net.global_step)
         net.dump_loss()
+
+
+@xln.command()
+@click.option('--dataset_name', '-dn', type=str)
+@click.option('--net_name', '-nn', type=str)
+@click.option('--filenames', '-fn', multiple=True, type=str)
+@click.option('--load_step', type=int)
+@with_config
+def predict_sr_multi(net_name=None,
+                     dataset_name=None,
+                     path_save='./predict',
+                     is_visualize=False,
+                     is_save=False,
+                     save_filename='predict.png',
+                     filenames=[],
+                     load_step=None,
+                     **kwargs):
+    print_pretty_args(predict_sr, locals())
+    dsc = getattr(xlearn.datasets, dataset_name)
+    netc = getattr(xlearn.nets, net_name)
+    if load_step is None:
+        files = os.listdir('.')
+        save_re = r'save-.*-([0-9]+)'
+        prog = re.compile(save_re)
+        max_step = -1
+        for f in files:
+            m = prog.match(f)
+            if m:
+                step = int(m.group(1))
+                if step > max_step:
+                    max_step = step
+        load_step = max_step
+
+    with dsc(filenames=filenames) as dataset:
+        net_settings = {'filenames': filenames}
+        if load_step is not None:
+            net_settings.update({'init_step': load_step})
+        net = netc(**net_settings)
+        net.define_net()
+        click.echo(net.pretty_settings())
+        if load_step is not None:
+            net.load(model_id='sr', step=load_step)
+        net_interp = xlearn.nets.SRInterp(filenames=filenames)
+        net_interp.define_net()
+        s = next(dataset)
+        print('Predicting Model sr...')
+        p = net.predict('sr', s[0])
+        print('Predicting Model interp...')
+        p_it = net_interp.predict('sr', s[0])
+        print('Predicting Model itp...')
+        _, hr_t = net.predict('itp', s[0])
+        print('Predicting Model res_out...')
+        res_sr = net.predict('res_out', s[0])
+        print('Predicting Model res_itp...')
+        res_it = net.predict('res_itp', s[0])
+        hr = dataset.visualize(hr_t, is_no_change=True)
+        lr = dataset.visualize(s[0][-1], is_no_change=True)
+        sr = dataset.visualize(p, is_no_change=True)
+        it = dataset.visualize(p_it, is_no_change=True)
+        res_sr_l = dataset.visualize(res_sr, is_no_change=True)
+        res_it_l = dataset.visualize(res_it, is_no_change=True)
+        window = [(-0.5, 0.5), (-0.5, 0.5), (-0.5, 0.5),
+                  (-0.5, 0.5), (-0.01, 0.01), (-0.01, 0.01)]
+        subplot_images((hr, lr, sr, it, res_sr_l, res_it_l), size=3.0, tight_c=0.5,
+                       is_save=True, filename=save_filename, window=window)
+        
+        print('Predicting Model sr1...')
+        p = net.predict('sr1', s[0])
+        print('Predicting Model res_out_1...')
+        res_sr = net.predict('res_out_1', s[0])
+        print('Predicting Model res_itp_1...')
+        res_it = net.predict('res_itp_1', s[0])
+        sr = dataset.visualize(p, is_no_change=True)
+        res_sr_l = dataset.visualize(res_sr, is_no_change=True)
+        res_it_l = dataset.visualize(res_it, is_no_change=True)
+        window = [(-0.5, 0.5), (-0.01, 0.01), (-0.01, 0.01)]
+        subplot_images((sr, res_sr_l, res_it_l), size=3.0, tight_c=0.5,
+                       is_save=True, filename='predict_1.png', window=window)
+        
+        print('Predicting Model sr2...')
+        p = net.predict('sr2', s[0])
+        print('Predicting Model res_out_2...')
+        res_sr = net.predict('res_out_2', s[0])
+        print('Predicting Model res_itp_2...')
+        res_it = net.predict('res_itp_2', s[0])
+        sr = dataset.visualize(p, is_no_change=True)
+        res_sr_l = dataset.visualize(res_sr, is_no_change=True)
+        res_it_l = dataset.visualize(res_it, is_no_change=True)
+        window = [(-0.5, 0.5), (-0.01, 0.01), (-0.01, 0.01)]
+        subplot_images((sr, res_sr_l, res_it_l), size=3.0, tight_c=0.5,
+                       is_save=True, filename='predict_2.png', window=window)
+        
+        print('Predicting Model sr3...')
+        p = net.predict('sr3', s[0])
+        print('Predicting Model res_out_3...')
+        res_sr = net.predict('res_out_3', s[0])
+        print('Predicting Model res_itp_3...')
+        res_it = net.predict('res_itp_3', s[0])
+        sr = dataset.visualize(p, is_no_change=True)
+        res_sr_l = dataset.visualize(res_sr, is_no_change=True)
+        res_it_l = dataset.visualize(res_it, is_no_change=True)
+        window = [(-0.5, 0.5), (-0.01, 0.01), (-0.01, 0.01)]
+        subplot_images((sr, res_sr_l, res_it_l), size=3.0, tight_c=0.5,
+                       is_save=True, filename='predict_3.png', window=window)
+
+        # np.save('predict_hr.npy', s[1][0])
+        # np.save('predict_lr.npy', s[0][1])
+        # np.save('predict_sr.npy', p)
+        # np.save('predict_res_sr.npy', res_sr)
+        # np.save('predict_res_it.npy', res_it)
+        res_sr_v = np.sqrt(np.mean(np.square(res_sr)))
+        res_it_v = np.sqrt(np.mean(np.square(res_it)))
+        print('res_sr: {0:10f}, res_it: {1:10f}'.format(
+            res_sr_v, res_it_v))
 
 
 @xln.command()
@@ -198,7 +315,7 @@ def predict_sr(net_name=None,
         net.define_net()
         click.echo(net.pretty_settings())
         if load_step is not None:
-            net.load(is_force=True, step=load_step)
+            net.load(step=load_step)
         net_interp = xlearn.nets.SRInterp(filenames=filenames)
         net_interp.define_net()
         s = next(dataset)
@@ -290,6 +407,7 @@ def clean(no_save, no_out=True):
         if perr.match(f):
             os.remove(os.path.abspath(f))
 
+
 @xln.command()
 @click.option('--dataset_name', '-dn', type=str)
 @click.option('--net_name', '-nn', type=str)
@@ -322,10 +440,10 @@ def sino4matlab(dataset_name,
         print(np.mean(p_it))
         _, hr_t = net.predict('itp', s[0])
         print(np.mean(hr_t))
-        sr_t = np.exp((p + 0.5)*6.0)-1.0
-        it_t = np.exp((p_it + 0.5)*6.0)-1.0
-        hr_t = np.exp((hr_t + 0.5)*6.0)-1.0
-        lr_t = np.exp((s[0][net.nb_down_sample] + 0.5)*6.0)-1.0
+        sr_t = np.exp((p + 0.5) * 6.0) - 1.0
+        it_t = np.exp((p_it + 0.5) * 6.0) - 1.0
+        hr_t = np.exp((hr_t + 0.5) * 6.0) - 1.0
+        lr_t = np.exp((s[0][net.nb_down_sample] + 0.5) * 6.0) - 1.0
         # sr_t = p
         # it_t = p_it
         # hr_t = hr_t
@@ -339,13 +457,15 @@ def sino4matlab(dataset_name,
         }
         scipy.io.savemat('sinos.mat', save_dict)
 
+
 @xln.command()
 def sbatch_all():
     dirs = os.listdir('.')
     paths = [os.path.abspath(d) for d in dirs]
     for p in paths:
         if os.path.isdir(p):
-            os.system('cd '+p +'; chmod +x work.sh; sbatch k80.slurm')
+            os.system('cd ' + p + '; chmod +x work.sh; sbatch k80.slurm')
+
 
 @xln.command()
 def clean_all():
@@ -353,7 +473,8 @@ def clean_all():
     paths = [os.path.abspath(d) for d in dirs]
     for p in paths:
         if os.path.isdir(p):
-            os.system('cd '+p +'; xln clean')
+            os.system('cd ' + p + '; python $PATH_XLEARN/scripts/main.py clean')
+
 
 @xln.command()
 def cres_all():
@@ -361,25 +482,39 @@ def cres_all():
     paths = [os.path.abspath(d) for d in dirs]
     for p in paths:
         if os.path.isdir(p):
-            os.system('cd '+p +'; cres.sh')
+            os.system('cd ' + p + '; cres.sh')
+
 
 @xln.command()
 @click.option('--loss_index', type=int)
-def merge_loss(loss_index=0):
+def merge_loss(loss_index):
     loss_names = []
     loss_merged = []
     dirs = os.listdir('.')
     paths = [os.path.abspath(d) for d in dirs]
     for p in paths:
         if os.path.isdir(p):
-            loss_file = os.path.join(p,'loss.npy')
-            loss_tmp = np.load(loss_file)[:,loss_index]
+            loss_file = os.path.join(p, 'loss.npy')
+            loss_tmp = np.load(loss_file)
+            loss_tmp = loss_tmp[:, loss_index]
             loss_merged.append(loss_tmp)
             loss_names.append(os.path.basename(p))
     loss_merged = np.array(loss_merged)
     np.save('loss_merged.npy', loss_merged)
     with open('loss_names.json', 'w') as fout:
         json.dump(loss_names, fout)
+
+
+@xln.command()
+def predict_all():
+    dirs = os.listdir('.')
+    paths = [os.path.abspath(d) for d in dirs]
+    for p in paths:
+        if os.path.isdir(p):
+            print("predict on:", p)
+            os.system(
+                'cd ' + p + '; python $PATH_XLEARN/scripts/main.py predict_sr -dn Sinograms -nn SRDv3 -fn srdv3.json -fn sino_shep.json')
+
 
 if __name__ == '__main__':
     xln()

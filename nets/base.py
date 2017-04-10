@@ -249,14 +249,16 @@ class Net(object):
                 model_name, file_path))
             self.model(model_id).save_weights(file_path)
 
-    def load(self, model_id=None, file_path=None, step='ukn', is_force=False):
+    def load(self, model_id=None, file_path=None, step=None, is_force=False):
         """ load weight from file """
-        if model_id is None:
+        if model_id is None:            
             for i in range(self._nb_model):
                 if self._is_load[i] or is_force:
                     self.load(
                         self._models_names[i], file_path=file_path, step=step, is_force=is_force)
-        else:
+        else:            
+            if step is None:
+                return
             if file_path is None:
                 if isinstance(model_id, str):
                     model_id = self._models_names.index(model_id)
@@ -294,8 +296,13 @@ class Net(object):
         m = self.model(model_id)
         loss_v = m.train_on_batch(inputs, outputs)
         return loss_v
+    
+    def _scadule_model(self):
+        return self._models_names[0]
 
-    def train_on_batch(self, model_id, inputs, outputs, **kwargs):
+    def train_on_batch(self, model_id=None, inputs=None, outputs=None, **kwargs):
+        if model_id is None:
+            model_id = self._scadule_model()
         loss_now = self._train_model_on_batch(model_id, inputs, outputs)
         self.global_step += 1
         if isinstance(model_id, str):
