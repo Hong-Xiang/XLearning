@@ -221,11 +221,13 @@ def predict_sr_multi(net_name=None,
         it = dataset.visualize(p_it, is_no_change=True)
         res_sr_l = dataset.visualize(res_sr, is_no_change=True)
         res_it_l = dataset.visualize(res_it, is_no_change=True)
+        res_sr_l = np.abs(res_sr_l)
+        res_it_l = np.abs(res_it_l)
         window = [(-0.5, 0.5), (-0.5, 0.5), (-0.5, 0.5),
-                  (-0.5, 0.5), (-0.01, 0.01), (-0.01, 0.01)]
+                  (-0.5, 0.5), (0.0, 0.01), (0.0, 0.01)]
         subplot_images((hr, lr, sr, it, res_sr_l, res_it_l), size=3.0, tight_c=0.5,
-                       is_save=True, filename=save_filename, window=window)
-        
+                       is_save=True, filename=save_filename, window=window, cmap='jet')
+
         print('Predicting Model sr1...')
         p = net.predict('sr1', s[0])
         print('Predicting Model res_out_1...')
@@ -235,10 +237,12 @@ def predict_sr_multi(net_name=None,
         sr = dataset.visualize(p, is_no_change=True)
         res_sr_l = dataset.visualize(res_sr, is_no_change=True)
         res_it_l = dataset.visualize(res_it, is_no_change=True)
-        window = [(-0.5, 0.5), (-0.01, 0.01), (-0.01, 0.01)]
+        res_sr_l = np.abs(res_sr_l)
+        res_it_l = np.abs(res_it_l)
+        window = [(-0.5, 0.5), (0.0, 0.01), (0.0, 0.01)]
         subplot_images((sr, res_sr_l, res_it_l), size=3.0, tight_c=0.5,
-                       is_save=True, filename='predict_1.png', window=window)
-        
+                       is_save=True, filename='predict_1.png', window=window, cmap='jet')
+
         print('Predicting Model sr2...')
         p = net.predict('sr2', s[0])
         print('Predicting Model res_out_2...')
@@ -248,10 +252,12 @@ def predict_sr_multi(net_name=None,
         sr = dataset.visualize(p, is_no_change=True)
         res_sr_l = dataset.visualize(res_sr, is_no_change=True)
         res_it_l = dataset.visualize(res_it, is_no_change=True)
-        window = [(-0.5, 0.5), (-0.01, 0.01), (-0.01, 0.01)]
+        res_sr_l = np.abs(res_sr_l)
+        res_it_l = np.abs(res_it_l)
+        window = [(-0.5, 0.5), (0.0, 0.01), (0.0, 0.01)]
         subplot_images((sr, res_sr_l, res_it_l), size=3.0, tight_c=0.5,
-                       is_save=True, filename='predict_2.png', window=window)
-        
+                       is_save=True, filename='predict_2.png', window=window, cmap='jet')
+
         print('Predicting Model sr3...')
         p = net.predict('sr3', s[0])
         print('Predicting Model res_out_3...')
@@ -261,10 +267,22 @@ def predict_sr_multi(net_name=None,
         sr = dataset.visualize(p, is_no_change=True)
         res_sr_l = dataset.visualize(res_sr, is_no_change=True)
         res_it_l = dataset.visualize(res_it, is_no_change=True)
-        window = [(-0.5, 0.5), (-0.01, 0.01), (-0.01, 0.01)]
+        res_sr_l = np.abs(res_sr_l)
+        res_it_l = np.abs(res_it_l)
+        window = [(-0.5, 0.5), (0.0, 0.01), (0.0, 0.01)]
         subplot_images((sr, res_sr_l, res_it_l), size=3.0, tight_c=0.5,
-                       is_save=True, filename='predict_3.png', window=window)
+                       is_save=True, filename='predict_3.png', window=window, cmap='jet')
 
+        print('Predicting Model srdebug...')
+        p4x, p2x, p1x = net.predict('srdebug', s[0])
+        p1xs = net.predict('sr1', s[0]) 
+        sr4x = dataset.visualize(p4x, is_no_change=True)
+        sr2x = dataset.visualize(p2x, is_no_change=True)
+        sr1x = dataset.visualize(p1x, is_no_change=True)        
+        sr1xs = dataset.visualize(p1xs, is_no_change=True)        
+        window = [(-0.5, 0.5)]*4
+        subplot_images((sr4x, sr2x, sr1x, sr1xs), size=3.0, tight_c=0.5,
+                       is_save=True, filename='predict_debug.png', window=window, cmap='jet')
         # np.save('predict_hr.npy', s[1][0])
         # np.save('predict_lr.npy', s[0][1])
         # np.save('predict_sr.npy', p)
@@ -323,7 +341,9 @@ def predict_sr(net_name=None,
         p_it = net_interp.predict('sr', s[0])
         _, hr_t = net.predict('itp', s[0])
         res_sr = net.predict('res_out', s[0])
+        res_sr = np.abs(res_sr)
         res_it = net.predict('res_itp', s[0])
+        res_it = np.abs(res_it)
         hr = dataset.visualize(hr_t, is_no_change=True)
         lr = dataset.visualize(s[0][-1], is_no_change=True)
         sr = dataset.visualize(p, is_no_change=True)

@@ -232,6 +232,9 @@ class Net(object):
         #     self._callbacks.append(tmpbk
         pass
 
+    def save_graph(self):
+        tf.summary.FileWriter('./log', graph=K.get_session().graph)
+
     def save(self, model_id=None, file_path=None, step='ukn'):
         if model_id is None:
             for i in range(self._nb_model):

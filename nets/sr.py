@@ -1,6 +1,6 @@
 import tensorflow as tf
 from keras.models import Model, Sequential
-from keras.layers import Dense, Activation, Dropout, Input, ELU, LeakyReLU, Conv2D, UpSampling2D, BatchNormalization, Cropping2D, add, Lambda, Cropping2D, ZeroPadding2D
+from keras.layers import Dense, Activation, Dropout, Input, ELU, LeakyReLU, Conv2D, UpSampling2D, BatchNormalization, Cropping2D, add, Lambda, Cropping2D, ZeroPadding2D, MaxPool2D, concatenate
 
 from keras import backend as K
 from keras.engine.topology import Layer
@@ -344,15 +344,15 @@ class SRDv4(NetSR):
         self._models_names = ['sr',  'sr1', 'sr2', 'sr3',
                               'res_out', 'res_out_1', 'res_out_2', 'res_out_3',
                               'res_itp', 'res_itp_1', 'res_itp_2', 'res_itp_3',
-                              'itp']
+                              'itp', 'srdebug']
         self._is_trainable = [True, True, True, True,
                               False, False, False, False,
                               False, False, False, False,
-                              False]
+                              False, False]
         self._is_save = [True, False, False, False,
                          False, False, False, False,
                          False, False, False, False,
-                         False]
+                         False, False]
         self._nb_phase = nb_phase
 
     def _define_models(self):
@@ -453,18 +453,23 @@ class SRDv4(NetSR):
                 res_1x, up_1x, ip0, name='outputs_2x_to_1x')
         self._models[self.model_id('sr')] = Model(ip3, inft)
         self._models[self.model_id('res_out')] = Model([ip3, ip0], res_inft)
+        self._models[self.model_id('srdebug')] = Model(
+            [ip3, ip0], [inf_4x, inf_2x, inft])
 
         with tf.name_scope('res_itp'):
             with tf.name_scope('interpolation'):
                 ipt_full = UpSampling2D(
                     size=self._down_sample_ratios[-1], name='up_full')(ip3)
-                ipt_full_c = Cropping2D(self._crop_size_1x, name='crop_full')(ipt_full)
-            ip0_c = Cropping2D(self._crop_size_1x, name='input_1x_cropped')(ips[0])
+                ipt_full_c = Cropping2D(
+                    self._crop_size_1x, name='crop_full')(ipt_full)
+            ip0_c = Cropping2D(self._crop_size_1x,
+                               name='input_1x_cropped')(ips[0])
             with tf.name_scope('res_full'):
                 res_ipt_f = sub(ip0_c, ipt_full_c)
         # self._models[self.model_id('itp')] = Model(ip3, ipt_full_c)
         self._models[self.model_id('res_itp')] = Model([ip3, ip0], res_ipt_f)
-        self._models[self.model_id('itp')] = Model([ip3, ip0], [ipt_full_c, ip0_c])
+        self._models[self.model_id('itp')] = Model(
+            [ip3, ip0], [ipt_full_c, ip0_c])
 
     def _train_model_on_batch(self, model_id, inputs, outputs):
         if model_id == 'sr1':
@@ -510,66 +515,93 @@ class SRDv4(NetSR):
             return self.model(model_id).predict([inputs[1], inputs[0]], batch_size=self._batch_size)
         elif model_id in ['sr']:
             return self.model(model_id).predict(inputs[3], batch_size=self._batch_size)
-        elif model_id in ['res_out', 'res_itp', 'itp']:
+        elif model_id in ['res_out', 'res_itp', 'itp', 'srdebug']:
             return self.model(model_id).predict([inputs[3], inputs[0]], batch_size=self._batch_size)
 
 
-class SRAEv0(NetSR):
+class SRCAEv0(NetSR):
     """ Super resolution based on autoencoder"""
     @with_config
     def __init__(self,
-                 latent_dim,
-                 h_enc,
-                 h_enc_cond,
+                 h_enc_h,
+                 h_enc_c,
                  h_dec,
-                 h_dec_cond,
                  **kwargs):
         NetSR.__init__(self, **kwargs)
-        self._h_enc = h_enc
-        self._h_enc_cond = h_enc_cond
+        self._h_enc_h = h_enc_h
+        self._h_enc_c = h_enc_c
         self._h_dec = h_dec
-        self._h_dec_cond = h_dec_cond
 
     def _define_models(self):
-        NetSR._define_models(self)
+        self._ips = []
+        for i in range(self._nb_down_sample + 1):
+            with tf.name_scope('input_%dx' % (2**i)) as scope:
+                self._ips.append(Input(self._shapes[i]))
+        self._ip3 = self._ips[3]
+        self._ip2 = self._ips[2]
+        self._ip0 = self._ips[0]
 
         with tf.name_scope('encoder_hr'):
-            x = self._ip0
-            for i, nc in enumerate(self._h_enc):
-                with tf.name_scope('conv_%d' % i):
-                    x = Conv2D(nc, 3, padding='same')(x)
-                    if self._is_bn:
-                        x = BatchNormalization()(x)
-                    x = ELU()(x)
-            with tf.name_scope('conv_enc'):
-                x = Conv2D(latent_dim, 3, padding='same')(x)
+            x = self._ip2
+            enc_h_f = conv_blocks(x.shape.as_list()[1:], self._h_enc_h, 3, name='enc_h')(x)
+            enc_h = MaxPool2D(self._down_sample_ratio)(enc_h_f)
         with tf.name_scope('encoder_cond'):
-            x = self._ipn
-            for i, nc in enumerate(self._h_enc):
-                with tf.name_scope('conv_%d' % i):
-                    x = Conv2D(nc, 3, padding='same')(x)
-                    if self._is_bn:
-                        x = BatchNormalization()(x)
-                    x = ELU()(x)
-            with tf.name_scope('conv_enc'):
-                x = Conv2D(latent_dim, 3, padding='same')(x)
+            x = self._ip3
+            enc_c = conv_blocks(x.shape.as_list()[1:], self._h_enc_c, 3, name='enc_c')(x)
+        with tf.name_scope('merging'):
+            minx = min(enc_h.shape.as_list()[1], enc_c.shape.as_list()[1])
+            miny = min(enc_h.shape.as_list()[2], enc_c.shape.as_list()[2])
+            cpx_h = (enc_h.shape.as_list()[1] - minx) // 2
+            cpx_c = (enc_c.shape.as_list()[1] - minx) // 2
+            cpy_h = (enc_h.shape.as_list()[2] - miny) // 2
+            cpy_c = (enc_c.shape.as_list()[2] - miny) // 2
+            enc_h = Cropping2D((cpx_h, cpy_h))(enc_h)
+            enc_c = Cropping2D((cpx_c, cpy_c))(enc_c)
         with tf.name_scope('upsampling'):
-            x = UpSampling2D(
-                size=self._down_sample_ratios[self._nb_down_sample])(x)
-        with tf.name_scope('conv_end'):
-            x = Conv2D(self._hiddens[-1], 5,
-                       activation='elu', padding='same')(x)
-            x = Conv2D(self._hiddens[-1], 5,
-                       activation='elu', padding='same')(x)
+            enc_h_1x = UpSampling2D(size=self._down_sample_ratio)(enc_h)
+            enc_c_1x = UpSampling2D(size=self._down_sample_ratio)(enc_c)
+            z = concatenate([enc_h_1x, enc_c_1x])
+        with tf.name_scope('dec'):
+            reps = conv_blocks(z.shape.as_list()[
+                               1:], self._h_dec, 3, is_final_active=True, name='dec')(z)
         with tf.name_scope('output'):
-            res_inf = Conv2D(1, 3, padding='same')(x)
-            img_inf = add([res_inf, ups])
-            img_crop = Cropping2D(self._crop_size)(img_inf)
+            res_inf = Conv2D(1, 3)(reps)
+            shape_o = res_inf.shape.as_list()[1:3]
+            shape_i = self._ip2.shape.as_list()[1:3]
+            crop_x = (shape_i[0] - shape_o[0]) // 2
+            crop_y = (shape_i[1] - shape_o[1]) // 2
+            self._crop_size = (crop_x, crop_y)
+            ups = UpSampling2D(size=self._down_sample_ratio)(self._ip3)
+            ups_crop = Cropping2D(self._crop_size)(ups)
+            img_inf = add([res_inf, ups_crop])
         with tf.name_scope('res_out'):
-            res_out = sub(self._ip0_c, img_inf)
-        self._models[self.model_id('sr')] = Model(self._ipn, img_crop)
+            ip2_c = Cropping2D(self._crop_size)(self._ip2)
+            res_out = sub(ip2_c, img_inf)
+        self._models[self.model_id('sr')] = Model([self._ip3, self._ip2], img_inf)
         self._models[self.model_id('res_out')] = Model(
-            [self._ip0, self._ipn], res_out)
+            [self._ip3, self._ip2], res_out)
+
+        self._models[self.model_id('itp')] = Model(
+            [self._ip3, self._ip2], [ups_crop, ip2_c])
+
+        with tf.name_scope('res_itp'):
+            res_itp = sub(ip2_c, ups_crop)
+        self._models[self.model_id('res_itp')] = Model(
+            [self._ip3, self._ip2], res_itp)
+
+    def _train_model_on_batch(self, model_id, inputs, outputs):
+        if model_id == 'sr':
+            cpx, cpy = self._crop_size
+            loss_v = self.model(model_id).train_on_batch(
+                [inputs[3], inputs[2]], inputs[2][:, cpx:-cpx, cpy:-cpy, :])
+        else:
+            raise ValueError(
+                'Invalid or non-trainable model id {0}.'.format(model_id))
+        return loss_v
+    
+    def _predict(self, model_id, inputs):        
+        return self.model(model_id).predict([inputs[3], inputs[2]], batch_size=self._batch_size)
+        
 
 # class SRDMultiScale(NetSR):
 #     @with_config
