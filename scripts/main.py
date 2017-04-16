@@ -23,6 +23,9 @@ from xlearn.utils.general import with_config, empty_list, enter_debug, ProgressT
 from xlearn.utils.image import subplot_images
 import h5py
 
+from xlearn.net_tf.srmr import SRSino8
+from xlearn.datasets.sinogram2 import Sinograms2
+
 
 class Config(dict):
     def __init__(self, config='config.json'):
@@ -65,6 +68,12 @@ def test_net_define(net_name,
     for m in net._models:
         m.summary()
     click.echo(net.pretty_settings())
+
+
+@xln.command()
+def test_srsino8_define():
+    net = SRSino8(input_shape=[64, 64, 1])
+    net.build()
 
 
 @xln.command()
@@ -275,12 +284,12 @@ def predict_sr_multi(net_name=None,
 
         print('Predicting Model srdebug...')
         p4x, p2x, p1x = net.predict('srdebug', s[0])
-        p1xs = net.predict('sr1', s[0]) 
+        p1xs = net.predict('sr1', s[0])
         sr4x = dataset.visualize(p4x, is_no_change=True)
         sr2x = dataset.visualize(p2x, is_no_change=True)
-        sr1x = dataset.visualize(p1x, is_no_change=True)        
-        sr1xs = dataset.visualize(p1xs, is_no_change=True)        
-        window = [(-0.5, 0.5)]*4
+        sr1x = dataset.visualize(p1x, is_no_change=True)
+        sr1xs = dataset.visualize(p1xs, is_no_change=True)
+        window = [(-0.5, 0.5)] * 4
         subplot_images((sr4x, sr2x, sr1x, sr1xs), size=3.0, tight_c=0.5,
                        is_save=True, filename='predict_debug.png', window=window, cmap='jet')
         # np.save('predict_hr.npy', s[1][0])
@@ -293,6 +302,30 @@ def predict_sr_multi(net_name=None,
         print('res_sr: {0:10f}, res_it: {1:10f}'.format(
             res_sr_v, res_it_v))
 
+@xln.command()
+@click.option('--filenames', '-fn', multiple=True, type=str)
+@click.option('--load_step', type=int)
+@click.option('--total_step', type=int)
+@with_config
+def train_sino8(load_step=None,
+                total_step=None,
+                filenames=[],
+                **kwargs):
+    net = SRSino8(filenames=filenames, **kwargs)
+    net.build()
+    with Sinograms2(filenames=filenames) as dataset_train:
+        with Sinograms2(filenames=filenames, mode='test') as dataset_test:
+            pt = ProgressTimer(total_step)
+            for i in range(total_step):
+                ss = next(dataset_train)
+                loss_v, _ = net.sess.run([net.loss2x, net.train_2x], feed_dict={net.ip: ss[0], net.ll: ss[1][0], net.lr: ss[1][1]})
+                pt.event(i, msg='loss %f.'%loss_v)
+                if i % 100 == 0:
+                    summ = net.sess.run(net.summary_op, feed_dict={net.ip: ss[0], net.ll: ss[1][0], net.lr: ss[1][1]})
+                    net.sw.add_summary(summ, net.sess.run(net.global_step))
+                if i % 1000 == 0:
+                    net.save()
+        net.save()
 
 @xln.command()
 @click.option('--dataset_name', '-dn', type=str)

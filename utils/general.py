@@ -18,6 +18,7 @@ import click
 from inspect import getfullargspec, signature
 from functools import wraps
 
+
 def get_args(func, all_vars):
     d = {}
     sig = signature(func)
@@ -27,7 +28,8 @@ def get_args(func, all_vars):
         d.update({param.name: all_vars[param.name]})
     return d
 
-def print_pretty_args(func, all_vars):    
+
+def print_pretty_args(func, all_vars):
     if isinstance(func, click.core.Command):
         func = func.callback
     sig = signature(func)
@@ -242,17 +244,20 @@ def with_config(func):
         for fn in filenames:
             with open(fn, 'r') as fin:
                 json_dicts.append(json.load(fin))
-        key_args = paras.args[len(args):]
-        nb_def = len(key_args)
         if paras.defaults is not None:
-            def_args = paras.defaults[-nb_def:]
+            nb_def = len(paras.defaults)
         else:
-            def_args = empty_list(nb_def)
-        def_dict = {k: v for k, v in zip(key_args, def_args)}
-        for k in def_dict:
+            nb_def = 0
+        def_args = paras.defaults
+        if def_args is None:
+            def_args = []
+        def_keys = paras.args[-nb_def:]
+        def_dict = {k: v for k, v in zip(def_keys, def_args)}
+        for k in paras.args:
             v = config_from_dicts(k, [kwargs] + json_dicts + [def_dict])
-            kwargs.update({k: v})
-        kwargs.update({'filenames':filenames})
+            if v is not None:
+                kwargs.update({k: v})
+        kwargs.update({'filenames': filenames})
         kwargs.pop('filenames')
         return func(*args, filenames=filenames, **kwargs)
     return wrapper

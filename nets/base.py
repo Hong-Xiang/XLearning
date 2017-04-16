@@ -254,12 +254,12 @@ class Net(object):
 
     def load(self, model_id=None, file_path=None, step=None, is_force=False):
         """ load weight from file """
-        if model_id is None:            
+        if model_id is None:
             for i in range(self._nb_model):
                 if self._is_load[i] or is_force:
                     self.load(
                         self._models_names[i], file_path=file_path, step=step, is_force=is_force)
-        else:            
+        else:
             if step is None:
                 return
             if file_path is None:
@@ -299,7 +299,7 @@ class Net(object):
         m = self.model(model_id)
         loss_v = m.train_on_batch(inputs, outputs)
         return loss_v
-    
+
     def _scadule_model(self):
         return self._models_names[0]
 

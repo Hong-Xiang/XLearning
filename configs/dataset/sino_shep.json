@@ -6,7 +6,7 @@
     "is_norm": true,
     "norm_c": 6.0,
     "is_crop": true,
-    "crop_target_shape": [64, 64],
+    "crop_target_shape": [363, 512],
     "crop_offset": [1, 1],
     "is_crop_random": true,
     "is_down_sample": true,

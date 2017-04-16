@@ -222,6 +222,10 @@ class DataSetBase(object):
         else:
             return self._sample_single()
 
+    def sample(self):
+        """ simply warps __next__() """
+        return self.__next__()
+
     def gather_examples(self, nb_examples=64):
         """ gather given numbers of examples """
         nb_gathered = 0
