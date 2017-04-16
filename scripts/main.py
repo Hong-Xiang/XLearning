@@ -340,7 +340,6 @@ def predict_sr_multi(net_name=None,
 
 
 @xln.command()
-@click.option('--filenames', '-fn', multiple=True, type=str)
 @click.option('--load_step', type=int)
 @click.option('--total_step', type=int)
 @with_config
@@ -348,41 +347,46 @@ def train_sino8v2(load_step=None,
                 total_step=None,
                 filenames=[],
                 **kwargs):
-    net = SRSino8v2(filenames=filenames, **kwargs)
+    net = SRSino8v2(filenames='srsino8v2.json', **kwargs)
     net.build()
-    dataset_train = Sinograms2(filenames=filenames)
-    dataset_test = Sinograms2(filenames=filenames)
-    dataset_train.init()
-    dataset_test.init()
+    ds8x_tr = Sinograms2(filenames='sino2_shep8x.json', mode='train')
+    ds4x_tr = Sinograms2(filenames='sino2_shep4x.json', mode='train')
+    ds2x_tr = Sinograms2(filenames='sino2_shep2x.json', mode='train')
+    ds8x_te = Sinograms2(filenames='sino2_shep8x.json', mode='test')
+    ds4x_te = Sinograms2(filenames='sino2_shep4x.json', mode='test')
+    ds2x_te = Sinograms2(filenames='sino2_shep2x.json', mode='test')
+    datasets = [ds8x_tr, ds4x_tr, ds2x_tr, ds8x_te, ds4x_te, ds2x_te]
+    for ds in datasets:
+        ds.init()
     pt = ProgressTimer(total_step * 3)
     for i in range(total_step):
-        ss = next(dataset_train)
+        ss = next(ds8x_tr)
         loss_v, _ = net.train('net_8x', ss)
         pt.event(i, msg='train net_8x, loss %f.' % loss_v)
-        ss = next(dataset_train)
+        ss = next(ds4x_tr)
         loss_v, _ = net.train('net_4x', ss)
         pt.event(i, msg='train net_4x, loss %f.' % loss_v)
-        ss = next(dataset_train)
+        ss = next(ds2x_tr)
         loss_v, _ = net.train('net_2x', ss)
         pt.event(i, msg='train net_2x, loss %f.' % loss_v)
         if i % 15 == 0:
-            ss = next(dataset_train)
+            ss = next(ds8x_tr)
             net.summary('net_8x', ss, True)
-            ss = next(dataset_train)
+            ss = next(ds4x_tr)
             net.summary('net_4x', ss, True)
-            ss = next(dataset_train)
+            ss = next(ds2x_tr)
             net.summary('net_2x', ss, True)
-            ss = next(dataset_test)
+            ss = next(ds8x_te)
             net.summary('net_8x', ss, False)
-            ss = next(dataset_test)
+            ss = next(ds4x_te)
             net.summary('net_4x', ss, False)
-            ss = next(dataset_test)
+            ss = next(ds2x_te)
             net.summary('net_2x', ss, False)
         if i % 500 == 0:
             net.save()
     net.save()
-    dataset_train.close()
-    dataset_test.close()
+    for ds in datasets:
+        ds.close()
 
 
 @xln.command()
