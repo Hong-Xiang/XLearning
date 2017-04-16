@@ -45,6 +45,13 @@ class Sinograms2:
         image = np.log(image)
         return image
 
+    def init(self):
+        self.fin = h5py.File(self.file_data, 'r')
+        self.dataset = self.fin['sinograms']
+
+    def close(self):
+        self.fin.close()
+
     def __enter__(self):
         self.fin = h5py.File(self.file_data, 'r')
         self.dataset = self.fin['sinograms']

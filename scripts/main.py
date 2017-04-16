@@ -24,6 +24,7 @@ from xlearn.utils.image import subplot_images
 import h5py
 
 from xlearn.net_tf.srmr import SRSino8
+from xlearn.net_tf.srmr2 import SRSino8v2
 from xlearn.datasets.sinogram2 import Sinograms2
 
 
@@ -73,6 +74,12 @@ def test_net_define(net_name,
 @xln.command()
 def test_srsino8_define():
     net = SRSino8(input_shape=[64, 64, 1])
+    net.build()
+
+
+@xln.command()
+def test_srsino8r_define():
+    net = SRSino8v2(filenames=['srsino8v2.json', 'sino2_shep.json'])
     net.build()
 
 
@@ -134,6 +141,7 @@ def test_dataset(dataset_name,
 @click.option('--load_step', type=int)
 @with_config
 def train_sr_d(dataset_name,
+
                net_name,
                epochs,
                steps_per_epoch,
@@ -169,6 +177,34 @@ def train_sr_d(dataset_name,
                 pt.event(msg=msg)
         net.save(step=net.global_step)
         net.dump_loss()
+
+
+@xln.command()
+@click.option('--filenames', '-fn', multiple=True, type=str)
+@click.option('--load_step', type=int)
+@click.option('--total_step', type=int)
+@with_config
+def train_sino8v2(load_step=None,
+                  total_step=None,
+                  filenames=[],
+                  **kwargs):
+    net = SRSino8(filenames=filenames, **kwargs)
+    net.build()
+    with Sinograms2(filenames=filenames) as dataset_train:
+        with Sinograms2(filenames=filenames, mode='test') as dataset_test:
+            pt = ProgressTimer(total_step)
+            for i in range(total_step):
+                ss = next(dataset_train)
+                loss_v, _ = net.sess.run([net.loss2x, net.train_2x], feed_dict={
+                                         net.ip: ss[0], net.ll: ss[1][0], net.lr: ss[1][1]})
+                pt.event(i, msg='loss %f.' % loss_v)
+                if i % 100 == 0:
+                    summ = net.sess.run(net.summary_op, feed_dict={
+                                        net.ip: ss[0], net.ll: ss[1][0], net.lr: ss[1][1]})
+                    net.sw.add_summary(summ, net.sess.run(net.global_step))
+                if i % 1000 == 0:
+                    net.save()
+        net.save()
 
 
 @xln.command()
@@ -302,30 +338,52 @@ def predict_sr_multi(net_name=None,
         print('res_sr: {0:10f}, res_it: {1:10f}'.format(
             res_sr_v, res_it_v))
 
+
 @xln.command()
 @click.option('--filenames', '-fn', multiple=True, type=str)
 @click.option('--load_step', type=int)
 @click.option('--total_step', type=int)
 @with_config
-def train_sino8(load_step=None,
+def train_sino8v2(load_step=None,
                 total_step=None,
                 filenames=[],
                 **kwargs):
-    net = SRSino8(filenames=filenames, **kwargs)
+    net = SRSino8v2(filenames=filenames, **kwargs)
     net.build()
-    with Sinograms2(filenames=filenames) as dataset_train:
-        with Sinograms2(filenames=filenames, mode='test') as dataset_test:
-            pt = ProgressTimer(total_step)
-            for i in range(total_step):
-                ss = next(dataset_train)
-                loss_v, _ = net.sess.run([net.loss2x, net.train_2x], feed_dict={net.ip: ss[0], net.ll: ss[1][0], net.lr: ss[1][1]})
-                pt.event(i, msg='loss %f.'%loss_v)
-                if i % 100 == 0:
-                    summ = net.sess.run(net.summary_op, feed_dict={net.ip: ss[0], net.ll: ss[1][0], net.lr: ss[1][1]})
-                    net.sw.add_summary(summ, net.sess.run(net.global_step))
-                if i % 1000 == 0:
-                    net.save()
-        net.save()
+    dataset_train = Sinograms2(filenames=filenames)
+    dataset_test = Sinograms2(filenames=filenames)
+    dataset_train.init()
+    dataset_test.init()
+    pt = ProgressTimer(total_step * 3)
+    for i in range(total_step):
+        ss = next(dataset_train)
+        loss_v, _ = net.train('net_8x', ss)
+        pt.event(i, msg='train net_8x, loss %f.' % loss_v)
+        ss = next(dataset_train)
+        loss_v, _ = net.train('net_4x', ss)
+        pt.event(i, msg='train net_4x, loss %f.' % loss_v)
+        ss = next(dataset_train)
+        loss_v, _ = net.train('net_2x', ss)
+        pt.event(i, msg='train net_2x, loss %f.' % loss_v)
+        if i % 15 == 0:
+            ss = next(dataset_train)
+            net.summary('net_8x', ss, True)
+            ss = next(dataset_train)
+            net.summary('net_4x', ss, True)
+            ss = next(dataset_train)
+            net.summary('net_2x', ss, True)
+            ss = next(dataset_test)
+            net.summary('net_8x', ss, False)
+            ss = next(dataset_test)
+            net.summary('net_4x', ss, False)
+            ss = next(dataset_test)
+            net.summary('net_2x', ss, False)
+        if i % 500 == 0:
+            net.save()
+    net.save()
+    dataset_train.close()
+    dataset_test.close()
+
 
 @xln.command()
 @click.option('--dataset_name', '-dn', type=str)
