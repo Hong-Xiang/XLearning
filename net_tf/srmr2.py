@@ -1,4 +1,5 @@
 import tensorflow as tf
+import numpy as np
 from ..utils.general import with_config
 
 
@@ -32,7 +33,19 @@ class SRSino8v2:
         self.cores = cores
         self.batch_size = batch_size
 
-    def predict(self, input):
+    def predict(self, ips):
+        hight = ips.shape[1]
+        width = ips.shape[2]
+        if hight != 363 or width != 90:
+            raise ValueError('Invalid input shape.')
+        inf_l = self.sess.run(self.ops8x['inf_l'], feed_dict={self.ip: ips, self.training:False})
+        inf_r = self.sess.run(self.ops8x['inf_r'], feed_dict={self.ip: ips, self.training:False})
+        inf_l_pad = np.pad(inf_l, ((0, 0), [self.crop_size]*2, [self.crop_size]*2, (0, 0)))
+        inf_r_pad = np.pad(inf_r, ((0, 0), [self.crop_size]*2, [self.crop_size]*2, (0, 0)))
+        inf4x = np.zeros([1, 363, 180, 1])
+        inf4x[0, :, ::2, :] = inf_l_pad
+        inf4x[0, :, 1::2, :] = inf_r_pad
+        inf4x[0, :, :self.crop_size, :] = inf4x[0, :, 180:180+64, ]
         pass
 
     def save(self, ):
@@ -181,11 +194,11 @@ class SRSino8v2:
             with tf.name_scope('core_%d' % i):
                 h = self.build_core(h, conv_c, bn_c)
         with tf.name_scope('infer8x'):
-            ops8x, self.loss8x, self.summ8x = self.build_infer(h)
+            self.ops8x, self.loss8x, self.summ8x = self.build_infer(h)
         with tf.name_scope('infer4x'):
-            ops4x, self.loss4x, self.summ4x = self.build_infer(h)
+            self.ops4x, self.loss4x, self.summ4x = self.build_infer(h)
         with tf.name_scope('infer2x'):
-            ops2x, self.loss2x, self.summ2x = self.build_infer(h)
+            self.ops2x, self.loss2x, self.summ2x = self.build_infer(h)
         self.summ8x += summ_ip
         self.summ4x += summ_ip
         self.summ2x += summ_ip
