@@ -407,7 +407,6 @@ def train_sino8v2(load_step=None,
     for ds in datasets:
         ds.close()
 
-
 @xln.command()
 @click.option('--filenames', '-fn', multiple=True, type=str)
 @click.option('--load_step', type=int)
@@ -432,6 +431,14 @@ def predict_sino8v2(load_step=None,
                 if i % 1000 == 0:
                     net.save()
         net.save()
+
+@xln.command()
+def clear_dirs():
+    dirs = os.listdir('.')
+    paths = [os.path.abspath(p) for p in dirs]
+    for p in paths:
+        if os.path.isdir(p):
+            shutil.rmtree(p)
 
 @xln.command()
 @click.option('--dataset_name', '-dn', type=str)
@@ -634,6 +641,11 @@ def clean_all():
         if os.path.isdir(p):
             os.system('cd ' + p + '; python $PATH_XLEARN/scripts/main.py clean')
 
+from xlearn.utils.hpc import grid_search_sino8
+
+@xln.command()
+def hpc_grid():
+    grid_search_sino8()
 
 @xln.command()
 def cres_all():
