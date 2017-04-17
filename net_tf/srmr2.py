@@ -177,6 +177,7 @@ class SRSino8v2:
             inf_r = self.ipc + res_r
             summs.append(tf.summary.image('inf_l', inf_l))
             summs.append(tf.summary.image('inf_r', inf_r))
+
         with tf.name_scope('res_ip'):
             res_ll = self.ll - self.ipc
             res_lr = self.lr - self.ipc
@@ -187,6 +188,13 @@ class SRSino8v2:
             loss_r = tf.losses.mean_squared_error(inf_r, self.lr)
             loss = loss_l + loss_r
             summs.append(tf.summary.scalar('loss', loss))
+        with tf.name_scope('summ_err'):
+            summs.append(tf.summary.image('ll_c', self.ll))
+            summs.append(tf.summary.image('lr_c', self.lr))
+            errl = inf_l - self.ll
+            errr = inf_r - self.lr
+            summs.append(tf.summary.image('err_l', errl))
+            summs.append(tf.summary.image('err_r', errr))
         ops = {
             'res_l': res_l,
             'res_r': res_r,

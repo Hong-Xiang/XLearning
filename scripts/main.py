@@ -343,12 +343,22 @@ def predict_sr_multi(net_name=None,
 @xln.command()
 @click.option('--load_step', type=int)
 @click.option('--total_step', type=int)
+@click.option('--step8', type=int)
+@click.option('--step4', type=int)
+@click.option('--step2', type=int)
+@click.option('--sumf', type=int)
+@click.option('--savef', type=int)
 @with_config
 def train_sino8v2(load_step=None,
                   total_step=None,
+                  step8=1,
+                  step4=1,
+                  step2=1,
+                  sumf=5,
+                  savef=100,
                   filenames=[],
                   **kwargs):
-    print("START TRAINING!!!!")
+    click.echo("START TRAINING!!!!")
     net = SRSino8v2(filenames='srsino8v2.json', **kwargs)
     net.build()
     ds8x_tr = Sinograms2(filenames='sino2_shep8x.json', mode='train')
@@ -361,17 +371,24 @@ def train_sino8v2(load_step=None,
     for ds in datasets:
         ds.init()
     pt = ProgressTimer(total_step * 3)
-    for i in range(total_step):
-        ss = next(ds8x_tr)
-        loss_v, _ = net.train('net_8x', ss)
-        pt.event(i, msg='train net_8x, loss %f.' % loss_v)
-        ss = next(ds4x_tr)
-        loss_v, _ = net.train('net_4x', ss)
-        pt.event(i, msg='train net_4x, loss %f.' % loss_v)
-        ss = next(ds2x_tr)
-        loss_v, _ = net.train('net_2x', ss)
-        pt.event(i, msg='train net_2x, loss %f.' % loss_v)
-        if i % 15 == 0:
+    cstp = 0
+    for i in range(total_step//(step8+step4+step2)):
+        for _ in range(step8):
+            ss = next(ds8x_tr)
+            loss_v, _ = net.train('net_8x', ss)
+            pt.event(cstp, msg='train net_8x, loss %f.' % loss_v)
+            cstp += 1
+        for _ in range(step4):
+            ss = next(ds4x_tr)
+            loss_v, _ = net.train('net_4x', ss)
+            pt.event(cstp, msg='train net_4x, loss %f.' % loss_v)
+            cstp += 1
+        for _ in range(stpe2):
+            ss = next(ds2x_tr)
+            loss_v, _ = net.train('net_2x', ss)
+            pt.event(cstp, msg='train net_2x, loss %f.' % loss_v)
+            cstp += 1
+        if i % sumf == 0:
             ss = next(ds8x_tr)
             net.summary('net_8x', ss, True)
             ss = next(ds4x_tr)
@@ -384,7 +401,7 @@ def train_sino8v2(load_step=None,
             net.summary('net_4x', ss, False)
             ss = next(ds2x_te)
             net.summary('net_2x', ss, False)
-        if i % 500 == 0:
+        if i % savef == 0:
             net.save()
     net.save()
     for ds in datasets:
