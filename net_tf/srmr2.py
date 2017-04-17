@@ -94,7 +94,7 @@ class SRSino8v2:
         ip_c = self.ipc
         ll = self.ll
         lr = self.lr
-        run_ops = [res_l, res_r, inf_l, inf_r, res_ll, res_lr, ip_c, ll, lr]
+        run_ops = [res_l, res_r, inf_l, inf_r, res_ll, res_lr, ip_c, ll, lr, ops['inf_up']]
         ll_c = ss[1][0][:, self.crop_size:-self.crop_size,
                         self.crop_size:-self.crop_size, :]
         lr_c = ss[1][1][:, self.crop_size:-self.crop_size,
@@ -139,7 +139,8 @@ class SRSino8v2:
         inf_f[:, :, ::2, :] = inf_f_l
         inf_f[:, :, 1::2, :] = inf_f_r
         err = ip_f - inf_f
-        return ip_f, inf_f, err, inf_l_t, inf_r_t
+        inf_up_f = results[-1]
+        return ip_f, inf_f, err, inf_l_t, inf_r_t, inf_up_f
 
     def predict(self, ips):
         hight = ips.shape[1]
@@ -209,7 +210,7 @@ class SRSino8v2:
         shape_up[2] *= 2
         lf = np.zeros(shape_up)
         lf[:, :, ::2, :] = ss[1][0]
-        lf[:, :, ::2, :] = ss[1][1]
+        lf[:, :, 1::2, :] = ss[1][1]
         lf_c = lf[:, self.crop_size:-self.crop_size,
                   self.crop_size * 2:-self.crop_size * 2, :]
         feed_dict = {self.ip: ss[0], self.ll: ll_c,
@@ -275,13 +276,13 @@ class SRSino8v2:
             with tf.name_scope('crop'):
                 res_l = tf.slice(res_l,
                                  [0, self.crop_size, self.crop_size, 0],
-                                 [self.batch_size, self.cropped_shape[1], self.cropped_shape[2], 1], name='ip_c')
+                                 [self.batch_size, self.cropped_shape[1], self.cropped_shape[2], 1], name='res_l')
                 res_r = tf.slice(res_r,
                                  [0, self.crop_size, self.crop_size, 0],
-                                 [self.batch_size, self.cropped_shape[1], self.cropped_shape[2], 1], name='ip_c')
+                                 [self.batch_size, self.cropped_shape[1], self.cropped_shape[2], 1], name='res_r')
                 res_up = tf.slice(res_up,
                                   [0, self.crop_size * 2, self.crop_size * 2, 0],
-                                  [self.batch_size, self.cropped_shape[1], self.cropped_shape[2] * 2, 1], name='ip_c')
+                                  [self.batch_size, self.cropped_shape[1], self.cropped_shape[2] * 2, 1], name='res_up')
             summs.append(tf.summary.image('res_l', res_l))
             summs.append(tf.summary.image('res_r', res_r))
             summs.append(tf.summary.image('res_up', res_up))
