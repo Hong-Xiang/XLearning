@@ -272,7 +272,7 @@ class SRSino8v2:
                     ress, size=[self.input_shape[1], self.input_shape[2] * 2])
                 h = tf.layers.conv2d(res_up, 32, 3, padding='same')
                 h = tf.nn.crelu(h)
-                res_up = tf.layers.conv2d(res_up, 1, 3, padding='same')
+                res_up = tf.layers.conv2d(h, 1, 3, padding='same')
             with tf.name_scope('crop'):
                 res_l = tf.slice(res_l,
                                  [0, self.crop_size, self.crop_size, 0],
