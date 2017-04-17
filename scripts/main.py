@@ -625,7 +625,6 @@ def sino4matlab(dataset_name,
         }
         scipy.io.savemat('sinos.mat', save_dict)
 
-
 @xln.command()
 @click.option('--arch', '-a', type=str)
 def sbatch_all(arch='k80'):

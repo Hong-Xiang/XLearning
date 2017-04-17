@@ -1,6 +1,7 @@
 import tensorflow as tf
 import numpy as np
 from ..utils.general import with_config
+from scipy.misc import imresize
 
 
 class SRSino8v2:
@@ -17,6 +18,7 @@ class SRSino8v2:
                  log_dir='./log/',
                  model_dir='save',
                  lrs=1e-4,
+                 is_fc=False,
                  **kwargs):
         self.filters = filters
         self.depths = depths
@@ -24,7 +26,12 @@ class SRSino8v2:
         self.input_shape = [None] + list(input_shape)
         self.cropped_shape = [None, input_shape[0] - crop_size * 2,
                               input_shape[1] - crop_size * 2, 1]
+
         self.crop_size = crop_size
+        self.input_shape_up = list(self.input_shape)
+        self.input_shape_up[2] *= 2
+        self.input_shape_up[1] -= crop_size * 2
+        self.input_shape_up[2] -= crop_size * 4
         self.log_dir = log_dir
         self.model_dir = model_dir
         self.is_bn = is_bn
@@ -32,6 +39,7 @@ class SRSino8v2:
         self.saver = None
         self.cores = cores
         self.batch_size = batch_size
+        self.is_fc = is_fc
 
     def predict_single(self, net_name, ss):
         if net_name == 'net_8x':
@@ -67,6 +75,73 @@ class SRSino8v2:
             fn = os.join(os.path.abspath('results'), n)
             np.save(fn, arr)
 
+    def predict_fullsize(self, net_name, ss):
+        if net_name == 'net_8x':
+            ops = self.ops8x
+            period = 45
+        if net_name == 'net_4x':
+            ops = self.ops4x
+            period = 90
+        if net_name == 'net_2x':
+            ops = self.ops2x
+            period = 180
+
+        res_l = ops['res_l']
+        res_r = ops['res_r']
+        inf_l = ops['inf_l']
+        inf_r = ops['inf_r']
+        res_ll = ops['res_ll']
+        res_lr = ops['res_lr']
+        ip_c = self.ipc
+        ll = self.ll
+        lr = self.lr
+        run_ops = [res_l, res_r, inf_l, inf_r, res_ll, res_lr, ip_c, ll, lr]
+        ll_c = ss[1][0][:, self.crop_size:-self.crop_size,
+                        self.crop_size:-self.crop_size, :]
+        lr_c = ss[1][1][:, self.crop_size:-self.crop_size,
+                        self.crop_size:-self.crop_size, :]
+        shape_up = list(ss[1][0].shape)
+        shape_up[2] *= 2
+        lf = np.zeros(shape_up)
+        lf[:, :, ::2, :] = ss[1][0]
+        lf[:, :, ::2, :] = ss[1][1]
+        lf_c = lf[:, self.crop_size:-self.crop_size,
+                  self.crop_size * 2:-self.crop_size * 2, :]
+        feed_dict = {self.ip: ss[0], self.ll: ll_c,
+                     self.lr: lr_c, self.ipup: lf_c, self.training: False}
+        results = self.sess.run(run_ops, feed_dict=feed_dict)
+        crop_shape = list(results[2].shape)
+        full_shape = list(results[2].shape)
+        full_shape[1] += self.crop_size * 2
+        full_shape[2] += self.crop_size * 2
+        inf_l_t = results[2]
+        inf_r_t = results[3]
+        meanip = np.mean(ss[0])
+        meanl = np.mean(inf_l_t)
+        meanr = np.mean(inf_r_t)
+        inf_l_t = inf_l_t / meanl * meanip
+        inf_r_t = inf_r_t / meanr * meanip
+        inf_f_l = np.zeros(full_shape)
+        inf_f_r = np.zeros(full_shape)
+        inf_f_l[:, self.crop_size:-self.crop_size,
+                self.crop_size:-self.crop_size, :] = inf_l_t[:, :, :, :]
+        inf_f_r[:, self.crop_size:-self.crop_size,
+                self.crop_size:-self.crop_size, :] = inf_r_t[:, :, :, :]
+        for i in range(self.crop_size + 3):
+            inf_f_l[:, :, i, :] = inf_f_l[:, :, i + period, :]
+            inf_f_r[:, :, i, :] = inf_f_r[:, :, i + period, :]
+            inf_f_l[:, :, -i, :] = inf_f_l[:, :, -i - period, :]
+            inf_f_r[:, :, -i, :] = inf_f_r[:, :, -i - period, :]
+        ip_f = np.zeros(shape=[full_shape[0], full_shape[1],
+                               full_shape[2] * 2, full_shape[3]])
+        ip_f[:, :, ::2, :] = ss[1][0]
+        ip_f[:, :, 1::2, :] = ss[1][1]
+        inf_f = np.zeros(shape=ip_f.shape)
+        inf_f[:, :, ::2, :] = inf_f_l
+        inf_f[:, :, 1::2, :] = inf_f_r
+        err = ip_f - inf_f
+        return ip_f, inf_f, err, inf_l_t, inf_r_t
+
     def predict(self, ips):
         hight = ips.shape[1]
         width = ips.shape[2]
@@ -91,8 +166,8 @@ class SRSino8v2:
                         global_step=self.global_step)
 
     def load(self, load_step=None):
-        save_path = self.model_dir + str(load_step)
-        self.saver.restore(net.sess, save_path)
+        save_path = r'./' + self.model_dir + '-' + str(load_step)
+        self.saver.restore(self.sess, save_path)
         self.global_step.assign(load_step)
 
     def train(self, net_name, ss):
@@ -109,8 +184,15 @@ class SRSino8v2:
                         self.crop_size:-self.crop_size, :]
         lr_c = ss[1][1][:, self.crop_size:-self.crop_size,
                         self.crop_size:-self.crop_size, :]
+        shape_up = list(ss[1][0].shape)
+        shape_up[2] *= 2
+        lf = np.zeros(shape_up)
+        lf[:, :, ::2, :] = ss[1][0]
+        lf[:, :, ::2, :] = ss[1][1]
+        lf_c = lf[:, self.crop_size:-self.crop_size,
+                  self.crop_size * 2:-self.crop_size * 2, :]
         feed_dict = {self.ip: ss[0], self.ll: ll_c,
-                     self.lr: lr_c, self.training: True}
+                     self.lr: lr_c, self.ipup: lf_c, self.training: True}
         return self.sess.run([loss_op, train_op], feed_dict=feed_dict)
 
     def summary(self, net_name, ss, is_train):
@@ -124,8 +206,15 @@ class SRSino8v2:
                         self.crop_size:-self.crop_size, :]
         lr_c = ss[1][1][:, self.crop_size:-self.crop_size,
                         self.crop_size:-self.crop_size, :]
+        shape_up = list(ss[1][0].shape)
+        shape_up[2] *= 2
+        lf = np.zeros(shape_up)
+        lf[:, :, ::2, :] = ss[1][0]
+        lf[:, :, ::2, :] = ss[1][1]
+        lf_c = lf[:, self.crop_size:-self.crop_size,
+                  self.crop_size * 2:-self.crop_size * 2, :]
         feed_dict = {self.ip: ss[0], self.ll: ll_c,
-                     self.lr: lr_c, self.training: False}
+                     self.lr: lr_c, self.training: False, self.ipup: lf_c}
         sve = self.sess.run(summ_op, feed_dict=feed_dict)
         step = self.sess.run(self.global_step)
         # for sve in sv:
@@ -160,17 +249,30 @@ class SRSino8v2:
         summs = []
         with tf.name_scope('res'):
             with tf.name_scope('conv_l'):
-                h = tf.layers.conv2d(reps, 512, 3, padding='same')
-                h = tf.nn.crelu(h)
-                h = tf.layers.conv2d(h, 512, 1, padding='same')
-                h = tf.nn.crelu(h)
-                res_l = tf.layers.conv2d(h, 1, 3, padding='same')
+                if self.is_fc:
+                    h = tf.layers.conv2d(reps, 512, 3, padding='same')
+                    h = tf.nn.crelu(h)
+                    h = tf.layers.conv2d(h, 512, 1, padding='same')
+                    h = tf.nn.crelu(h)
+                    res_l = tf.layers.conv2d(h, 1, 3, padding='same')
+                else:
+                    res_l = tf.layers.conv2d(reps, 1, 3, padding='same')
             with tf.name_scope('conv_r'):
-                h = tf.layers.conv2d(reps, 512, 3, padding='same')
+                if self.is_fc:
+                    h = tf.layers.conv2d(reps, 512, 3, padding='same')
+                    h = tf.nn.crelu(h)
+                    h = tf.layers.conv2d(h, 512, 1, padding='same')
+                    h = tf.nn.crelu(h)
+                    res_r = tf.layers.conv2d(h, 1, 3, padding='same')
+                else:
+                    res_r = tf.layers.conv2d(reps, 1, 3, padding='same')
+            with tf.name_scope('merge'):
+                ress = tf.concat([res_l, res_r], axis=-1)
+                res_up = tf.image.resize_images(
+                    ress, size=[self.input_shape[1], self.input_shape[2] * 2])
+                h = tf.layers.conv2d(res_up, 32, 3, padding='same')
                 h = tf.nn.crelu(h)
-                h = tf.layers.conv2d(h, 512, 1, padding='same')
-                h = tf.nn.crelu(h)
-                res_r = tf.layers.conv2d(h, 1, 3, padding='same')
+                res_up = tf.layers.conv2d(res_up, 1, 3, padding='same')
             with tf.name_scope('crop'):
                 res_l = tf.slice(res_l,
                                  [0, self.crop_size, self.crop_size, 0],
@@ -178,13 +280,19 @@ class SRSino8v2:
                 res_r = tf.slice(res_r,
                                  [0, self.crop_size, self.crop_size, 0],
                                  [self.batch_size, self.cropped_shape[1], self.cropped_shape[2], 1], name='ip_c')
+                res_up = tf.slice(res_up,
+                                  [0, self.crop_size * 2, self.crop_size * 2, 0],
+                                  [self.batch_size, self.cropped_shape[1], self.cropped_shape[2] * 2, 1], name='ip_c')
             summs.append(tf.summary.image('res_l', res_l))
             summs.append(tf.summary.image('res_r', res_r))
+            summs.append(tf.summary.image('res_up', res_up))
         with tf.name_scope('infer'):
             inf_l = self.ipc + res_l
             inf_r = self.ipc + res_r
+            inf_up = self.ipup + res_up
             summs.append(tf.summary.image('inf_l', inf_l))
             summs.append(tf.summary.image('inf_r', inf_r))
+            summs.append(tf.summary.image('inf_up', inf_up))
 
         with tf.name_scope('res_ip'):
             res_ll = self.ll - self.ipc
@@ -194,7 +302,11 @@ class SRSino8v2:
         with tf.name_scope('loss'):
             loss_l = tf.losses.mean_squared_error(inf_l, self.ll)
             loss_r = tf.losses.mean_squared_error(inf_r, self.lr)
-            loss = loss_l + loss_r
+            loss_up = tf.losses.mean_squared_error(inf_up, self.ipup)
+            loss = loss_l + loss_r + loss_up
+            summs.append(tf.summary.scalar('loss_l', loss_l))
+            summs.append(tf.summary.scalar('loss_r', loss_r))
+            summs.append(tf.summary.scalar('loss_up', loss_up))
             summs.append(tf.summary.scalar('loss', loss))
         with tf.name_scope('summ_err'):
             summs.append(tf.summary.image('ll_c', self.ll))
@@ -209,7 +321,8 @@ class SRSino8v2:
             'inf_l': inf_l,
             'inf_r': inf_r,
             'res_ll': res_ll,
-            'res_lr': res_lr
+            'res_lr': res_lr,
+            'inf_up': inf_up
         }
         return ops, loss, summs
 
@@ -227,6 +340,8 @@ class SRSino8v2:
                 tf.float32, self.cropped_shape, name='label_l')
             self.lr = tf.placeholder(
                 tf.float32, self.cropped_shape, name='label_r')
+            self.ipup = tf.placeholder(
+                tf.float32, self.input_shape_up, name='input_up')
             summ_ip.append(tf.summary.image('input_crop', self.ipc))
             summ_ip.append(tf.summary.image('label_l_crop', self.ll))
             summ_ip.append(tf.summary.image('label_r_crop', self.lr))

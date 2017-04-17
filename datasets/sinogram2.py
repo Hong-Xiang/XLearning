@@ -15,6 +15,8 @@ class Sinograms2:
                  mode='train',
                  data_down_sample=3,
                  label_down_sample=0,
+                 is_from_npy=False,
+                 npy_file='sino.npy',
                  **kwargs):
         dataset_dir = os.environ.get('PATH_DATASETS')
         sino_name = 'shepplogan'
@@ -35,22 +37,37 @@ class Sinograms2:
         self.crop_shape = crop_shape
         self.data_down_sample = data_down_sample
         self.label_down_sample = label_down_sample
+        self.is_from_npy = is_from_npy
+        self.npy_file = npy_file
+        if self.is_from_npy:
+            tmp = np.array(np.load(self.npy_file))
+            self.idx = list(range(tmp.shape[0]))
+            self.sampler = Sampler(self.idx, is_shuffle=False)
+        
 
     def _load_sample(self):
-        id_ = next(self.sampler)[0]
-        image = np.array(self.dataset[id_])
+        if self.is_from_npy:
+            image = np.load(self.npy_file)
+        else:
+            id_ = next(self.sampler)[0]
+            image = np.array(self.dataset[id_])
         image = image[:, :360, :]
         image = np.concatenate((image, image), axis=1)
         image += 1.0
         image = np.log(image)
+        
         return image
 
     def init(self):
-        self.fin = h5py.File(self.file_data, 'r')
-        self.dataset = self.fin['sinograms']
+        if self.is_from_npy:
+            self.dataset = np.load(self.npy_file)
+        else:
+            self.fin = h5py.File(self.file_data, 'r')
+            self.dataset = self.fin['sinograms']
 
     def close(self):
-        self.fin.close()
+        if not self.is_from_npy:
+            self.fin.close()
 
     def __enter__(self):
         self.fin = h5py.File(self.file_data, 'r')
@@ -68,12 +85,14 @@ class Sinograms2:
         crop_offset = [0, 0]
         offsets = crop_offset
         is_crop_random = True
+        
         if is_crop_random:
-            offsets[0] += random.randint(0,
-                                         image.shape[0] - target_shape[0] - 1)
-            offsets[1] += random.randint(0,
-                                         image.shape[1] - target_shape[1] - 1)
-
+            if target_shape[0] < image.shape[0]:
+                offsets[0] += random.randint(0,
+                                            image.shape[0] - target_shape[0] - 1)
+            if target_shape[1] < image.shape[1]:
+                offsets[1] += random.randint(0,
+                                            image.shape[1] - target_shape[1] - 1)        
         image = image[offsets[0]:offsets[0] + target_shape[0],
                       offsets[1]:offsets[1] + target_shape[1], :]
         if image.shape[0] != self.crop_shape[0]:
