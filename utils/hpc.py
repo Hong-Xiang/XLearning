@@ -90,9 +90,10 @@ def grid_search_sino8():
     s2 = gsc['s2']
     suf = gsc['suf']
     saf = gsc['saf']
+    rep = gsc['rep']
     for lr in gsc['lr']:
         for filters in gsc['filters']:
             for depths in gsc['depths']:
                 for blocks in gsc['blocks']:
-                    prepare_jsons(def_nc, replica=3, batch_size=batch_size, input_shape=input_shape,
+                    prepare_jsons(def_nc, replica=rep, batch_size=batch_size, input_shape=input_shape,
                                   lr=lr, filters=filters, depths=depths, blocks=blocks, s8=s8, s4=s4, s2=s2, suf=suf, saf=saf)
