@@ -383,7 +383,7 @@ def train_sino8v2(load_step=None,
             loss_v, _ = net.train('net_4x', ss)
             pt.event(cstp, msg='train net_4x, loss %f.' % loss_v)
             cstp += 1
-        for _ in range(stpe2):
+        for _ in range(step2):
             ss = next(ds2x_tr)
             loss_v, _ = net.train('net_2x', ss)
             pt.event(cstp, msg='train net_2x, loss %f.' % loss_v)
