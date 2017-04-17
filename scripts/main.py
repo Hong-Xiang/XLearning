@@ -625,12 +625,13 @@ def sino4matlab(dataset_name,
 
 
 @xln.command()
-def sbatch_all():
+@click.option('--arch', '-a', type=str)
+def sbatch_all(arch='k80'):
     dirs = os.listdir('.')
     paths = [os.path.abspath(d) for d in dirs]
     for p in paths:
         if os.path.isdir(p):
-            os.system('cd ' + p + '; chmod +x work.sh; sbatch k80.slurm')
+            os.system('cd ' + p + r'; chmod +x work.sh; sbatch '+arch+r'.slurm')
 
 
 @xln.command()
