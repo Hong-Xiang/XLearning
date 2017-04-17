@@ -1,7 +1,6 @@
 import tensorflow as tf
 import numpy as np
 from ..utils.general import with_config
-from scipy.misc import imresize
 
 
 class SRSino8v2:
