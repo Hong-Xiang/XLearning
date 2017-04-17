@@ -47,7 +47,7 @@ def prepare_jsons(def_c, replica=1, batch_size=None, input_shape=None, lr=None, 
     if is_bn is not None:
         net_c['is_bn'] = is_bn
     for i in range(replica):
-        path = "rs%df%dd%db%dc%dl%0.1e"%(net_c['batch_size'], net_c['filters'], net_c['depths'], net_c['blocks'], net_c['cores'], net_c['lrs'])        
+        path = "rs%df%dd%db%dc%dl%0.1e.%d"%(net_c['batch_size'], net_c['filters'], net_c['depths'], net_c['blocks'], net_c['cores'], net_c['lrs'], i)        
         if net_c['is_bn']:
             path += 'bn'
         path = os.path.abspath(path)
