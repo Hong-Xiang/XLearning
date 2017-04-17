@@ -207,7 +207,6 @@ def train_sr_d(dataset_name,
 #         net.save()
 
 
-
 @xln.command()
 @click.option('--dataset_name', '-dn', type=str)
 @click.option('--net_name', '-nn', type=str)
@@ -372,7 +371,7 @@ def train_sino8v2(load_step=None,
         ds.init()
     pt = ProgressTimer(total_step * 3)
     cstp = 0
-    for i in range(total_step//(step8+step4+step2)):
+    for i in range(total_step // (step8 + step4 + step2)):
         for _ in range(step8):
             ss = next(ds8x_tr)
             loss_v, _ = net.train('net_8x', ss)
@@ -407,11 +406,12 @@ def train_sino8v2(load_step=None,
     for ds in datasets:
         ds.close()
 
+
 @xln.command()
 @click.option('--filenames', '-fn', multiple=True, type=str)
 @click.option('--load_step', type=int)
 @with_config
-def predict_sino8v2(load_step=None,                    
+def predict_sino8v2(load_step=None,
                     filenames=[],
                     **kwargs):
     net = SRSino8(filenames=filenames, **kwargs)
@@ -432,6 +432,7 @@ def predict_sino8v2(load_step=None,
                     net.save()
         net.save()
 
+
 @xln.command()
 def clear_dirs():
     dirs = os.listdir('.')
@@ -439,6 +440,7 @@ def clear_dirs():
     for p in paths:
         if os.path.isdir(p):
             shutil.rmtree(p)
+
 
 @xln.command()
 @click.option('--dataset_name', '-dn', type=str)
@@ -631,7 +633,8 @@ def sbatch_all(arch='k80'):
     paths = [os.path.abspath(d) for d in dirs]
     for p in paths:
         if os.path.isdir(p):
-            os.system('cd ' + p + r'; chmod +x work.sh; sbatch '+arch+r'.slurm')
+            os.system('cd ' + p + r'; chmod +x work.sh; sbatch ' +
+                      arch + r'.slurm')
 
 
 @xln.command()
@@ -642,11 +645,14 @@ def clean_all():
         if os.path.isdir(p):
             os.system('cd ' + p + '; python $PATH_XLEARN/scripts/main.py clean')
 
+
 from xlearn.utils.hpc import grid_search_sino8
+
 
 @xln.command()
 def hpc_grid():
     grid_search_sino8()
+
 
 @xln.command()
 def cres_all():

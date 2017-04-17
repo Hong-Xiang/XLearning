@@ -160,9 +160,17 @@ class SRSino8v2:
         summs = []
         with tf.name_scope('res'):
             with tf.name_scope('conv_l'):
-                res_l = tf.layers.conv2d(reps, 1, 3, padding='same')
+                h = tf.layers.conv2d(reps, 512, 3, padding='same')
+                h = tf.nn.crelu(h)
+                h = tf.layers.conv2d(h, 512, 1, padding='same')
+                h = tf.nn.crelu(h)
+                res_l = tf.layers.conv2d(h, 1, 3, padding='same')
             with tf.name_scope('conv_r'):
-                res_r = tf.layers.conv2d(reps, 1, 3, padding='same')
+                h = tf.layers.conv2d(reps, 512, 3, padding='same')
+                h = tf.nn.crelu(h)
+                h = tf.layers.conv2d(h, 512, 1, padding='same')
+                h = tf.nn.crelu(h)
+                res_r = tf.layers.conv2d(h, 1, 3, padding='same')
             with tf.name_scope('crop'):
                 res_l = tf.slice(res_l,
                                  [0, self.crop_size, self.crop_size, 0],

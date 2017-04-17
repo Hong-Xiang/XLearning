@@ -78,5 +78,5 @@ def grid_search_sino8():
         for filters in gsc['filters']:
             for depths in gsc['depths']:
                 for blocks in gsc['blocks']:
-                    prepare_jsons(def_nc, replica=1, batch_size=batch_size, input_shape=input_shape, lr=lr, filters=filters, depths=depths, blocks=blocks, cores=3, is_bn=True)
+                    prepare_jsons(def_nc, replica=3, batch_size=batch_size, input_shape=input_shape, lr=lr, filters=filters, depths=depths, blocks=blocks)
                     
