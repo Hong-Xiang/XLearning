@@ -33,19 +33,57 @@ class SRSino8v2:
         self.cores = cores
         self.batch_size = batch_size
 
+    def predict_single(self, net_name, ss):
+        if net_name == 'net_8x':
+            ops = self.ops8x
+        if net_name == 'net_4x':
+            ops = self.ops4x
+        if net_name == 'net_2x':
+            ops = self.ops2x
+
+        res_l = ops['res_l']
+        res_r = ops['res_r']
+        inf_l = ops['inf_l']
+        inf_r = ops['inf_r']
+        res_ll = ops['res_ll']
+        res_lr = ops['res_lr']
+        ip_c = self.ipc
+        ll = self.ll
+        lr = self.lr
+        run_ops = [res_l, res_r, inf_l, inf_r, res_ll, res_lr, ip_c, ll, lr]
+        ll_c = ss[1][0][:, self.crop_size:-self.crop_size,
+                        self.crop_size:-self.crop_size, :]
+        lr_c = ss[1][1][:, self.crop_size:-self.crop_size,
+                        self.crop_size:-self.crop_size, :]
+        feed_dict = {self.ip: ss[0], self.ll: ll_c,
+                     self.lr: lr_c, self.training: False}
+        results = self.sess.run(run_ops, feed_dict=feed_dict)
+        errl = results[2] - ll_c
+        errr = results[3] - lr_c
+        results += [errl, errr]
+        names = ['res_l', 'res_r', 'inf_l', 'inf_r', 'res_ll',
+                 'res_lr', 'ipc', 'll', 'lr', 'ip', 'errl', 'errr']
+        for n, arr in zip(names, results):
+            fn = os.join(os.path.abspath('results'), n)
+            np.save(fn, arr)
+
     def predict(self, ips):
         hight = ips.shape[1]
         width = ips.shape[2]
         if hight != 363 or width != 90:
             raise ValueError('Invalid input shape.')
-        inf_l = self.sess.run(self.ops8x['inf_l'], feed_dict={self.ip: ips, self.training:False})
-        inf_r = self.sess.run(self.ops8x['inf_r'], feed_dict={self.ip: ips, self.training:False})
-        inf_l_pad = np.pad(inf_l, ((0, 0), [self.crop_size]*2, [self.crop_size]*2, (0, 0)))
-        inf_r_pad = np.pad(inf_r, ((0, 0), [self.crop_size]*2, [self.crop_size]*2, (0, 0)))
+        inf_l = self.sess.run(self.ops8x['inf_l'], feed_dict={
+                              self.ip: ips, self.training: False})
+        inf_r = self.sess.run(self.ops8x['inf_r'], feed_dict={
+                              self.ip: ips, self.training: False})
+        inf_l_pad = np.pad(
+            inf_l, ((0, 0), [self.crop_size] * 2, [self.crop_size] * 2, (0, 0)))
+        inf_r_pad = np.pad(
+            inf_r, ((0, 0), [self.crop_size] * 2, [self.crop_size] * 2, (0, 0)))
         inf4x = np.zeros([1, 363, 180, 1])
         inf4x[0, :, ::2, :] = inf_l_pad
         inf4x[0, :, 1::2, :] = inf_r_pad
-        inf4x[0, :, :self.crop_size, :] = inf4x[0, :, 180:180+64, ]
+        inf4x[0, :, :self.crop_size, :] = inf4x[0, :, 180:180 + 64, ]
         pass
 
     def save(self, ):

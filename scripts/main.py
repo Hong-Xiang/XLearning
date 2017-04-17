@@ -179,32 +179,33 @@ def train_sr_d(dataset_name,
         net.dump_loss()
 
 
-@xln.command()
-@click.option('--filenames', '-fn', multiple=True, type=str)
-@click.option('--load_step', type=int)
-@click.option('--total_step', type=int)
-@with_config
-def train_sino8v2(load_step=None,
-                  total_step=None,
-                  filenames=[],
-                  **kwargs):
-    net = SRSino8(filenames=filenames, **kwargs)
-    net.build()
-    with Sinograms2(filenames=filenames) as dataset_train:
-        with Sinograms2(filenames=filenames, mode='test') as dataset_test:
-            pt = ProgressTimer(total_step)
-            for i in range(total_step):
-                ss = next(dataset_train)
-                loss_v, _ = net.sess.run([net.loss2x, net.train_2x], feed_dict={
-                                         net.ip: ss[0], net.ll: ss[1][0], net.lr: ss[1][1]})
-                pt.event(i, msg='loss %f.' % loss_v)
-                if i % 100 == 0:
-                    summ = net.sess.run(net.summary_op, feed_dict={
-                                        net.ip: ss[0], net.ll: ss[1][0], net.lr: ss[1][1]})
-                    net.sw.add_summary(summ, net.sess.run(net.global_step))
-                if i % 1000 == 0:
-                    net.save()
-        net.save()
+# @xln.command()
+# @click.option('--filenames', '-fn', multiple=True, type=str)
+# @click.option('--load_step', type=int)
+# @click.option('--total_step', type=int)
+# @with_config
+# def train_sino8v2(load_step=None,
+#                   total_step=None,
+#                   filenames=[],
+#                   **kwargs):
+#     net = SRSino8(filenames=filenames, **kwargs)
+#     net.build()
+#     with Sinograms2(filenames=filenames) as dataset_train:
+#         with Sinograms2(filenames=filenames, mode='test') as dataset_test:
+#             pt = ProgressTimer(total_step)
+#             for i in range(total_step):
+#                 ss = next(dataset_train)
+#                 loss_v, _ = net.sess.run([net.loss2x, net.train_2x], feed_dict={
+#                                          net.ip: ss[0], net.ll: ss[1][0], net.lr: ss[1][1]})
+#                 pt.event(i, msg='loss %f.' % loss_v)
+#                 if i % 100 == 0:
+#                     summ = net.sess.run(net.summary_op, feed_dict={
+#                                         net.ip: ss[0], net.ll: ss[1][0], net.lr: ss[1][1]})
+#                     net.sw.add_summary(summ, net.sess.run(net.global_step))
+#                 if i % 1000 == 0:
+#                     net.save()
+#         net.save()
+
 
 
 @xln.command()
@@ -344,9 +345,10 @@ def predict_sr_multi(net_name=None,
 @click.option('--total_step', type=int)
 @with_config
 def train_sino8v2(load_step=None,
-                total_step=None,
-                filenames=[],
-                **kwargs):
+                  total_step=None,
+                  filenames=[],
+                  **kwargs):
+    print("START TRAINING!!!!")
     net = SRSino8v2(filenames='srsino8v2.json', **kwargs)
     net.build()
     ds8x_tr = Sinograms2(filenames='sino2_shep8x.json', mode='train')
@@ -388,6 +390,31 @@ def train_sino8v2(load_step=None,
     for ds in datasets:
         ds.close()
 
+
+@xln.command()
+@click.option('--filenames', '-fn', multiple=True, type=str)
+@click.option('--load_step', type=int)
+@with_config
+def predict_sino8v2(load_step=None,                    
+                    filenames=[],
+                    **kwargs):
+    net = SRSino8(filenames=filenames, **kwargs)
+    net.build()
+    with Sinograms2(filenames=filenames) as dataset_train:
+        with Sinograms2(filenames=filenames, mode='test') as dataset_test:
+            pt = ProgressTimer(total_step)
+            for i in range(total_step):
+                ss = next(dataset_train)
+                loss_v, _ = net.sess.run([net.loss2x, net.train_2x], feed_dict={
+                                         net.ip: ss[0], net.ll: ss[1][0], net.lr: ss[1][1]})
+                pt.event(i, msg='loss %f.' % loss_v)
+                if i % 100 == 0:
+                    summ = net.sess.run(net.summary_op, feed_dict={
+                                        net.ip: ss[0], net.ll: ss[1][0], net.lr: ss[1][1]})
+                    net.sw.add_summary(summ, net.sess.run(net.global_step))
+                if i % 1000 == 0:
+                    net.save()
+        net.save()
 
 @xln.command()
 @click.option('--dataset_name', '-dn', type=str)
