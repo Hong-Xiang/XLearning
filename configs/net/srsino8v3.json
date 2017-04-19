@@ -1,0 +1,8 @@
+{
+    "input_shape": [64, 64, 1],
+    "depths": 8,
+    "filters": [64, 64, 64],    
+    "is_bn": true,
+    "crop_size": 16,
+    "lrs": 1e-4
+}

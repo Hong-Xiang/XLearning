@@ -4,6 +4,8 @@ import keras.backend as K
 import tensorflow as tf
 from ..models.merge import sub
 
+# import tensorflow.contrib.framework.python.framework
+
 
 def residual_block(input_, channels, kxs=None, kys=None, id=0, cat=False, scope=''):
     n_conv = len(channels)
@@ -187,3 +189,50 @@ def convolution_block(ip, nb_filter, nb_row, nb_col, subsample=(1, 1), id=0, bor
     x = BatchNormalization(name=scope + 'conv%d/bn' % id)(x)
     x = ELU(name=scope + "conv%d/elu" % id)(x)
     return x
+
+
+def inception_residual_block(input_tensor, filters, is_final_activ=False, is_bn=True, activation=tf.nn.crelu, training=True, reuse=None, res_scale=0.1, name='irb'):
+    cc = {'reuse': reuse, 'padding':'same'}
+    cb = {'reuse': reuse, 'training': training, 'scale':False}
+    with tf.name_scope(name) as scope:      
+        h1 = tf.layers.conv2d(input_tensor, filters, 1, **cc)
+        h1 = tf.layers.batch_normalization(h1, **cb)
+        h1 = activation(h1)
+        h1 = tf.layers.conv2d(h1, filters, 3, **cc)
+
+        h2 = tf.layers.conv2d(input_tensor, filters, 1, **cc)
+        h2 = tf.layers.batch_normalization(h2, **cb)
+        h2 = activation(h2)
+        h2 = tf.layers.conv2d(h2, filters, 3, **cc)
+        h2 = tf.layers.batch_normalization(h2, **cb)
+        h2 = activation(h2)
+        h2 = tf.layers.conv2d(h2, filters, 3, **cc)
+
+        h = tf.concat([h1, h2], axis=-1)
+        h = tf.layers.batch_normalization(h, **cb)
+        h = activation(h)
+        h = tf.layers.conv2d(h, filters, 1, **cc)
+        h = tf.layers.batch_normalization(h, **cb)
+        h = activation(h)
+
+        h = h * res_scale
+        h = h + input_tensor
+        if is_final_activ:
+            h = activation(h)
+        return h
+
+def align_by_crop(target_tensor, input_tensors, batch_size=None, name='align_crop'):
+    target_shape = target_tensor.shape.as_list()
+    if batch_size is not None:
+        target_shape[0] = batch_size
+    ops = []
+    with tf.name_scope(name):
+        for t in input_tensors:
+            input_shape = t.shape.as_list()
+            crop_h = (input_shape[1] - target_shape[1]) // 2
+            crop_w = (input_shape[2] - target_shape[2]) // 2
+            target_shape_now = list(target_shape)
+            target_shape_now[-1] = input_shape[-1]
+            ops.append(tf.slice(t, [0, crop_h, crop_w, 0], target_shape_now))
+    return ops
+            

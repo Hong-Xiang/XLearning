@@ -25,8 +25,10 @@ import h5py
 
 from xlearn.net_tf.srmr import SRSino8
 from xlearn.net_tf.srmr2 import SRSino8v2
+from xlearn.net_tf.srmr3 import SRSino8v3
 from xlearn.datasets.sinogram2 import Sinograms2
-
+from xlearn.net_tf.net_cali import CaliNet
+import time
 
 class Config(dict):
     def __init__(self, config='config.json'):
@@ -179,32 +181,40 @@ def train_sr_d(dataset_name,
         net.dump_loss()
 
 
-# @xln.command()
-# @click.option('--filenames', '-fn', multiple=True, type=str)
-# @click.option('--load_step', type=int)
-# @click.option('--total_step', type=int)
-# @with_config
-# def train_sino8v2(load_step=None,
-#                   total_step=None,
-#                   filenames=[],
-#                   **kwargs):
-#     net = SRSino8(filenames=filenames, **kwargs)
-#     net.build()
-#     with Sinograms2(filenames=filenames) as dataset_train:
-#         with Sinograms2(filenames=filenames, mode='test') as dataset_test:
-#             pt = ProgressTimer(total_step)
-#             for i in range(total_step):
-#                 ss = next(dataset_train)
-#                 loss_v, _ = net.sess.run([net.loss2x, net.train_2x], feed_dict={
-#                                          net.ip: ss[0], net.ll: ss[1][0], net.lr: ss[1][1]})
-#                 pt.event(i, msg='loss %f.' % loss_v)
-#                 if i % 100 == 0:
-#                     summ = net.sess.run(net.summary_op, feed_dict={
-#                                         net.ip: ss[0], net.ll: ss[1][0], net.lr: ss[1][1]})
-#                     net.sw.add_summary(summ, net.sess.run(net.global_step))
-#                 if i % 1000 == 0:
-#                     net.save()
-#         net.save()
+@xln.command()
+@click.option('--filenames', '-fn', multiple=True, type=str)
+@click.option('--load_step', type=int)
+@click.option('--total_step', type=int)
+@with_config
+def train_sino8v3(load_step=None,
+                  total_step=None,
+                  filenames=[],
+                  **kwargs):
+    net = SRSino8v3(filenames=filenames, **kwargs)
+    net.build()
+    if load_step is not None:
+        net.load(load_step=load_step)
+
+    pre_sum = time.time()
+    pre_save = time.time()
+    with Sinograms2(filenames=filenames) as dataset_train:
+        with Sinograms2(filenames=filenames, mode='test') as dataset_test:
+            pt = ProgressTimer(total_step)
+            for i in range(total_step):
+                ss = next(dataset_train)
+                loss_v, _ = net.train(ss)
+                pt.event(i, msg='loss %f.' % loss_v)
+                now = time.time()
+                if now - pre_sum > 120:
+                    ss = next(dataset_train)
+                    net.summary(ss, True)
+                    ss = next(dataset_test)
+                    net.summary(ss, False)
+                    pre_sum = now
+                if now - pre_save > 600:
+                    net.save()
+                    pre_save = now
+        net.save()
 
 
 @xln.command()
@@ -348,7 +358,7 @@ def predict_sr_multi(net_name=None,
 @click.option('--sumf', type=int)
 @click.option('--savef', type=int)
 @with_config
-def train_sino8v2(load_step=None,
+def train_sino8v2(load_step=-1,
                   total_step=None,
                   step8=1,
                   step4=1,
@@ -358,8 +368,10 @@ def train_sino8v2(load_step=None,
                   filenames=[],
                   **kwargs):
     click.echo("START TRAINING!!!!")
-    net = SRSino8v2(filenames='srsino8v2.json', **kwargs)
+    net = SRSino8v2(filenames='srsino8v2.json', **kwargs)    
     net.build()
+    if load_step > 0:
+        net.load(load_step=load_step)
     ds8x_tr = Sinograms2(filenames='sino2_shep8x.json', mode='train')
     ds4x_tr = Sinograms2(filenames='sino2_shep4x.json', mode='train')
     ds2x_tr = Sinograms2(filenames='sino2_shep2x.json', mode='train')
@@ -375,17 +387,17 @@ def train_sino8v2(load_step=None,
         for _ in range(step8):
             ss = next(ds8x_tr)
             loss_v, _ = net.train('net_8x', ss)
-            pt.event(cstp, msg='train net_8x, loss %f.' % loss_v)
+            pt.event(cstp, msg='train net_8x, loss %e.' % loss_v)
             cstp += 1
         for _ in range(step4):
             ss = next(ds4x_tr)
             loss_v, _ = net.train('net_4x', ss)
-            pt.event(cstp, msg='train net_4x, loss %f.' % loss_v)
+            pt.event(cstp, msg='train net_4x, loss %e.' % loss_v)
             cstp += 1
         for _ in range(step2):
             ss = next(ds2x_tr)
             loss_v, _ = net.train('net_2x', ss)
-            pt.event(cstp, msg='train net_2x, loss %f.' % loss_v)
+            pt.event(cstp, msg='train net_2x, loss %e.' % loss_v)
             cstp += 1
         if i % sumf == 0:
             ss = next(ds8x_tr)
@@ -574,6 +586,16 @@ def clean(no_save, no_out=True):
         perr = re.compile(r'[0-9]+\.err')
         if perr.match(f):
             os.remove(os.path.abspath(f))
+
+
+@xln.command()
+@click.option('--total_step', type=int)
+@click.option('--load_step', type=int)
+def train_cali(total_step,
+               load_step):
+    net = CaliNet(lr=1e-3)
+    net.build()
+
 
 
 @xln.command()

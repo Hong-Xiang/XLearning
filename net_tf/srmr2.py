@@ -89,25 +89,27 @@ class SRSino8v2:
         res_r = ops['res_r']
         inf_l = ops['inf_l']
         inf_r = ops['inf_r']
-        res_ll = ops['res_ll']
-        res_lr = ops['res_lr']
+        # res_ll = ops['res_ll']
+        # res_lr = ops['res_lr']
         ip_c = self.ipc
-        ll = self.ll
-        lr = self.lr
-        run_ops = [res_l, res_r, inf_l, inf_r, res_ll, res_lr, ip_c, ll, lr, ops['inf_up']]
-        ll_c = ss[1][0][:, self.crop_size:-self.crop_size,
-                        self.crop_size:-self.crop_size, :]
-        lr_c = ss[1][1][:, self.crop_size:-self.crop_size,
-                        self.crop_size:-self.crop_size, :]
-        shape_up = list(ss[1][0].shape)
-        shape_up[2] *= 2
-        lf = np.zeros(shape_up)
-        lf[:, :, ::2, :] = ss[1][0]
-        lf[:, :, ::2, :] = ss[1][1]
-        lf_c = lf[:, self.crop_size:-self.crop_size,
-                  self.crop_size * 2:-self.crop_size * 2, :]
-        feed_dict = {self.ip: ss[0], self.ll: ll_c,
-                     self.lr: lr_c, self.ipup: lf_c, self.training: False}
+        # ll = self.ll
+        # lr = self.lr
+        # run_ops = [res_l, res_r, inf_l, inf_r, res_ll, res_lr, ip_c, ll, lr, ops['inf_up']]
+        # ll_c = ss[1][0][:, self.crop_size:-self.crop_size,
+        #                 self.crop_size:-self.crop_size, :]
+        # lr_c = ss[1][1][:, self.crop_size:-self.crop_size,
+        #                 self.crop_size:-self.crop_size, :]
+        # shape_up = list(ss[1][0].shape)
+        # shape_up[2] *= 2
+        # lf = np.zeros(shape_up)
+        # lf[:, :, ::2, :] = ss[1][0]
+        # lf[:, :, ::2, :] = ss[1][1]
+        # lf_c = lf[:, self.crop_size:-self.crop_size,
+        #           self.crop_size * 2:-self.crop_size * 2, :]
+        # feed_dict = {self.ip: ss[0], self.ll: ll_c,
+                    #  self.lr: lr_c, self.ipup: lf_c, self.training: False}
+        run_ops = [res_l, res_r, inf_l, inf_r]
+        feed_dict = {self.ip: ss[0], self.training: False}
         results = self.sess.run(run_ops, feed_dict=feed_dict)
         crop_shape = list(results[2].shape)
         full_shape = list(results[2].shape)
@@ -133,14 +135,15 @@ class SRSino8v2:
             inf_f_r[:, :, -i, :] = inf_f_r[:, :, -i - period, :]
         ip_f = np.zeros(shape=[full_shape[0], full_shape[1],
                                full_shape[2] * 2, full_shape[3]])
-        ip_f[:, :, ::2, :] = ss[1][0]
-        ip_f[:, :, 1::2, :] = ss[1][1]
+        # ip_f[:, :, ::2, :] = ss[1][0]
+        # ip_f[:, :, 1::2, :] = ss[1][1]
         inf_f = np.zeros(shape=ip_f.shape)
         inf_f[:, :, ::2, :] = inf_f_l
         inf_f[:, :, 1::2, :] = inf_f_r
-        err = ip_f - inf_f
+        # err = ip_f - inf_f
         inf_up_f = results[-1]
-        return ip_f, inf_f, err, inf_l_t, inf_r_t, inf_up_f
+        # return ip_f, inf_f, err, inf_l_t, inf_r_t, inf_up_f
+        return inf_f, inf_l_t, inf_r_t, inf_up_f
 
     def predict(self, ips):
         hight = ips.shape[1]
