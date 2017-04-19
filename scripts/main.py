@@ -27,6 +27,7 @@ from xlearn.net_tf.srmr import SRSino8
 from xlearn.net_tf.srmr2 import SRSino8v2
 from xlearn.net_tf.srmr3 import SRSino8v3
 from xlearn.datasets.sinogram2 import Sinograms2
+from xlearn.datasets.pet_rebin import SinogramsPETRebin
 from xlearn.net_tf.net_cali import CaliNet
 import time
 
@@ -216,6 +217,40 @@ def train_sino8v3(load_step=None,
                     pre_save = now
         net.save()
 
+@xln.command()
+@click.option('--filenames', '-fn', multiple=True, type=str)
+@click.option('--load_step', type=int)
+@click.option('--total_step', type=int)
+@with_config
+def train_sino8v3_2(load_step=None,
+                  total_step=None,
+                  filenames=[],
+                  **kwargs):
+    net = SRSino8v3(filenames=filenames, **kwargs)
+    net.build()
+    if load_step is not None:
+        net.load(load_step=load_step)
+
+    pre_sum = time.time()
+    pre_save = time.time()
+    with SinogramsPETRebin(filenames=filenames) as dataset_train:
+        with SinogramsPETRebin(filenames=filenames, mode='test') as dataset_test:
+            pt = ProgressTimer(total_step)
+            for i in range(total_step):
+                ss = next(dataset_train)
+                loss_v, _ = net.train(ss)
+                pt.event(i, msg='loss %f.' % loss_v)
+                now = time.time()
+                if now - pre_sum > 120:
+                    ss = next(dataset_train)
+                    net.summary(ss, True)
+                    ss = next(dataset_test)
+                    net.summary(ss, False)
+                    pre_sum = now
+                if now - pre_save > 600:
+                    net.save()
+                    pre_save = now
+        net.save()
 
 @xln.command()
 @click.option('--dataset_name', '-dn', type=str)

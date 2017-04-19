@@ -18,6 +18,7 @@ class SRSino8v3:
                  log_dir='./log/',
                  model_dir='save',
                  learning_rate=1e-4,
+                 is_adam=True,
                  **kwargs):
         self.filters = filters
         self.depths = depths
@@ -30,14 +31,16 @@ class SRSino8v3:
         self.batch_size = batch_size
         self.learning_rate = learning_rate
         self.saver = None
+        self.is_adam = is_adam
 
     def predict_fullsize(self, ips, period):
         _, _, infer = self.predict(ips)
         batch_size = ips.shape[0]
-        full_shape = [0] + list(self.input_shape)
+        full_shape = list(self.input_shape)
+        full_shape[0] = self.batch_size
         full_shape[2] *= 2
         infer_full = np.zeros(full_shape)
-        infer_full[:, self.crop_size * 2:-self.crop_size * 2,
+        infer_full[:, self.crop_size:-self.crop_size,
                    self.crop_size * 2:-self.crop_size * 2, :] = infer
         for i in range(2 * self.crop_size + 3):
             infer_full[:, :, i, :] = infer_full[:, :, i + period, :]
@@ -175,13 +178,15 @@ class SRSino8v3:
             self.inf_l, self.inf_r, self.ip, self.lf)
 
         with tf.name_scope('loss_merge'):
-            self.loss = loss_l + loss_r + loss_f            
+            self.loss = loss_l + loss_r + loss_f
         tf.summary.scalar('loss', self.loss)
 
         self.saver = tf.train.Saver()
         with tf.name_scope('optimizer'):
-            opt = tf.train.AdamOptimizer(self.learning_rate)
-            # opt = tf.train.RMSPropOptimizer(self.lr)
+            if self.is_adam:
+                opt = tf.train.AdamOptimizer(self.learning_rate)
+            else:
+                opt = tf.train.RMSPropOptimizer(self.learning_rate)
             self.train_op = opt.minimize(
                 self.loss, global_step=self.global_step)
         self.sess = tf.Session()
