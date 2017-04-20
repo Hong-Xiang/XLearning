@@ -239,7 +239,7 @@ def train_sino8v3_2(load_step=None,
             for i in range(total_step):
                 ss = next(dataset_train)
                 loss_v, _ = net.train(ss)
-                pt.event(i, msg='loss %f.' % loss_v)
+                pt.event(i, msg='loss %e.' % loss_v)
                 now = time.time()
                 if now - pre_sum > 120:
                     ss = next(dataset_train)
