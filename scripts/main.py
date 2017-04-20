@@ -191,6 +191,7 @@ def train_sino8v3(load_step=None,
                   total_step=None,
                   filenames=[],
                   **kwargs):
+    print("TRAINGING v3 net on Phantom data.")
     net = SRSino8v3(filenames=filenames, **kwargs)
     net.build()
     if load_step is not None:
@@ -204,7 +205,7 @@ def train_sino8v3(load_step=None,
             for i in range(total_step):
                 ss = next(dataset_train)
                 loss_v, _ = net.train(ss)
-                pt.event(i, msg='loss %f.' % loss_v)
+                pt.event(i, msg='loss %e.' % loss_v)
                 now = time.time()
                 if now - pre_sum > 120:
                     ss = next(dataset_train)
@@ -222,10 +223,11 @@ def train_sino8v3(load_step=None,
 @click.option('--load_step', type=int)
 @click.option('--total_step', type=int)
 @with_config
-def train_sino8v3_2(load_step=None,
+def train_sino8v3_pet(load_step=None,
                   total_step=None,
                   filenames=[],
                   **kwargs):
+    print("TRAINGING v3 net on PET data.")
     net = SRSino8v3(filenames=filenames, **kwargs)
     net.build()
     if load_step is not None:
