@@ -31,6 +31,8 @@ from xlearn.datasets.pet_rebin import SinogramsPETRebin
 from xlearn.net_tf.net_cali import CaliNet
 import time
 
+from xlearn.scripts.workdir import workdir
+
 class Config(dict):
     def __init__(self, config='config.json'):
         self.config = config
@@ -55,7 +57,7 @@ def xln(config, cfg, debug):
     config.config = cfg
     config.load()
     if debug:
-        print("ENTER DEBUG MODE")
+        print("ENTER DEBUG MODE!")
         enter_debug()
 
 
@@ -218,15 +220,16 @@ def train_sino8v3(load_step=None,
                     pre_save = now
         net.save()
 
+
 @xln.command()
 @click.option('--filenames', '-fn', multiple=True, type=str)
 @click.option('--load_step', type=int)
 @click.option('--total_step', type=int)
 @with_config
 def train_sino8v3_pet(load_step=None,
-                  total_step=None,
-                  filenames=[],
-                  **kwargs):
+                      total_step=None,
+                      filenames=[],
+                      **kwargs):
     print("TRAINGING v3 net on PET data.")
     net = SRSino8v3(filenames=filenames, **kwargs)
     net.build()
@@ -253,6 +256,7 @@ def train_sino8v3_pet(load_step=None,
                     net.save()
                     pre_save = now
         net.save()
+
 
 @xln.command()
 @click.option('--dataset_name', '-dn', type=str)
@@ -405,7 +409,7 @@ def train_sino8v2(load_step=-1,
                   filenames=[],
                   **kwargs):
     click.echo("START TRAINING!!!!")
-    net = SRSino8v2(filenames='srsino8v2.json', **kwargs)    
+    net = SRSino8v2(filenames='srsino8v2.json', **kwargs)
     net.build()
     if load_step > 0:
         net.load(load_step=load_step)
@@ -597,32 +601,7 @@ def test_dataset_image(dataset_name,
                     imgs_all[i].append(imgs)
 
 
-@xln.command()
-@click.option('--no_save', is_flag=True)
-@click.option('--no_out', is_flag=True)
-def clean(no_save, no_out=True):
-    files = os.listdir('.')
-    save_re = r'save-.*-([0-9]+)'
-    prog = re.compile(save_re)
-    max_step = -1
-    for f in files:
-        m = prog.match(f)
-        if m:
-            step = int(m.group(1))
-            if step > max_step:
-                max_step = step
-    for f in files:
-        m = prog.match(f)
-        if m:
-            step = int(m.group(1))
-            if step < max_step:
-                os.remove(os.path.abspath(f))
-        pout = re.compile(r'[0-9]+\.out')
-        if pout.match(f) and no_out:
-            os.remove(os.path.abspath(f))
-        perr = re.compile(r'[0-9]+\.err')
-        if perr.match(f):
-            os.remove(os.path.abspath(f))
+
 
 
 @xln.command()
@@ -632,7 +611,6 @@ def train_cali(total_step,
                load_step):
     net = CaliNet(lr=1e-3)
     net.build()
-
 
 
 @xln.command()
@@ -683,6 +661,7 @@ def sino4matlab(dataset_name,
             'crop_size': np.array(net.crop_size)
         }
         scipy.io.savemat('sinos.mat', save_dict)
+
 
 @xln.command()
 @click.option('--arch', '-a', type=str)
@@ -751,6 +730,7 @@ def predict_all():
             os.system(
                 'cd ' + p + '; python $PATH_XLEARN/scripts/main.py predict_sr -dn Sinograms -nn SRDv3 -fn srdv3.json -fn sino_shep.json')
 
+xln.add_command(workdir)
 
 if __name__ == '__main__':
     xln()

@@ -49,7 +49,7 @@ def load_data():
 
 def train(m, train_data, test_data):
     # enter_debug()
-    nb_epochs = 10
+    nb_epochs = 100
     for i in range(10):
         print("TRAING %d" % i)
         # m.fit(list(train_data[0]), train_data[1], batch_size=128,
@@ -74,7 +74,7 @@ def model_define():
     h = Dense(8, activation='relu')(h)
     out = Dense(1)(h)
     m = Model(ip, out)
-    opt = RMSprop(1e-5)
+    opt = RMSprop(1e-7)
     m.compile(loss='mse', optimizer=opt)
     m.summary()
     return m
