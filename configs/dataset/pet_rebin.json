@@ -1,0 +1,7 @@
+{
+    "batch_size": 4,
+    "crop_shape": [64, 128],
+    "data_down_sample": 1,
+    "label_down_sample": 0,
+    "mode": "train"
+}

@@ -16,7 +16,9 @@ class Sinograms2:
                  data_down_sample=3,
                  label_down_sample=0,
                  is_from_npy=False,
+                 full_dump=False,
                  npy_file='sino.npy',
+                 period=360,
                  **kwargs):
         dataset_dir = os.environ.get('PATH_DATASETS')
         sino_name = 'shepplogan'
@@ -43,7 +45,8 @@ class Sinograms2:
             tmp = np.array(np.load(self.npy_file))
             self.idx = list(range(tmp.shape[0]))
             self.sampler = Sampler(self.idx, is_shuffle=False)
-        
+        self.full_dump = full_dump
+        self.period = period
 
     def _load_sample(self):
         if self.is_from_npy:
@@ -51,7 +54,7 @@ class Sinograms2:
         else:
             id_ = next(self.sampler)[0]
             image = np.array(self.dataset[id_])
-        image = image[:, :360, :]
+        image = image[:, :self.period, :]
         image = np.concatenate((image, image), axis=1)
         image += 1.0
         image = np.log(image)
@@ -117,8 +120,12 @@ class Sinograms2:
             imgs_label.append((imgl, imgr, img))
             img = (imgl + imgr) / 2.0
             imgs_data.append(img)
-        data = imgs_data[self.data_down_sample]
-        label = imgs_label[self.label_down_sample]
+        if self.full_dump:
+            data = imgs_data
+            label = imgs_label
+        else:
+            data = imgs_data[self.data_down_sample]
+            label = imgs_label[self.label_down_sample]
         return data, label
 
     def sample(self):
