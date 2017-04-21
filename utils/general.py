@@ -19,6 +19,14 @@ from inspect import getfullargspec, signature
 from functools import wraps
 
 
+def pp_json(title, cfg_dict, length=30):
+    click.echo(title)
+    click.echo("=" * length)
+    click.echo(json.dumps(cfg_dict, indent=4,
+                          separators=[',', '： '], sort_keys=True))
+    click.echo("=" * length)
+
+
 def get_args(func, all_vars):
     d = {}
     sig = signature(func)
@@ -347,12 +355,16 @@ class ProgressTimer:
             eta = None
 
         time_pas = str(datetime.timedelta(seconds=int(self._elaps)))
-        time_int = str(datetime.timedelta(
-            seconds=int(self._elaps / (step + 1.0))))
+        time_int_v = self._elaps / (step + 1.0)
+        if time_int_v < 60:
+            time_int_msg = '%0.2fs/it' % (time_int_v)
+        else:
+            time_int_msg = str(datetime.timedelta(
+                seconds=int(time_int_v)))
         if eta is None:
             time_eta = 'UKN'
         else:
             time_eta = str(datetime.timedelta(seconds=int(eta)))
-        click.echo("i=%6d, %s/it [%s<%s] :" %
-                   (step, time_int, time_pas, time_eta) + msg)
+        click.echo("i=%6d, %s, [%s<%s] :" %
+                   (step, time_int_msg, time_pas, time_eta) + msg)
         self._pre = self._elaps

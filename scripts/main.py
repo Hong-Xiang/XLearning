@@ -31,7 +31,7 @@ from xlearn.datasets.pet_rebin import SinogramsPETRebin
 from xlearn.net_tf.net_cali import CaliNet
 import time
 
-from xlearn.scripts.workdir import workdir
+
 
 class Config(dict):
     def __init__(self, config='config.json'):
@@ -57,7 +57,7 @@ def xln(config, cfg, debug):
     config.config = cfg
     config.load()
     if debug:
-        print("ENTER DEBUG MODE!")
+        print("ENTER DEBUG MODE")
         enter_debug()
 
 
@@ -88,17 +88,7 @@ def test_srsino8r_define():
     net.build()
 
 
-@xln.command()
-@click.option('--kind', '-k', type=str)
-@click.option('--name', '-n', type=str)
-@click.option('--filenames', '-fn', multiple=True, type=str)
-@with_config
-def cpcfg(kind, name, **kwargs):
-    """ copy config files """
-    print_pretty_args(cpcfg, locals())
-    name += '.json'
-    cfg_file = Path(os.environ['PATH_XLEARN']) / 'configs' / kind / name
-    shutil.copy(cfg_file, name)
+
 
 
 @xln.command()
@@ -730,7 +720,10 @@ def predict_all():
             os.system(
                 'cd ' + p + '; python $PATH_XLEARN/scripts/main.py predict_sr -dn Sinograms -nn SRDv3 -fn srdv3.json -fn sino_shep.json')
 
+from xlearn.scripts.workdir import workdir
 xln.add_command(workdir)
+from xlearn.scripts.train import train
+xln.add_command(train)
 
 if __name__ == '__main__':
     xln()

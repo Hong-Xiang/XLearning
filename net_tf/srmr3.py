@@ -29,7 +29,7 @@ class SRSino8v3:
         self.model_dir = model_dir
         self.is_bn = is_bn
         self.batch_size = batch_size
-        self.learning_rate = learning_rate
+        self.learning_rate_value = learning_rate
         self.saver = None
         self.is_adam = is_adam
 
@@ -62,12 +62,14 @@ class SRSino8v3:
 
     def train(self, ss):
         feed_dict = {self.ip: ss[0], self.ll: ss[1][0],
-                     self.lr: ss[1][1], self.lf: ss[1][2], self.training: True}
+                     self.lr: ss[1][1], self.lf: ss[1][2], self.training: True,
+                     self.learning_rate: self.learning_rate_value}
         return self.sess.run([self.loss, self.train_op], feed_dict=feed_dict)
 
     def summary(self, ss, is_train):
         feed_dict = {self.ip: ss[0], self.ll: ss[1][0],
-                     self.lr: ss[1][1], self.lf: ss[1][2], self.training: False}
+                     self.lr: ss[1][1], self.lf: ss[1][2], self.training: False,
+                     self.learning_rate: self.learning_rate_value}
         sve = self.sess.run(self.summ_op, feed_dict=feed_dict)
         step = self.sess.run(self.global_step)
         if is_train:
@@ -133,6 +135,9 @@ class SRSino8v3:
             return infer, loss
 
     def build(self):
+        self.learning_rate = tf.Variable(
+            self.learning_rate_value, trainable=False, name='learning_rate')
+        tf.summary.scalar('learning_rate', self.learning_rate)
         self.global_step = tf.Variable(0, trainable=False, name='global_step')
         self.training = tf.placeholder(tf.bool, name='bn_switch')
         with tf.name_scope('inputs'):
