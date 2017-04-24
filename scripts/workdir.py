@@ -26,7 +26,8 @@ def cfgs(kind, name, **kwargs):
 @click.option('--no_save', is_flag=True, help="Remove all save files. Default will keep the last one.")
 @click.option('--no_out', is_flag=True, help="Remove *.out file. Default will only remove *.err files.")
 @click.option('--no_action', is_flag=True)
-def clean(no_save, no_out=True, no_action=False):
+@click.option('--keep', '-k', type=int, multiple=True)
+def clean(no_save, no_out=True, no_action=False, keep=None):
     """ Clean work directory """
     click.echo("Clean work directory.")
     files = os.listdir('.')
@@ -39,11 +40,15 @@ def clean(no_save, no_out=True, no_action=False):
             step = int(m.group(1))
             if step > max_step:
                 max_step = step
+    if keep is None:
+        keep = []
     for f in files:
         m = prog.match(f)
         if m:
             step = int(m.group(1))
             if step < max_step:
+                if step in keep:
+                    continue
                 if no_action:
                     print('TO REMOVE: ', os.path.abspath(f))
                 else:
