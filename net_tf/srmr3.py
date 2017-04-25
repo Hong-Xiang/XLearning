@@ -192,7 +192,7 @@ class SRSino8v3:
                 opt = tf.train.AdamOptimizer(self.learning_rate)
             else:
                 opt = tf.train.RMSPropOptimizer(self.learning_rate)
-            gvs = opt.compute_gradients(loss)
+            gvs = opt.compute_gradients(self.loss)
             capped_gvs = [(tf.clip_by_value(grad, -1., 1.), var)
                           for grad, var in gvs]
             self.train_op = opt.apply_gradients(
