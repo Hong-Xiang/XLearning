@@ -16,6 +16,7 @@ class SinogramsPETRebin:
                  label_down_sample=0,
                  is_from_npy=False,
                  npy_file='sino.npy',
+                 is_norm_at_final=False,                 
                  **kwargs):
         dataset_dir = os.environ.get('PATH_DATASETS')
         self.file_data = os.path.join(dataset_dir, 'pet_rebin.h5')
@@ -41,6 +42,7 @@ class SinogramsPETRebin:
             tmp = np.array(np.load(self.npy_file))
             self.idx = list(range(tmp.shape[0]))
             self.sampler = Sampler(self.idx, is_shuffle=False)
+        self.is_norm_at_final = is_norm_at_final
 
     def _load_sample(self):
         if self.is_from_npy:
@@ -56,10 +58,11 @@ class SinogramsPETRebin:
         image = image.T
         image = np.reshape(image, [image.shape[0], image.shape[1], 1])
         image = np.concatenate((image, image), axis=1)
-        image += 11.0
-        image = np.log(image)
-        image /= 5.0
-        image -= 0.5
+        if not self.is_norm_at_final:
+            image += 11.0
+            image = np.log(image)
+            image /= 5.0
+            image -= 0.5
         return image
 
     def init(self):
@@ -123,6 +126,15 @@ class SinogramsPETRebin:
             imgs_data.append(img)
         data = imgs_data[self.data_down_sample]
         label = imgs_label[self.label_down_sample]
+        if self.is_norm_at_final:
+            data += 11.0
+            data = np.log(data)
+            data /= 5.0
+            data -= 0.5
+            label += 11.0
+            label = np.log(label)
+            label /= 5.0
+            label -= 0.5
         return data, label
 
     def sample(self):

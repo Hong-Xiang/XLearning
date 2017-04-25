@@ -19,6 +19,8 @@ class Sinograms2:
                  full_dump=False,
                  npy_file='sino.npy',
                  period=360,
+                 is_norm=False,
+                 is_norm_at_final=False,
                  **kwargs):
         dataset_dir = os.environ.get('PATH_DATASETS')
         sino_name = 'shepplogan'
@@ -44,21 +46,26 @@ class Sinograms2:
         if self.is_from_npy:
             tmp = np.array(np.load(self.npy_file))
             self.idx = list(range(tmp.shape[0]))
-            self.sampler = Sampler(self.idx, is_shuffle=False)
+            self.sampler = Sampler(self.idx, is_shuffle=False)            
         self.full_dump = full_dump
         self.period = period
+        self.is_norm = is_norm
+        self.is_norm_at_final = is_norm_at_final
 
     def _load_sample(self):
+        id_ = next(self.sampler)[0]
         if self.is_from_npy:
-            image = np.load(self.npy_file)
+            image = np.array(self.dataset[id_])
         else:
-            id_ = next(self.sampler)[0]
             image = np.array(self.dataset[id_])
         image = image[:, :self.period, :]
         image = np.concatenate((image, image), axis=1)
-        image += 1.0
-        image = np.log(image)
-        
+        if not self.is_norm_at_final:
+            image += 1.0
+            image = np.log(image)
+            if self.is_norm:            
+                image /= 5.0
+                image -= 0.5
         return image
 
     def init(self):
@@ -73,12 +80,11 @@ class Sinograms2:
             self.fin.close()
 
     def __enter__(self):
-        self.fin = h5py.File(self.file_data, 'r')
-        self.dataset = self.fin['sinograms']
+        self.init()
         return self
 
     def __exit__(self, etype, value, traceback):
-        self.fin.close()
+        self.close()
         # raise etype(value, traceback)
 
     def _crop(self, image_ip):
@@ -126,6 +132,9 @@ class Sinograms2:
         else:
             data = imgs_data[self.data_down_sample]
             label = imgs_label[self.label_down_sample]
+        if self.is_norm_at_final:
+            data += 1.0
+            data = np.log(data)
         return data, label
 
     def sample(self):

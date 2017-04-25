@@ -42,6 +42,7 @@ def clean(no_save, no_out=True, no_action=False, keep=None):
                 max_step = step
     if keep is None:
         keep = []
+    print('TO KEEP:', keep)
     for f in files:
         m = prog.match(f)
         if m:
