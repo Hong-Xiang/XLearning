@@ -192,8 +192,11 @@ class SRSino8v3:
                 opt = tf.train.AdamOptimizer(self.learning_rate)
             else:
                 opt = tf.train.RMSPropOptimizer(self.learning_rate)
-            self.train_op = opt.minimize(
-                self.loss, global_step=self.global_step)
+            gvs = opt.compute_gradients(loss)
+            capped_gvs = [(tf.clip_by_value(grad, -1., 1.), var)
+                          for grad, var in gvs]
+            self.train_op = opt.apply_gradients(
+                capped_gvs, global_step=self.global_step)
         self.sess = tf.Session()
         self.summ_op = tf.summary.merge_all()
         self.sw = tf.summary.FileWriter(
