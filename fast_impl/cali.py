@@ -5,9 +5,13 @@ from keras.utils import to_categorical
 import numpy as np
 import sys
 import random
+import os
+import scipy.io
+import tensorflow as tf
+import keras.backend as K
 
 
-def load_data():
+def load_data_():
     pho = np.load(
         '/home/hongxwing/Workspace/Datas/DetectorCalibration/data_all/pho_c.npy')
     pos = np.load(
@@ -20,7 +24,7 @@ def load_data():
     x = m[1]
     y = m[0]
     ipt2 = np.zeros([ipt.shape[0], 10, 10, 2])
-    ipt2[:, :, :, 0]  = ipt[:, :, :, 0]
+    ipt2[:, :, :, 0] = ipt[:, :, :, 0]
     for i in range(ipt2.shape[0]):
         ipt2[i, :, :, 1] = x
         # ipts[i, :, :, 2] = y
@@ -44,6 +48,50 @@ def load_data():
     # return ((ipt_train, cx_train), x_train), ((ipt_test, cx_test), x_test)
     return (ipt_train, x_train), (ipt_test, x_test)
 
+
+def load_data__():
+    datapath = '/home/hongxwing/Workspace/cali/data/transfer/data_grid2_100/'
+    label = np.load(os.path.join(datapath, 'incs_good.npy'))
+    data = np.load(os.path.join(datapath, 'opms_good.npy'))
+    p_label = np.load(os.path.join(datapath, 'x_label.npy'))
+    print(label.shape)
+    print(data.shape)
+    label = label[:, 0:1]
+    nb_data = data.shape[0]
+    nb_train = nb_data // 5 * 4
+    data = np.reshape(data, [nb_data, 10, 10, 1])
+    data2 = np.zeros(data.shape)
+    for i in range(data.shape[0]):
+        data2[i, :, :, 0] = p_label
+    data = np.concatenate([data, data2], axis=-1)
+    train_x = data[:nb_train, :, :, :]
+    test_x = data[nb_train:, :, :, :]
+    train_y = label[:nb_train, :]
+    test_y = label[nb_train:, :]
+    return (train_x, train_y), (test_x, test_y)
+
+
+def load_data():
+    datapath = '/home/hongxwing/Workspace/cali/data/transfer/data_grid2_100/'
+    label = np.load(os.path.join(datapath, 'pos_gnd.npy'))
+    data = np.load(os.path.join(datapath, 'evt_gnd.npy'))
+    sum_data = np.sum(data, axis=1)
+    idx = np.nonzero(np.logical_and(sum_data > 6000, sum_data < 8000))[0]
+    data = data[idx, :]
+    label = label[idx, :]
+    idx = list(range(data.shape[0]))
+    random.shuffle(idx)
+    data = data[idx, :]
+    label = label[idx, :]
+    label = label[:, 0:1]
+    nb_data = data.shape[0]
+    nb_train = nb_data // 5 * 4
+    data = np.reshape(data, [nb_data, 10, 10, 1])
+    train_x = data[:nb_train, :, :, :]
+    test_x = data[nb_train:, :, :, :]
+    train_y = label[:nb_train, :]
+    test_y = label[nb_train:, :]
+    return (train_x, train_y), (test_x, test_y)
 # from xlearn.utils.general import enter_debug
 
 
@@ -56,7 +104,7 @@ def train(m, train_data, test_data):
         #       epochs=nb_epochs, validation_data=test_data)
         print(train_data[0].shape)
         print(train_data[1].shape)
-        m.fit(train_data[0], train_data[1], batch_size=128,
+        m.fit(train_data[0], train_data[1], batch_size=512,
               epochs=nb_epochs, validation_data=test_data)
         m.save('save-%d' % i)
         pdx = m.predict(test_data[0])
@@ -67,17 +115,29 @@ def train(m, train_data, test_data):
         print('err_test', err_s)
 
 
+def loss(pred, lable):
+    error = pred - lable
+    error = K.square(error)
+    error = K.sum(error, axis=-1)
+    error = K.sqrt(error + 1e-10)
+    loss = K.mean(error)
+    return loss
+
+
 def model_define():
-    ip = Input(shape=(10, 10, 2))
+    ip = Input(shape=(10, 10, 1))
     h = Flatten()(ip)
-    h = Dense(10, activation='relu')(h)
-    h = Dense(8, activation='relu')(h)
+    h = Dense(128, activation='relu')(h)
+    h = Dense(256, activation='relu')(h)
+    h = Dense(512, activation='relu')(h)
+    h = Dropout(0.5)(h)
     out = Dense(1)(h)
     m = Model(ip, out)
-    opt = RMSprop(1e-7)
-    m.compile(loss='mse', optimizer=opt)
+    opt = RMSprop(1e-3)
+    m.compile(loss=loss, optimizer=opt)
     m.summary()
     return m
+
 
 def model_define_1():
     is_cata = False
@@ -161,6 +221,26 @@ def model_define_1():
 
 def predict(m, data, mode):
     print('Predict ' + mode)
+    idx = list(range(data[0].shape[0]))
+    random.shuffle(idx)
+    idx = idx[:32]
+    pred = m.predict(data[0][idx, :, :, :])
+    poss = data[1][idx, :]
+    err = np.abs(poss - pred)
+    print("true\tpred\terror")
+    for t, p, e in zip(poss, pred, err):
+        print("%0.5f\t%0.5f\t%0.5f" % (t, p, e))
+    pred_all = m.predict(data[0])
+    pos_all = data[1]
+    err_all = pos_all - pred_all
+    np.save('err' + mode + '.npy', err_all)
+    np.save('img' + mode + '.npy', data[0])
+    np.save('pred' + mode + '.npy', pred)
+    np.save('poss' + mode + '.npy', poss)
+
+
+def predict_1(m, data, mode):
+    print('Predict ' + mode)
     data = list(data)
     # data[0][0] = data[0][0][:10000, ...]
     # data[0][1] = data[0][1][:10000, ...]
@@ -184,8 +264,6 @@ def predict(m, data, mode):
     np.save('poss' + mode + '.npy', poss)
 
 
-import tensorflow as tf
-import keras.backend as K
 if __name__ == "__main__":
     m = model_define()
     tf.summary.FileWriter('./log', K.get_session().graph)
