@@ -49,13 +49,18 @@ def load_data_():
     return (ipt_train, x_train), (ipt_test, x_test)
 
 
-def load_data__():
-    datapath = '/home/hongxwing/Workspace/cali/data/transfer/data_grid2_100/'
+def load_data():
+    datapath = '/home/hongxwing/Workspace/cali/data/transfer/data_grid6_200/'
     label = np.load(os.path.join(datapath, 'incs_good.npy'))
     data = np.load(os.path.join(datapath, 'opms_good.npy'))
     p_label = np.load(os.path.join(datapath, 'x_label.npy'))
     print(label.shape)
     print(data.shape)
+
+    idx = list(range(data.shape[0]))
+    random.shuffle(idx)
+    data = data[idx, :, :]
+    label = label[idx, :]
     label = label[:, 0:1]
     nb_data = data.shape[0]
     nb_train = nb_data // 5 * 4
@@ -71,7 +76,7 @@ def load_data__():
     return (train_x, train_y), (test_x, test_y)
 
 
-def load_data():
+def load_data__():
     datapath = '/home/hongxwing/Workspace/cali/data/transfer/data_grid2_100/'
     label = np.load(os.path.join(datapath, 'pos_gnd.npy'))
     data = np.load(os.path.join(datapath, 'evt_gnd.npy'))
@@ -125,11 +130,12 @@ def loss(pred, lable):
 
 
 def model_define():
-    ip = Input(shape=(10, 10, 1))
+    ip = Input(shape=(10, 10, 2))
     h = Flatten()(ip)
     h = Dense(128, activation='relu')(h)
     h = Dense(256, activation='relu')(h)
     h = Dense(512, activation='relu')(h)
+    h = Dense(1024, activation='relu')(h)
     h = Dropout(0.5)(h)
     out = Dense(1)(h)
     m = Model(ip, out)
