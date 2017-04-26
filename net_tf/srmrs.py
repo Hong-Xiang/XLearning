@@ -16,6 +16,7 @@ class SRSino8s:
                  log_dir='./log/',
                  model_dir='save',
                  learning_rate=1e-4,
+                 is_adam=False,
                  **kwargs):
         self.filters = filters
         self.input_shape = [None] + list(input_shape)
@@ -25,6 +26,7 @@ class SRSino8s:
         self.batch_size = batch_size
         self.learning_rate_value = learning_rate
         self.saver = None
+        self.is_adam = is_adam
 
     def predict_fullsize(self, ips, period):
         _, _, infer = self.predict(ips)
@@ -180,16 +182,9 @@ class SRSino8s:
             if self.is_adam:
                 opt = tf.train.AdamOptimizer(self.learning_rate)
             else:
-                opt = tf.train.RMSPropOptimizer(self.learning_rate)
-            if self.is_clip:
-                gvs = opt.compute_gradients(self.loss)
-                capped_gvs = [(tf.clip_by_value(grad, -1., 1.), var)
-                              for grad, var in gvs]
-                self.train_op = opt.apply_gradients(
-                    capped_gvs, global_step=self.global_step)
-            else:
-                self.train_op = opt.minimize(
-                    self.loss, global_step=self.global_step)
+                opt = tf.train.RMSPropOptimizer(self.learning_rate)  
+            self.train_op = opt.minimize(
+                self.loss, global_step=self.global_step)
         self.sess = tf.Session()
         self.summ_op = tf.summary.merge_all()
         self.sw = tf.summary.FileWriter(
