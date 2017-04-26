@@ -123,7 +123,7 @@ class Sinograms2:
         for i in range(max_down_sample):
             imgl = img[:, ::2, :]
             imgr = img[:, 1::2, :]
-            imgs_label.append((imgl, imgr, img))
+            imgs_label.append([imgl, imgr, img])
             img = (imgl + imgr) / 2.0
             imgs_data.append(img)
         if self.full_dump:
@@ -135,6 +135,9 @@ class Sinograms2:
         if self.is_norm_at_final:
             data += 1.0
             data = np.log(data)
+            for i in range(3):
+                label[i] += 1.0
+                label[i] = np.log(label[i])
         return data, label
 
     def sample(self):
