@@ -22,6 +22,8 @@ class SRSino8v4:
                  learning_rate=1e-4,
                  is_adam=True,
                  is_clip=False,
+                 is_up=False,
+                 is_deconv=False,
                  **kwargs):
         self.filters = filters
         self.depths = depths
@@ -38,6 +40,8 @@ class SRSino8v4:
         self.is_clip = is_clip
         self.towers = towers
         self.stem_filters = stem_filters
+        self.is_up = is_up
+        self.is_deconv = is_deconv
 
     def predict_fullsize(self, ips, period):
         _, _, infer = self.predict(ips)
@@ -62,6 +66,7 @@ class SRSino8v4:
                         global_step=self.global_step)
 
     def load(self, load_step=None):
+        print('LOADING FROM STEP %d' % load_step)
         save_path = r'./' + self.model_dir + '-' + str(load_step)
         self.saver.restore(self.sess, save_path)
         self.global_step.assign(load_step)
@@ -108,13 +113,14 @@ class SRSino8v4:
 
         with tf.name_scope('upscaling'):
             ipu = tf.image.resize_images(self.ip, full_shape[1:3])
-            tf.summary.image('interp', ipu)
 
         with tf.name_scope('res_ref'):
             res_ref = self.lf - ipu
-            tf.summary.image('img', res_ref)
 
-        infers = []
+        if self.is_up:
+            h = ipu
+
+        residual = None
         for i_stage, filters in enumerate(self.filters):
             with tf.name_scope('stage_%d' % i_stage):
                 stage_in = h
@@ -129,25 +135,59 @@ class SRSino8v4:
                                                                    training=self.training,
                                                                    name='block_%d' % i_block)
                 with tf.name_scope('infer'):
-                    h = tf.concat(hs, axis=-1)
-                    infer = tf.layers.conv2d_transpose(
-                        h, 1, kernel_size=(1, 2), strides=(1, 2), padding='same')
-                    infers.append(infer)
-
-        with tf.name_scope('residual'):
-            residual = tf.add_n(infers)
-            tf.summary.image('img', residual)
+                    with tf.name_scope('conv'):
+                        h = tf.concat(hs, axis=-1)
+                        if self.is_up:
+                            infer = tf.layers.conv2d(h, 1, 5, padding='same')
+                        else:
+                            if self.is_deconv:
+                                infer = tf.layers.conv2d_transpose(
+                                    h, 1, kernel_size=(1, 2), strides=(1, 2), padding='same')
+                            else:
+                                hup = tf.image.resize_images(
+                                    h, full_shape[1:3])
+                                infer = tf.layers.conv2d(
+                                    hup, 1, 5, padding='same')
+                    with tf.name_scope('add'):
+                        if residual is None:
+                            residual = infer
+                        else:
+                            residual += infer
 
         with tf.name_scope('infer'):
             self.infer = ipu + residual
-            tf.summary.image('img', self.infer)
 
+        with tf.name_scope('crop'):
+            input_shape = self.lf.shape.as_list()
+            output_shape = [self.batch_size, input_shape[1] - 2 * self.crop_size,
+                            input_shape[2] - 2 * self.crop_size, input_shape[3]]
+            ipuc = tf.slice(
+                ipu, [0, self.crop_size, self.crop_size, 0], output_shape)
+            lfc = tf.slice(self.lf, [0, self.crop_size,
+                                     self.crop_size, 0], output_shape)
+            infc = tf.slice(
+                self.infer, [0, self.crop_size, self.crop_size, 0], output_shape)
+
+        with tf.name_scope('res_ref'):
+            res_ref = lfc - ipuc
         with tf.name_scope('res_inf'):
-            res_inf = self.lf - self.infer
-            tf.summary.image('img', res_inf)
+            res_inf = infc - ipuc
+        with tf.name_scope('error'):
+            error = tf.abs(lfc - infc)
+
+        with tf.name_scope('res_img'):
+            tf.summary.image('ref', res_ref)
+            tf.summary.image('inf', res_inf)
+        with tf.name_scope('full_size'):
+            tf.summary.image('interp', ipuc)
+            tf.summary.image('label', lfc)
+            tf.summary.image('infer', infc)
+        tf.summary.image('error', error)
+        tf.summary.image('input', self.ip)
 
         with tf.name_scope('loss'):
-            self.loss = tf.losses.mean_squared_error(self.lf, self.infer)/self.batch_size
+            self.loss = tf.losses.mean_squared_error(
+                lfc, infc) / self.batch_size
             tf.summary.scalar('loss', self.loss)
 
         self.saver = tf.train.Saver()
