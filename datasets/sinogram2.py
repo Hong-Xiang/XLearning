@@ -64,7 +64,7 @@ class Sinograms2:
             image += 1.0
             image = np.log(image)
             if self.is_norm:            
-                image /= 5.0
+                image /= 6.0
                 image -= 0.5
         return image
 
@@ -135,9 +135,15 @@ class Sinograms2:
         if self.is_norm_at_final:
             data += 1.0
             data = np.log(data)
+            if self.is_norm:            
+                data /= 6.0
+                data -= 0.5
             for i in range(3):
                 label[i] += 1.0
                 label[i] = np.log(label[i])
+                if self.is_norm:            
+                    label[i] /= 6.0
+                    label[i] -= 0.5
         return data, label
 
     def sample(self):

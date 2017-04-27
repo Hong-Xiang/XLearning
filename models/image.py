@@ -191,6 +191,7 @@ def convolution_block(ip, nb_filter, nb_row, nb_col, subsample=(1, 1), id=0, bor
     return x
 
 
+
 def inception_residual_block(input_tensor, filters, is_final_activ=False, is_bn=True, activation=tf.nn.crelu, training=True, reuse=None, res_scale=0.1, name='irb'):
     cc = {'reuse': reuse, 'padding':'same'}
     cb = {'reuse': reuse, 'training': training, 'scale':False}
