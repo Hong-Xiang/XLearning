@@ -4,7 +4,24 @@ import click
 import re
 import shutil
 from pathlib import Path
-from xlearn.utils.general import print_pretty_args
+import json
+from inspect import getfullargspec, signature
+
+def print_pretty_args(func, all_vars):
+    if isinstance(func, click.core.Command):
+        func = func.callback
+    sig = signature(func)
+    d = {}
+    for param in sig.parameters.values():
+        if param.kind == param.VAR_POSITIONAL or param.kind == param.VAR_KEYWORD:
+            continue
+        d.update({param.name: all_vars[param.name]})
+    prefix = "=" * 30 + "\n"
+    prefix += str(func.__name__) + " args:" + "\n"
+    prefix += "." * 30 + "\n"
+    sets = json.dumps(d, indent=4, separators=[',', ': '], sort_keys=True)
+    suffix = "\n" + "=" * 30
+    click.echo(prefix + sets + suffix)
 
 @click.group()
 def workdir():
