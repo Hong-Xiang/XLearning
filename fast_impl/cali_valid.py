@@ -1,4 +1,4 @@
-from keras.layers import Conv2D, Dense, Flatten, ELU, Input, concatenate, Dropout, MaxPool2D, add
+from keras.layers import Conv2D, Dense, Flatten, ELU, Input, concatenate, Dropout, MaxPool2D, add, BatchNormalization, Activation
 from keras.models import Model
 from keras.optimizers import Adam, RMSprop
 from keras.utils import to_categorical
@@ -18,20 +18,23 @@ def data_aug(x, y):
 
 
 def load_data():
-    datapath = '/home/hongxwing/Workspace/cali/data/transfer/data_grid6_200/'
+    datapath = '/home/hongxwing/Workspace/cali/data/transfer/data_grid2_100/'
     valid_label = np.load(os.path.join(datapath, 'valid_label.npy'))
     opms = np.load(os.path.join(datapath, 'opms.npy'))
     print(valid_label.shape)
-    print(opms.shape)
-    data = np.array(opms)
-    sum_data = np.sum(data, axis=1)
-    sum_data = np.sum(sum_data, axis=1)
-    idx = np.nonzero(sum_data > 6000)[0]
-    data = data[idx, :, :]
-    valid_label = valid_label[idx]
+    print(opms.shape)    
+    data = np.array(opms)    
+    # sum_data = np.sum(data, axis=1)
+    # sum_data = np.sum(sum_data, axis=1)
+    # idx = np.nonzero(sum_data > 5500)[0]
+    # data = data[idx, :, :]
+    # valid_label = valid_label[idx]
     label = np.array(valid_label)
     label = to_categorical(label, 2)
     nb_data = data.shape[0]
+    idx = list(range(nb_data))
+    data = data[idx, :, :]
+    label = label[idx, :]
     nb_train = nb_data // 5 * 4
     data = np.reshape(data, [nb_data, 10, 10, 1])
     train_x = data[:nb_train, :, :, :]
@@ -44,13 +47,13 @@ def load_data():
 def train(m, train_data, test_data):
     # enter_debug()
     nb_epochs = 1
-    for i in range(10):
+    for i in range(100):
         print("TRAING %d" % i)
         # m.fit(list(train_data[0]), train_data[1], batch_size=128,
         #       epochs=nb_epochs, validation_data=test_data)
         print(train_data[0].shape)
         print(train_data[1].shape)
-        m.fit(train_data[0], train_data[1], batch_size=32,
+        m.fit(train_data[0], train_data[1], batch_size=2048,
               epochs=nb_epochs, validation_data=test_data)
         m.save('save-%d' % i)
         # pdx = m.predict(test_data[0])
@@ -64,13 +67,8 @@ def train(m, train_data, test_data):
 # def model_define():
 #     ip = Input(shape=(10, 10, 1))
 #     h = Flatten()(ip)
-#     h = Dense(256, activation='elu')(h)
-#     h = Dropout(0.5)(h)
-#     h = Dense(512, activation='elu')(h)
-#     h = Dropout(0.5)(h)
-#     h = Dense(1024, activation='elu')(h)
-#     h = Dropout(0.5)(h)
-#     h = Dense(2048, activation='elu')(h)
+#     h = Dense(128, activation='relu')(h)
+#     h = Dense(512, activation='relu')(h)
 #     h = Dropout(0.5)(h)
 #     out = Dense(2, activation='sigmoid')(h)
 #     m = Model(ip, out)
@@ -79,49 +77,92 @@ def train(m, train_data, test_data):
 #     m.summary()
 #     return m
 
-
 def model_define():
     ip = Input(shape=(10, 10, 1))
+    f0 = 32
+    h = Conv2D(f0, 5, activation='relu', padding='same')(ip)
+
+    h = Conv2D(f0, 3, padding='same')(h) 
+    # h = BatchNormalization()(h)
+    h = Activation('relu')(h)
+
+    h = Conv2D(f0*2, 3, strides=(2, 2), padding='same')(h)
+    # h = BatchNormalization(scale=False)(h)
+    h = Activation('relu')(h)    
+
+    h = Conv2D(f0*2, 3, padding='same')(h)
+    # h = BatchNormalization(scale=False)(h)
+    h = Activation('relu')(h)
+
+    # h = Conv2D(f0*2, 3, strides=(2, 2), padding='same')(h)
+    # # h = BatchNormalization(scale=False)(h)
+    # h = Activation('relu')(h)    
+
+    # h = Conv2D(f0*2, 1, padding='same')(h)
+    # # h = BatchNormalization(scale=False)(h)
+    # h = Activation('relu')(h) 
+
+    h = Flatten()(h)
+
+    h = Dense(8)(h)
+    # h = BatchNormalization(scale=False)(h)
+    h = Activation('relu')(h)
+    h = Dropout(0.75)(h)
+    out = Dense(2, activation='sigmoid')(h)
+    m = Model(ip, out)
+    opt = RMSprop(1e-3, decay=0.001)
+    m.compile(loss='binary_crossentropy', optimizer=opt, metrics=['acc'])
+    m.summary()
+    return m
+
+
+def model_define_():
+    ip = Input(shape=(10, 10, 1))
     reps = []
-    h = Conv2D(64, 7, activation='elu', padding='same')(ip)
-    h = MaxPool2D()(h)
+    h = Conv2D(8, 3, activation='elu', padding='same')(ip)
+    h = Conv2D(8, 1, activation='elu', padding='same')(h)
+    h = Conv2D(16, 3, strides=(2, 2), activation='elu', padding='same')(h)
+    h = Conv2D(16, 1, activation='elu', padding='same')(h)
     h = Flatten()(h)
-    h = Dense(1024, activation='elu')(h)
+    h = Dense(256, activation='elu')(h)
     reps.append(h)
 
-    h = Conv2D(64, 7, activation='elu', padding='same')(ip)
-    h = MaxPool2D()(h)
-    h = Conv2D(128, 3, activation='elu', padding='same')(h)
-    h = MaxPool2D()(h)
+    h = Conv2D(8, 3, activation='elu', padding='same')(ip)
+    h = Conv2D(8, 1, activation='elu', padding='same')(h)
+    h = Conv2D(16, 3, strides=(2, 2), activation='elu', padding='same')(h)
+    h = Conv2D(16, 1, activation='elu', padding='same')(h)
+    h = Conv2D(16, 3, activation='elu', padding='same')(h)
+    h = Conv2D(32, 3, strides=(2, 2), activation='elu', padding='same')(h)
+    h = Conv2D(32, 1, activation='elu', padding='same')(h)
     h = Flatten()(h)
-    h = Dense(1024, activation='elu')(h)
+    h = Dense(256, activation='elu')(h)
     reps.append(h)
 
-    h = Conv2D(64, 7, activation='elu', padding='same')(ip)
-    h = MaxPool2D()(h)
-    h = Conv2D(128, 3, activation='elu', padding='same')(h)
-    h = MaxPool2D()(h)
-    h = Conv2D(256, 1, activation='elu', padding='same')(h)
+    h = Conv2D(8, 3, activation='elu', padding='same')(ip)
+    h = Conv2D(8, 1, activation='elu', padding='same')(h)
+    h = Conv2D(16, 3, strides=(2, 2), activation='elu', padding='same')(h)
+    h = Conv2D(16, 1, activation='elu', padding='same')(h)
+    h = Conv2D(32, 3, strides=(2, 2), activation='elu', padding='same')(h)
+    h = Conv2D(32, 1, activation='elu', padding='same')(h)
+    h = Conv2D(64, 3, strides=(2, 2), activation='elu', padding='same')(h)
+    h = Conv2D(64, 1, activation='elu', padding='same')(h)
     h = Flatten()(h)
-    h = Dense(1024)(h)
+    h = Dense(256)(h)
     reps.append(h)
 
     h = Flatten()(ip)
     h = Dense(128, activation='elu')(h)
+    h = Dense(128, activation='elu')(h)
     h = Dense(256, activation='elu')(h)
-    h = Dense(512, activation='elu')(h)
-    h = Dense(1024, activation='elu')(h)
+    h = Dense(256, activation='elu')(h)
     reps.append(h)
 
     h = concatenate(reps)
-    h0 = Dense(4096, activation='elu')(h)
-    h = Dropout(0.5)(h)
-    h = Dense(4096, activation='elu')(h0)
-    h = Dropout(0.5)(h)
-    h = Dense(4096, activation='elu')(h)
+    h0 = Dense(1024, activation='elu')(h)
+    h = Dense(1024, activation='elu')(h0)
+    h = Dense(1024, activation='elu')(h)
     h = add([h0, h])
-    h = Dropout(0.5)(h)
-    h = Dense(4096, activation='elu')(h)
+    h = Dense(1024, activation='elu')(h)
     h = Dropout(0.5)(h)
     out = Dense(2, activation='sigmoid')(h)
 

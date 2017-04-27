@@ -50,7 +50,7 @@ def load_data_():
 
 
 def load_data():
-    datapath = '/home/hongxwing/Workspace/cali/data/transfer/data_grid6_200/'
+    datapath = '/home/hongxwing/Workspace/cali/data/transfer/data_grid2_100/'
     label = np.load(os.path.join(datapath, 'incs_good.npy'))
     data = np.load(os.path.join(datapath, 'opms_good.npy'))
     p_label = np.load(os.path.join(datapath, 'x_label.npy'))
@@ -102,8 +102,8 @@ def load_data__():
 
 def train(m, train_data, test_data):
     # enter_debug()
-    nb_epochs = 100
-    for i in range(10):
+    nb_epochs = 10
+    for i in range(50):
         print("TRAING %d" % i)
         # m.fit(list(train_data[0]), train_data[1], batch_size=128,
         #       epochs=nb_epochs, validation_data=test_data)
@@ -129,13 +129,15 @@ def loss(pred, lable):
     return loss
 
 
-def model_define():
+def model_define_():
     ip = Input(shape=(10, 10, 2))
     h = Flatten()(ip)
     h = Dense(128, activation='relu')(h)
     h = Dense(256, activation='relu')(h)
     h = Dense(512, activation='relu')(h)
     h = Dense(1024, activation='relu')(h)
+    h = Dense(2048, activation='relu')(h)
+    h = Dense(4096, activation='relu')(h)
     h = Dropout(0.5)(h)
     out = Dense(1)(h)
     m = Model(ip, out)
@@ -145,7 +147,7 @@ def model_define():
     return m
 
 
-def model_define_1():
+def model_define():
     is_cata = False
     reps = []
     ip = Input(shape=(10, 10, 2))

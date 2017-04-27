@@ -194,25 +194,35 @@ def convolution_block(ip, nb_filter, nb_row, nb_col, subsample=(1, 1), id=0, bor
 def inception_residual_block(input_tensor, filters, is_final_activ=False, is_bn=True, activation=tf.nn.crelu, training=True, reuse=None, res_scale=0.1, name='irb'):
     cc = {'reuse': reuse, 'padding':'same'}
     cb = {'reuse': reuse, 'training': training, 'scale':False}
-    with tf.name_scope(name) as scope:      
+    with tf.name_scope(name):
+        with tf.name_scope('nin'):
+            if activation == tf.nn.crelu:
+                input_tensor = tf.layers.conv2d(input_tensor, 2*filters, 1, **cc)
+            else:
+                input_tensor = tf.layers.conv2d(input_tensor, filters, 1, **cc)
         h1 = tf.layers.conv2d(input_tensor, filters, 1, **cc)
-        h1 = tf.layers.batch_normalization(h1, **cb)
+        if is_bn:
+            h1 = tf.layers.batch_normalization(h1, **cb)
         h1 = activation(h1)
         h1 = tf.layers.conv2d(h1, filters, 3, **cc)
 
         h2 = tf.layers.conv2d(input_tensor, filters, 1, **cc)
-        h2 = tf.layers.batch_normalization(h2, **cb)
+        if is_bn:
+            h2 = tf.layers.batch_normalization(h2, **cb)
         h2 = activation(h2)
         h2 = tf.layers.conv2d(h2, filters, 3, **cc)
-        h2 = tf.layers.batch_normalization(h2, **cb)
+        if is_bn:
+            h2 = tf.layers.batch_normalization(h2, **cb)
         h2 = activation(h2)
         h2 = tf.layers.conv2d(h2, filters, 3, **cc)
 
         h = tf.concat([h1, h2], axis=-1)
-        h = tf.layers.batch_normalization(h, **cb)
+        if is_bn:
+            h = tf.layers.batch_normalization(h, **cb)
         h = activation(h)
         h = tf.layers.conv2d(h, filters, 1, **cc)
-        h = tf.layers.batch_normalization(h, **cb)
+        if is_bn:
+            h = tf.layers.batch_normalization(h, **cb)
         h = activation(h)
 
         h = h * res_scale

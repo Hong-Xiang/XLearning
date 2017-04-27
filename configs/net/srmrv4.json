@@ -1,0 +1,11 @@
+{
+    "input_shape": [64, 64, 1],
+    "depths": 4,
+    "filters": [128, 128],    
+    "towers": 4,
+    "is_bn": false,
+    "is_clip": false,
+    "is_adam": true,
+    "crop_size": 16,
+    "lrs": 1e-3
+}
