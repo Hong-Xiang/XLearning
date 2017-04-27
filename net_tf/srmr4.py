@@ -24,6 +24,7 @@ class SRSino8v4:
                  is_clip=False,
                  is_up=False,
                  is_deconv=False,
+                 res_scale=0.25,
                  **kwargs):
         self.filters = filters
         self.depths = depths
@@ -42,6 +43,7 @@ class SRSino8v4:
         self.stem_filters = stem_filters
         self.is_up = is_up
         self.is_deconv = is_deconv
+        self.res_scale = res_scale
 
     def predict_fullsize(self, ips, period):
         _, _, infer = self.predict(ips)
@@ -114,9 +116,6 @@ class SRSino8v4:
         with tf.name_scope('upscaling'):
             ipu = tf.image.resize_images(self.ip, full_shape[1:3])
 
-        with tf.name_scope('res_ref'):
-            res_ref = self.lf - ipu
-
         if self.is_up:
             h = ipu
 
@@ -133,6 +132,7 @@ class SRSino8v4:
                                                                    is_final_activ=True,
                                                                    is_bn=self.is_bn,
                                                                    training=self.training,
+                                                                   res_scale=self.res_scale,
                                                                    name='block_%d' % i_block)
                 with tf.name_scope('infer'):
                     with tf.name_scope('conv'):
