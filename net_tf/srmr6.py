@@ -127,7 +127,6 @@ class SRSino8v6:
                     h = tf.layers.batch_normalization(h, scale=False, training=self.training)
                 h = tf.nn.crelu(h)
         with tf.name_scope('infer'):
-            h = tf.concat(hs, axis=-1)
             if self.is_up:
                 infer = tf.layers.conv2d(h, 1, 5, padding='same')
             else:
