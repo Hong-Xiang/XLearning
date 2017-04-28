@@ -119,14 +119,14 @@ class SRSino8v6:
         if self.is_up:
             h = ipu
 
-        residual = None
+   
         for i_stage, filters in enumerate(self.filters):
             with tf.name_scope('conv_%d'%i_stage):
                 h = tf.layers.conv2d(h, filters, 3)
                 if self.is_bn:
                     h = tf.layers.batch_normalization(h, scale=False, training=self.training)
                 h = tf.nn.crelu(h)
-        with tf.name_scope('conv'):
+        with tf.name_scope('infer'):
             h = tf.concat(hs, axis=-1)
             if self.is_up:
                 infer = tf.layers.conv2d(h, 1, 5, padding='same')
@@ -139,15 +139,7 @@ class SRSino8v6:
                         h, full_shape[1:3])
                     infer = tf.layers.conv2d(
                         hup, 1, 5, padding='same')
-        with tf.name_scope('add'):
-            if residual is None:
-                residual = infer
-            else:
-                residual += infer
-            with tf.name_scope('nin'):
-                h = tf.layers.conv2d(h, filters, 1, padding='same')
-            h = self.res_scale * h + \
-                (1 - self.res_scale) * stage_in
+        residual = infer
 
         with tf.name_scope('infer'):
             self.infer = ipu + residual
