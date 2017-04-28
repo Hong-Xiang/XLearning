@@ -3,5 +3,7 @@
     "crop_shape": [32, 64],
     "data_down_sample": 1,
     "label_down_sample": 0,
-    "mode": "train"
+    "mode": "train",
+    "is_norm": false,
+    "is_norm_at_final": false
 }
