@@ -1,17 +1,12 @@
 {
-    "is_batch": true,    
     "batch_size": 1,
-    "is_uint8": false,
-    "is_gray": true,
+    "crop_shape": [64, 512],
+    "data_down_sample": 3,
+    "label_down_sample": 2,
+    "mode": "train",
+    "padding": 3,
+    "period": 360,
     "is_norm": true,
-    "norm_c": 6.0,
-    "is_crop": true,
-    "crop_target_shape": [363, 512],
-    "crop_offset": [1, 1],
-    "is_crop_random": true,
-    "is_down_sample": true,
-    "is_down_sample_0": false,
-    "is_down_sample_1": true,
-    "nb_down_sample": 1,
-    "down_sample_method": "mean"
+    "data_mean": 26.0,
+    "data_std": 27.0
 }
