@@ -150,13 +150,17 @@ class Sinograms:
 
         data = imgs_data[self.data_down_sample]
         label = imgs_label[self.label_down_sample]
+        data = np.array(data)
+        label[0] = np.array(label[0])
+        label[1] = np.array(label[1])
+        label[2] = np.array(label[2])
         if self.is_norm:
             data -= self.data_mean
             data /= self.data_std
         for i in range(3):
             if self.is_norm:
                 label[i] -= self.data_mean
-                label[i] /= self.data_std
+                label[i] /= self.data_std        
         return data, label
 
     def sample(self):
