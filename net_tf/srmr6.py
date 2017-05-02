@@ -119,15 +119,14 @@ class SRSino8v6:
         if self.is_up:
             h = ipu
 
-
         for i_stage, filters in enumerate(self.filters):
-            with tf.name_scope('conv_%d'%i_stage):
-                h = tf.layers.conv2d(h, filters, 3)
-                if self.is_bn:
-                    h = tf.layers.batch_normalization(h, scale=False, training=self.training)
-                h = tf.nn.crelu(h)
+            for i_d in range(self.depths):
+                with tf.name_scope('conv_%d_%d'%(i_stage, i_d)):
+                    h = tf.layers.conv2d(h, filters, 3)
+                    if self.is_bn:
+                        h = tf.layers.batch_normalization(h, scale=False, training=self.training)
+                    h = tf.nn.crelu(h)
         with tf.name_scope('infer'):
-            h = tf.concat(hs, axis=-1)
             if self.is_up:
                 infer = tf.layers.conv2d(h, 1, 5, padding='same')
             else:
