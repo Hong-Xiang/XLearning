@@ -1,0 +1,10 @@
+{
+    "net": "SRSino8v3",
+    "dataset": "Sinograms2",
+    "lrs": [1e-4, 1e-5, 1e-6],
+    "total_step": 10000,    
+    "summary_freq": 120,
+    "save_freq": 600,
+    "filenames": ["srsino8v3.json", "sino2_shep.json"],
+    "load_step": null
+}

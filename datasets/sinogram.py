@@ -23,6 +23,7 @@ class Sinograms:
                  sino_name='shepplogan',
                  is_from_npy=False,
                  npy_file='sino.npy',
+                 rnz=0.1,
                  is_norm=False,
                  data_mean=6.0,
                  data_std=0.5,
@@ -49,13 +50,16 @@ class Sinograms:
         self.data_std = data_std
         self.mode = mode
         self.offset = offset
+        self.rnz = rnz
 
     def _load_sample(self):
-        id_ = next(self.sampler)[0]
-        if self.is_from_npy:
+        while True:
+            id_ = next(self.sampler)[0]
             image = np.array(self.dataset[id_], dtype=np.float32)
-        else:
-            image = np.array(self.dataset[id_], dtype=np.float32)
+            nnz = len(np.nonzero(image)[0])
+            rnz = nnz / np.size(image)
+            if rnz >= self.rnz:
+                break
         image = image[:, :self.period, :]
         image = [image] * self.padding
         image = np.concatenate(image, axis=1)
@@ -91,7 +95,8 @@ class Sinograms:
             'data_mean': self.data_mean,
             'data_std': self.data_std,
             'offset': self.offset,
-            'dataset_shape': self.dataset.shape
+            'dataset_shape': self.dataset.shape,
+            'rnz': self.rnz
         }
         pp_json(cfg_dict, 'CONFIGS OF SINOGRAM DATASET:')
 
@@ -160,7 +165,7 @@ class Sinograms:
         for i in range(3):
             if self.is_norm:
                 label[i] -= self.data_mean
-                label[i] /= self.data_std        
+                label[i] /= self.data_std
         return data, label
 
     def sample(self):

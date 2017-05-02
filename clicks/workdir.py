@@ -7,7 +7,7 @@ from pathlib import Path
 import json
 from inspect import getfullargspec, signature
 import click
-from xlearn.utils.prints import pp_args, pprint
+from xlearn.utils.prints import pp_json, pprint
 
 
 @click.group()
@@ -17,18 +17,24 @@ def workdir():
 
 
 @workdir.command()
-@click.option('--target', '-t', type=str)
+@click.option('--target', '-t', type=str, default='.')
 @click.option('--kind', '-k', type=str)
 @click.option('--name', '-n', type=str)
 @click.option('--filenames', '-fn', multiple=True, type=str)
-def cfgs(target='.', kind=None, name=None, **kwargs):
+def cfgs(target, kind=None, name=None, **kwargs):
     """ copy config files (automatically adding .json suffix)."""
     click.echo("COPY CONFIGS...")
     if not name.endswith('.json'):
         name += '.json'
-    pp_args(cfgs, locals())
     target = Path(target)
     cfg_file = Path(os.environ['PATH_XLEARN']) / 'configs' / kind / name
+    cfgs_dict = {
+        'target': str(target),
+        'kind': kind,
+        'name': name,
+        'origin': str(cfg_file)
+    }
+    pp_json(cfgs_dict, 'COPY CONFIG OPTIONS:')
     shutil.copy(cfg_file, name)
 
 
