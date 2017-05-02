@@ -119,7 +119,7 @@ class SRSino8v6:
         if self.is_up:
             h = ipu
 
-   
+
         for i_stage, filters in enumerate(self.filters):
             with tf.name_scope('conv_%d'%i_stage):
                 h = tf.layers.conv2d(h, filters, 3)
