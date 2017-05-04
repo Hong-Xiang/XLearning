@@ -7,6 +7,7 @@ import random
 import numpy
 import h5py
 import pathlib
+import tensorflow as tf
 
 from ..utils.prints import pp_json
 from ..utils.general import with_config, empty_list

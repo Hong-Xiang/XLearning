@@ -1,9 +1,6 @@
 """ mnist recognition """
 import tensorflow as tf
 
-
-
-    
 def mnist_recon(features, labels, mode, params, config):
     h = features['data']
     h = tf.layers.conv2d(h, 32, 5, activation=tf.nn.relu)

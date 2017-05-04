@@ -10,10 +10,11 @@ class CalibrationDataSet(DataSetBase):
     @with_config
     def __init__(self,
                  is_good=False,
+                 with_z=False,
                  **kwargs):
         DataSetBase.__init__(self, **kwargs)
         self.is_good = is_good
-
+        self.with_z = with_z
         if self.is_good:
             self.data_key = {'data': 'evt_good', 'label': 'inc_good'}
         else:
@@ -24,7 +25,8 @@ class CalibrationDataSet(DataSetBase):
         self.pp_dict.update({
             'is_good': self.is_good,
             'data_key': self.data_key,
-            'file_data': self.file_data
+            'file_data': self.file_data,
+            'with_z': self.with_z
         })
 
     def initialize(self):
@@ -54,7 +56,10 @@ class CalibrationDataSet(DataSetBase):
         while True:
             idx = next(self.sampler)[0]
             data = self.data[idx, ...]
+            data = data.reshape([1, 10, 10])
             label = self.label[idx, ...]
+            if not self.with_z:
+                label = label[:2]
             total = np.sum(data)
             if total > 5500:
                 break

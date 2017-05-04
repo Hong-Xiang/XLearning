@@ -1,6 +1,6 @@
 {
-    "net": "SRSino8v3",
-    "dataset": "Sinograms2",
+    "net": "Cali0",
+    "dataset": "CalibrationDataSet",
     "lrs": [1e-4, 1e-5, 1e-6],
     "total_step": 10000,    
     "summary_freq": 120,

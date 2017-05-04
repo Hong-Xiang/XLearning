@@ -7,3 +7,5 @@ from .sinogram import Sinograms
 from .synthetic import Syn4, Wave, MoG
 from .sinogram2 import Sinograms2
 from .pet_rebin import SinogramsPETRebin
+
+from .cali import CalibrationDataSet

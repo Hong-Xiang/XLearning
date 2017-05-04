@@ -30,7 +30,7 @@ class MNISTRecon(DataSetImages):
         if len(image.shape) == 2:
             image = image.reshape([1, image.shape[0], image.shape[1]])
         label = numpy.array(self.labels[idx], dtype=numpy.int32)
-        
+        label = numpy.reshape(label, [1])
         return image, label
 
     def _sample_single(self):
