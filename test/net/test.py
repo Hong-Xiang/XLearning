@@ -20,7 +20,7 @@ def main(*args, **kwargs):
     dataset_train.initialize()
     dataset_test.initialize()
     net.set_dataset({'train': dataset_train, 'test': dataset_test})
-    net.train(steps=50000, phase=5, decay=10.0)
+    net.train(steps=100000, phase=10, decay=2.0)
     dataset_train.finalize()
     dataset_test.finalize()
     net.save()
