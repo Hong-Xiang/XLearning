@@ -49,7 +49,7 @@ def load_data_():
     return (ipt_train, x_train), (ipt_test, x_test)
 
 
-def load_data():
+def load_data__():
     datapath = '/home/hongxwing/Workspace/cali/data/transfer/data_grid2_100/'
     label = np.load(os.path.join(datapath, 'incs_good.npy'))
     data = np.load(os.path.join(datapath, 'opms_good.npy'))
@@ -76,7 +76,7 @@ def load_data():
     return (train_x, train_y), (test_x, test_y)
 
 
-def load_data__():
+def load_data():
     datapath = '/home/hongxwing/Workspace/cali/data/transfer/data_grid2_100/'
     label = np.load(os.path.join(datapath, 'pos_gnd.npy'))
     data = np.load(os.path.join(datapath, 'evt_gnd.npy'))
@@ -129,8 +129,8 @@ def loss(pred, lable):
     return loss
 
 
-def model_define_():
-    ip = Input(shape=(10, 10, 2))
+def model_define():
+    ip = Input(shape=(10, 10, 1))
     h = Flatten()(ip)
     h = Dense(128, activation='relu')(h)
     h = Dense(256, activation='relu')(h)
@@ -138,16 +138,17 @@ def model_define_():
     h = Dense(1024, activation='relu')(h)
     h = Dense(2048, activation='relu')(h)
     h = Dense(4096, activation='relu')(h)
+    h = Dense(4096*2, activation='relu')(h)
     h = Dropout(0.5)(h)
     out = Dense(1)(h)
     m = Model(ip, out)
-    opt = RMSprop(1e-3)
+    opt = RMSprop(1e-5)
     m.compile(loss=loss, optimizer=opt)
     m.summary()
     return m
 
 
-def model_define():
+def model_define_():
     is_cata = False
     reps = []
     ip = Input(shape=(10, 10, 2))
