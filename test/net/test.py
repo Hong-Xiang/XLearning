@@ -6,7 +6,7 @@ from xlearn.utils.general import enter_debug
 
 
 def main(*args, **kwargs):
-    enter_debug()
+    # enter_debug()
     tf.logging.set_verbosity(tf.logging.INFO)
     # net = MNISTRecon0(filenames='net_mnist_recon.json', load_step=-1)
     net = nets.Cali0(filenames='cali0.json')
@@ -20,7 +20,7 @@ def main(*args, **kwargs):
     dataset_train.initialize()
     dataset_test.initialize()
     net.set_dataset({'train': dataset_train, 'test': dataset_test})
-    net.train(steps=1000, phase=10)
+    net.train(steps=50000, phase=5, decay=10.0)
     dataset_train.finalize()
     dataset_test.finalize()
     net.save()

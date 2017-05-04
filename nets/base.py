@@ -2,6 +2,7 @@ import pathlib
 import tensorflow as tf
 import os
 import re
+import numpy as np
 
 from ..utils.general import with_config, ProgressTimer
 from ..utils.prints import pp_json, pprint
@@ -64,7 +65,7 @@ class Net:
     def reset_lr(self, lr=None, decay=10.0):
         for k in self.lr.keys():
             if lr is None:
-                new_value = self.params['lr'][k] / decay
+                self.params['lr'][k] /= decay
                 self.feed_dict.update({self.lr[k]: self.params['lr'][k]})
             else:
                 self.feed_dict.update({self.lr[k]: lr[k]})
@@ -152,9 +153,9 @@ class Net:
         results = self.sess.run(run_op, feed_dict=feed_dict)
         return results
 
-    def train(self, steps=None, phase=1):
+    def train(self, steps=None, phase=1, decay=2.0):
         pt = ProgressTimer(steps)
-        steps_phase = int(np.ceil(steps//phase))
+        steps_phase = int(np.ceil(steps // phase))
         cstep = 0
         for _ in range(phase):
             for i in range(steps_phase):
@@ -167,7 +168,7 @@ class Net:
                     if i % self.params['summary_freq'] == 0:
                         self.summary_auto()
             self.save()
-            self.reset_lr(decay=2.0)
+            self.reset_lr(decay=decay)
 
     def predict(self, data, **kwargs):
         feed_dict = dict()
