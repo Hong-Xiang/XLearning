@@ -142,7 +142,7 @@ def model_define():
     h = Dropout(0.25)(h)
     out = Dense(2)(h)
     m = Model(ip, out)
-    opt = RMSprop(1e-5)
+    opt = RMSprop(1e-3)
     m.compile(loss=loss, optimizer=opt)
     m.summary()
     return m

@@ -23,7 +23,7 @@ class Cali0(Net):
             filters = [128, 256, 512, 1024, 2048, 4096, 8192]
             h = slim.stack(h, slim.fully_connected, filters)
         h = tf.nn.dropout(h, self.kp)
-        pos_pred = tf.layers.dense(h, 2)
+        pos_pred = slim.fully_connected(h, 2, activation_fn=None)
         self.output['pos_pred'] = pos_pred
         error = self.label['label'] - self.output['pos_pred']
         l = tf.square(error)
@@ -51,7 +51,7 @@ class Cali1(Net):
         self.label['label'] = tf.placeholder(
             dtype=tf.float32, shape=[None, 2], name='label')
         h = self.input['data']
-        with slim.arg_scope([slim.conv2d], padding='same', activation_fn=tf.nn.crelu, data_format='NCHW'):
+        with slim.arg_scope([slim.conv2d], padding='same', activation_fn=tf.nn.elu, data_format='NCHW'):
             h = slim.conv2d(h, 32, 3)
             h = slim.conv2d(h, 32, 1)
             h = slim.conv2d(h, 64, 1, 2)
@@ -62,7 +62,6 @@ class Cali1(Net):
         h = slim.flatten(h)
         # h = slim.fully_connected(h, 2048, activation_fn=tf.nn.elu)
         reps = [h]
-
         h = self.input['data']
         h = slim.flatten(h)
         with slim.arg_scope([slim.fully_connected], activation_fn=tf.nn.elu):
@@ -74,7 +73,7 @@ class Cali1(Net):
         h = slim.fully_connected(h, 4096, activation_fn=tf.nn.elu)
         h = slim.fully_connected(h, 8192, activation_fn=tf.nn.elu)
         h = tf.nn.dropout(h, self.kp)
-        pos_pred = slim.fully_connected(h, 2)
+        pos_pred = slim.fully_connected(h, 2, activation_fn=None)
         self.output['pos_pred'] = pos_pred
         error = self.label['label'] - self.output['pos_pred']
         l = tf.square(error)

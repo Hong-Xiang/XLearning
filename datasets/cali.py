@@ -4,17 +4,19 @@ import numpy as np
 from ..utils.general import with_config
 from ..utils.cells import Sampler
 from .base import DataSetBase, PATH_DATASETS
-
+import random
 
 class CalibrationDataSet(DataSetBase):
     @with_config
     def __init__(self,
                  is_good=False,
+                 is_agu=True,
                  with_z=False,
                  with_y=True,
                  **kwargs):
         DataSetBase.__init__(self, **kwargs)
         self.is_good = is_good
+        self.is_agu = is_agu
         self.with_z = with_z
         self.with_y = with_y
         if self.is_good:
@@ -29,7 +31,8 @@ class CalibrationDataSet(DataSetBase):
             'data_key': self.data_key,
             'file_data': self.file_data,
             'with_z': self.with_z,
-            'with_y': self.with_y
+            'with_y': self.with_y,
+            'is_agu': self.is_agu
         })
 
     def initialize(self):
@@ -59,8 +62,22 @@ class CalibrationDataSet(DataSetBase):
         while True:
             idx = next(self.sampler)[0]
             data = self.data[idx, ...]
-            data = data.reshape([1, 10, 10])
+            data = data.reshape([10, 10])
             label = self.label[idx, ...]
+            if self.is_agu:
+                isflip = random.randint(0, 1)
+                if isflip == 1:
+                    data = data[9::-1, :]
+                    label[1] = - label[1]
+                isflip = random.randint(0, 1)
+                if isflip == 1:
+                    data = data[:, 9::-1]
+                    label[0] = - label[0]
+                istrans = random.randint(0, 1)
+                if istrans == 1:
+                    data = data.T
+                    label[0], label[1] = label[1], label[0]
+            data = data.reshape([1, 10, 10])
             if not self.with_z:
                 label = label[:2]
             if not self.with_y:
