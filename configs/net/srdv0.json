@@ -1,0 +1,8 @@
+{
+    "optims_names": ["Adam"],
+    "is_bn": false,
+    "inputs_shapes": [[64, 64, 1]],
+    "nb_down_sample": 1,
+    "lrs": [1e-3],
+    "crop_size": [16, 16]
+}

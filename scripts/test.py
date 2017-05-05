@@ -1,0 +1,1 @@
+from xlearn.scripts.main import test_define_net

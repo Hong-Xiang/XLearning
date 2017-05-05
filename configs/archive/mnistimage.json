@@ -1,0 +1,4 @@
+{
+    "is_batch": true,
+    "batch_size": 32
+}

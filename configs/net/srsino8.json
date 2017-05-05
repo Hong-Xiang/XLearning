@@ -1,0 +1,15 @@
+{
+    "input_shape": [32, 32, 1],
+    "filters_8x": 64,
+    "depths_8x": 1,
+    "blocks_8x": 16,
+    "filters_4x": 64,
+    "depths_4x": 1,
+    "blocks_4x": 16,
+    "filters_2x": 64,
+    "depths_2x": 1,
+    "blocks_2x": 16,
+    "is_bn": true,
+    "log_dir": "./log",
+    "model_dir": "./save"
+}

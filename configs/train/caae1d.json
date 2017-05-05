@@ -1,0 +1,9 @@
+{
+    "net_name": "CAAE1D",
+    "dataset_name": "MNIST2",
+    "config_files": [
+        "./mnist2.json",
+        "./caae1d.json"
+    ],
+    "is_p2": true
+}

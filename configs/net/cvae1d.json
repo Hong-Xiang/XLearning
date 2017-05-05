@@ -1,0 +1,11 @@
+{
+    "inputs_shapes": [[3136],[784]],
+    "outputs_shapes": [[3136]],
+    "latent_dim": 128,
+    "hiddens": [512, 1024, 1024],    
+    "sigma": 1e-3,
+    "lrs": [1e-3],
+    "path_saves": ["./save_ae.h5", "./save_enc.h5", "./save_dec.h5", "./save_gen.h5"],
+    "path_loads": ["./save_ae.h5", "./save_enc.h5", "./save_dec.h5", "./save_gen.h5"],
+    "optims_names": ["RMSProp"]
+}

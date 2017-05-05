@@ -9,7 +9,83 @@ import sys
 import numpy as np
 from functools import wraps
 from itertools import zip_longest
+import time
 import logging
+import time
+import datetime
+import tensorflow as tf
+import click
+from inspect import getfullargspec, signature
+from functools import wraps
+
+
+def pp_json(title, cfg_dict, length=30):
+    click.echo(title)
+    click.echo("=" * length)
+    click.echo(json.dumps(cfg_dict, indent=4,
+                          separators=[',', '： '], sort_keys=True))
+    click.echo("=" * length)
+
+
+def get_args(func, all_vars):
+    d = {}
+    sig = signature(func)
+    for param in sig.parameters.values():
+        if param.kind == param.VAR_POSITIONAL or param.kind == param.VAR_KEYWORD:
+            continue
+        d.update({param.name: all_vars[param.name]})
+    return d
+
+
+def print_pretty_args(func, all_vars):
+    if isinstance(func, click.core.Command):
+        func = func.callback
+    sig = signature(func)
+    d = {}
+    for param in sig.parameters.values():
+        if param.kind == param.VAR_POSITIONAL or param.kind == param.VAR_KEYWORD:
+            continue
+        d.update({param.name: all_vars[param.name]})
+    prefix = "=" * 30 + "\n"
+    prefix += str(func.__name__) + " args:" + "\n"
+    prefix += "." * 30 + "\n"
+    sets = json.dumps(d, indent=4, separators=[',', ': '], sort_keys=True)
+    suffix = "\n" + "=" * 30
+    click.echo(prefix + sets + suffix)
+
+
+def setting_with_priority(settings_list):
+    for setting in settings_list:
+        if setting is not None:
+            return setting
+    return None
+
+
+def config_from_dicts(key, dicts, mode='first'):
+    value = None
+    for d in dicts:
+        tmp = d.get(key)
+        if mode == 'first':
+            value = tmp
+            if value is not None:
+                break
+        elif mode == 'append':
+            if value is None:
+                if isinstance(tmp, (list, tuple)):
+                    value = list(tmp)
+                else:
+                    value = [tmp]
+            else:
+                if isinstance(tmp, (list, tuple)):
+                    value += list(tmp)
+                else:
+                    value.append(tmp)
+    return value
+
+
+def print_global_vars():
+    for v in tf.global_variables():
+        print(v.name)
 
 
 class Sentinel:
@@ -34,10 +110,13 @@ def extend_list(list_input, nb_target):
         raise ValueError("Can't extend list with len != 1")
 
 
-def empty_list(length):
+def empty_list(length, is_lol=False):
     output = []
     for i in range(length):
-        output.append(None)
+        if is_lol:
+            output.append([])
+        else:
+            output.append(None)
     return output
 
 
@@ -51,8 +130,10 @@ class ExceptionHook:
                                                 color_scheme='Linux', call_pdb=1)
         return self.instance(*args, **kwargs)
 
+
 def enter_debug():
     sys.excepthook = ExceptionHook()
+
 
 def show_debug_logs():
     """ print debug logging info """
@@ -141,16 +222,52 @@ def label_name(data_name, case_digit=None, label_prefix=None):
 #     return
 
 
-def with_config(func):
+def with_config_old(func):
     @wraps(func)
     def wrapper(*args, **kwargs):
-        sets = merge_settings(settings=kwargs.pop('settings', None), filenames=kwargs.pop(
-            'filenames', None), default_settings=kwargs.pop('default_settings', None), **kwargs)
+        fns = kwargs.pop('filenames', None)
+        sets = merge_settings(settings=kwargs.pop('settings', None), filenames=fns,
+                              default_settings=kwargs.pop('default_settings', None), **kwargs)
         logging.getLogger(__name__).debug(
             "After merge_settings, settings:" + str(sets) + "\nkwargs:" + str(kwargs))
         logging.getLogger(__name__).debug(
             "args:" + str(args))
+        kwargs['filenames'] = fns
         return func(*args,  settings=sets, **kwargs)
+    return wrapper
+
+
+def with_config(func):
+    """ add support to read keywargs from .json file
+    Add a preserved keyword 'filenames' for .json files.
+    """
+    @wraps(func)
+    def wrapper(*args, filenames=None, **kwargs):
+        if isinstance(filenames, str):
+            filenames = [filenames]
+        if filenames is None:
+            filenames = []
+        paras = getfullargspec(func)
+        json_dicts = []
+        for fn in filenames:
+            with open(fn, 'r') as fin:
+                json_dicts.append(json.load(fin))
+        if paras.defaults is not None:
+            nb_def = len(paras.defaults)
+        else:
+            nb_def = 0
+        def_args = paras.defaults
+        if def_args is None:
+            def_args = []
+        def_keys = paras.args[-nb_def:]
+        def_dict = {k: v for k, v in zip(def_keys, def_args)}
+        for k in paras.args:
+            v = config_from_dicts(k, [kwargs] + json_dicts + [def_dict])
+            if v is not None:
+                kwargs.update({k: v})
+        kwargs.update({'filenames': filenames})
+        kwargs.pop('filenames')
+        return func(*args, filenames=filenames, **kwargs)
     return wrapper
 
 
@@ -204,3 +321,50 @@ def filename_filter(filenames, prefix, suffix):
             else:
                 files.append(path_full)
     return files, dirs
+
+
+class ProgressTimer:
+    def __init__(self, nb_steps=100, min_elp=1.0):
+        self._nb_steps = nb_steps
+        self._step = 0
+        self._start = None
+        self._elaps = None
+        self._pre = None
+        self._min_elp = min_elp
+        self.reset()
+
+    def reset(self):
+        self._start = time.time()
+        self._pre = 0.0
+        self._step = 0
+
+    def event(self, step=None, msg='None'):
+        if step is None:
+            step = self._step
+            self._step += 1
+        else:
+            self._step = step
+
+        self._elaps = time.time() - self._start
+        if self._elaps - self._pre < self._min_elp:
+            return
+        comp_percen = float(step) / float(self._nb_steps)
+        if comp_percen > 0:
+            eta = (1 - comp_percen) * self._elaps / comp_percen
+        else:
+            eta = None
+
+        time_pas = str(datetime.timedelta(seconds=int(self._elaps)))
+        time_int_v = self._elaps / (step + 1.0)
+        if time_int_v < 60:
+            time_int_msg = '%0.2fs/it' % (time_int_v)
+        else:
+            time_int_msg = str(datetime.timedelta(
+                seconds=int(time_int_v)))
+        if eta is None:
+            time_eta = 'UKN'
+        else:
+            time_eta = str(datetime.timedelta(seconds=int(eta)))
+        click.echo("i=%6d, %s, [%s<%s] :" %
+                   (step, time_int_msg, time_pas, time_eta) + msg)
+        self._pre = self._elaps

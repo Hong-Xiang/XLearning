@@ -1,0 +1,13 @@
+{
+    "crop_shape": [363, 720, 1],
+    "npy_file": "/home/hongxwing/Workspace/Datas/data_sp/sinos.npy",
+    "nb_samples": 32,
+    "input_shape_8x": [363, 90, 1],
+    "input_shape_4x": [363, 180, 1],
+    "input_shape_2x": [363, 360, 1],
+    "input_shape_1x": [363, 720, 1],
+    "load_step": 30000,
+    "period_8x": 90,
+    "period_4x": 180,
+    "period_2x": 360
+}

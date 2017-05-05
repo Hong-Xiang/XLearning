@@ -1,0 +1,6 @@
+{
+    "inputs_dims": [[784]],
+    "latent_dims": 2,
+    "gen_freq": 5,    
+    "pre_train": 100
+}

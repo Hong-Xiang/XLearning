@@ -1,0 +1,7 @@
+{
+    "log_dir": "log",
+    "model_dir": "save",
+    "lr": {"default": 1e-3},
+    "summary_type": "step",
+    "summary_freq": 10
+}

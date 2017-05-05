@@ -1,0 +1,11 @@
+{
+    "batch_size": 1,
+    "input_shape": [64, 64, 1],
+    "cores": 3,
+    "filters": 64,
+    "depths": 2,
+    "blocks": 8,
+    "is_bn": true,
+    "crop_size": 16,
+    "lrs": 1e-4
+}

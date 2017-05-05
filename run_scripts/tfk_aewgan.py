@@ -9,7 +9,7 @@ from xlearn.dataset import MNIST
 
 enter_debug()
 
-batch_size = 16
+batch_size = 128
 nb_batches = 3000
 
 data_settings = {
@@ -19,8 +19,7 @@ data_settings = {
     'is_weight': False,
     'is_batch': True,
     'is_bin': False,
-    'is_norm': True,
-    'lrs': [1e-3],
+    'is_norm': True,    
     'batch_size': batch_size,
     'is_cata': False,
 }
@@ -30,7 +29,7 @@ net_settings = {
     'latent_dims': (2,),
     'hiddens': (512, 512, 512),
     'batch_size': batch_size,
-    'sigma': 1.0,
+    'sigma': 1e-3,
 }
 
 

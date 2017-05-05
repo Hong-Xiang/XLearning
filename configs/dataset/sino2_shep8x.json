@@ -1,0 +1,6 @@
+{
+    "batch_size": 1,
+    "crop_shape": [64, 512],
+    "data_down_sample": 3,
+    "label_down_sample": 2
+}

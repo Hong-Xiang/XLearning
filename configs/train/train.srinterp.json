@@ -1,0 +1,8 @@
+{
+    "net_name": "SRInterp",
+    "dataset_name": "celeba",
+    "config_files": [
+        "./srinterp.json", 
+        "./celeba.json"
+    ]
+}

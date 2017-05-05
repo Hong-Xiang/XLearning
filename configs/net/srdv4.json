@@ -1,0 +1,9 @@
+{
+    "optims_names": ["Adam"],
+    "inputs_shapes": [[363, 360, 1]],
+    "nb_down_sample": 1,
+    "hiddens": [128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 128, 1],
+    "is_celu": true,
+    "lrs": [1e-4],
+    "nb_phase_1": 128
+}

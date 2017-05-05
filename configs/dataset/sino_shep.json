@@ -1,0 +1,12 @@
+{
+    "batch_size": 1,
+    "crop_shape": [64, 512],
+    "data_down_sample": 3,
+    "label_down_sample": 2,
+    "mode": "train",
+    "padding": 3,
+    "period": 360,
+    "is_norm": true,
+    "data_mean": 26.0,
+    "data_std": 27.0
+}

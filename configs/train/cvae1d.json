@@ -1,0 +1,9 @@
+{
+    "net_name": "CVAE1D",
+    "dataset_name": "MNIST2",
+    "config_files": [
+        "./mnist2.json",
+        "./cvae1d.json"
+    ],
+    "save_filename": "predict_run.png"
+}

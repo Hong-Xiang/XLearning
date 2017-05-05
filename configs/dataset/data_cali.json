@@ -1,0 +1,7 @@
+{
+    "batch_size": 32,
+    "mode": "train",
+    "is_norm": true,
+    "data_mean": 55.0,
+    "data_std": 77.0
+}

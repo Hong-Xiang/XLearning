@@ -1,0 +1,18 @@
+{
+    "data_name": "shep",
+    "batch_size": 32,
+    "mode": "train",
+    "is_norm": true,
+    "data_mean": 27.0,
+    "data_std": 27.0,
+    "is_down_sample": true,
+    "is_down_sample_0": false,
+    "is_down_sample_1": true,
+    "crop_offset": [0, 0],
+    "crop_shape": [64, 128],
+    "data_down_sample": 2,
+    "label_down_sample": 0,
+    "padding": [0, 1],
+    "period": [363, 360],
+    "nnz_ratio": 0.2
+}

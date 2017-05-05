@@ -1,0 +1,16 @@
+{
+    "data_name": "mnist",
+    "batch_size": 32,
+    "mode": "train",
+    "is_norm": true,
+    "data_mean": 128.0,
+    "data_std": 256.0,
+    "is_down_sample": true,
+    "is_down_sample_0": true,
+    "is_down_sample_1": true,
+    "crop_offset": [0, 0],
+    "crop_shape": [28, 28],
+    "data_down_sample": 2,
+    "label_down_sample": 0,
+    "padding": null
+}

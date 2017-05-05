@@ -1,0 +1,9 @@
+{
+    "inputs_shapes": [[784]],
+    "outputs_shapes": [[784]],
+    "hiddens":[1024, 1024], 
+    "batch_size":32,
+    "latent_dim":128,
+    "path_saves": ["./save_ae.h5", "./save_enc.h5", "./save_dec.h5"],
+    "path_loads": ["./save_ae.h5", "./save_enc.h5", "./save_dec.h5"]
+}

@@ -1,21 +1,20 @@
 import random
 import logging
 import xlearn.utils.general as utg
-
+from ..utils.general import with_config
+import time
 
 class Cell(object):
-
-    @utg.with_config
-    def __init__(self, cells_in=None, settings=None, **kwargs):
+    @with_config
+    def __init__(self,
+                 cells_in=None,
+                 name='Cell',
+                 **kwargs):
         if cells_in is None:
             self._cins = []
         else:
             self._cins = cells_in
-        # self._settings = utg.merge_settings(
-        # settings=None, filenames=filenames, default_settings=None, **kwargs)
-        self._settings = settings
-        self._name = settings.get('name', 'Cell')
-        logging.getLogger(__name__).debug(str(self._settings))
+        self._name = name
 
     def add_in(self, c, channel=None):
         if channel is None:
@@ -60,18 +59,19 @@ class Counter(Cell):
     Add one each time next(self) if called.
     If counter reaches nb_max, StopIteration will raised.
     """
-
-    def __init__(self, nb_max=None, name=None, **kwargs):
+    @with_config
+    def __init__(self,
+                 nb_max=None,
+                 name='Counter',
+                 **kwargs):
         """
         *Pump cell*
         Args:
             name:   *str*,  _Counter_,  name of cell.
             nb_max: *int*,  _-1_,   maxinum state.
         """
-        super(Counter, self).__init__(nb_max=nb_max, name=name,
-                                      default_settings={'name': 'Counter', 'nb_max': -1}, **kwargs)
-        self._name = self._settings.get('name')
-        self._nb_max = self._settings.get('nb_max')
+        Cell.__init__(self, name=name, **kwargs)
+        self._nb_max = nb_max
         self._state = 0
 
     def _pump(self):
@@ -89,27 +89,31 @@ class Counter(Cell):
     def state(self):
         return self._state
 
-    def reset(self):
-        self._state = 0
+    def reset(self, value=0):
+        self._state = value
 
 
 class Sampler(Cell):
     # TODO: Add feature of random seed.
 
-    def __init__(self, datas=[], is_shuffle=False, seed=0, **kwargs):
+    def __init__(self,
+                 datas=[],
+                 is_shuffle=False,
+                 seed=0,
+                 name='Sampler',
+                 **kwargs):
         """
         Args:
             datas:      list, where data sample from.
             is_shuffle: bool, whether use shuffle.
         """
-        super(Sampler, self).__init__(
-            is_shuffle=is_shuffle, seed=seed, **kwargs)
+        Cell.__init__(self, name=name, **kwargs)
         self._datas = datas
         self._nb_datas = len(self._datas)
         if self._nb_datas == 0:
             raise TypeError("Can not construct sampler on empty datas.")
-        self._is_shuffle = self._settings.get('is_shuffle', True)
-        self._seed = self._settings.get('seed', None)
+        self._is_shuffle = is_shuffle
+        self._seed = seed
         self._counter = Counter(nb_max=self._nb_datas,
                                 name=self._name + '/nb_sampled')
         self._ids = list(range(self._nb_datas))
