@@ -17,6 +17,7 @@ class Net:
                  is_load=False,
                  summary_freq=10,
                  summary_type='time',
+                 save_freq=100,
                  dataset=None,
                  load_step=None,
                  ckpt_name='model.ckpt',
@@ -31,6 +32,7 @@ class Net:
         self.params['summary_type'] = summary_type
         self.params['load_step'] = load_step
         self.params['ckpt_name'] = ckpt_name
+        self.params['save_freq'] = save_freq
         # Supervisor and managed session
         self.sv = None
         self.sess = None
@@ -57,7 +59,7 @@ class Net:
         for k in self.params['lr']:
             self.lr[k] = tf.placeholder(dtype=tf.float32, name=k)
             self.feed_dict.update({self.lr[k]: self.params['lr'][k]})
-
+            tf.summary.scalar('lr/' + k, self.lr[k])
         self.dataset = None
         self.saver = None
         self.summary_writer = None
@@ -94,6 +96,8 @@ class Net:
         path_load = pathlib.Path(self.params['model_dir'])
         step = self.params['load_step']
         if step == -1:
+            if not path_load.is_dir():
+                return
             pattern = self.params['ckpt_name'] + '-' + '([0-9]+)' + '-*'
             p = re.compile(pattern)
             for f in path_load.iterdir():
@@ -167,6 +171,8 @@ class Net:
                 if self.params['summary_type'] == 'step':
                     if i % self.params['summary_freq'] == 0:
                         self.summary_auto()
+                if i % self.params['save_freq'] == 0 and i > 0:
+                    self.save()
             self.save()
             self.reset_lr(decay=decay)
 
@@ -212,6 +218,7 @@ class Net:
         step = results.pop('global_step')
         for k in results.keys():
             self.summary_writer[mode].add_summary(results[k], global_step=step)
+        self.summary_writer[mode].flush()
         return results
 
     def summary_auto(self):

@@ -11,10 +11,12 @@ class CalibrationDataSet(DataSetBase):
     def __init__(self,
                  is_good=False,
                  with_z=False,
+                 with_y=True,
                  **kwargs):
         DataSetBase.__init__(self, **kwargs)
         self.is_good = is_good
         self.with_z = with_z
+        self.with_y = with_y
         if self.is_good:
             self.data_key = {'data': 'evt_good', 'label': 'inc_good'}
         else:
@@ -26,7 +28,8 @@ class CalibrationDataSet(DataSetBase):
             'is_good': self.is_good,
             'data_key': self.data_key,
             'file_data': self.file_data,
-            'with_z': self.with_z
+            'with_z': self.with_z,
+            'with_y': self.with_y
         })
 
     def initialize(self):
@@ -60,6 +63,8 @@ class CalibrationDataSet(DataSetBase):
             label = self.label[idx, ...]
             if not self.with_z:
                 label = label[:2]
+            if not self.with_y:
+                label = label[:1]
             total = np.sum(data)
             if total > 5500:
                 break
