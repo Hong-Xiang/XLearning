@@ -6,6 +6,7 @@ from ..utils.cells import Sampler
 from .base import DataSetBase, PATH_DATASETS
 import random
 
+
 class CalibrationDataSet(DataSetBase):
     @with_config
     def __init__(self,
@@ -34,11 +35,54 @@ class CalibrationDataSet(DataSetBase):
             'with_y': self.with_y,
             'is_agu': self.is_agu
         })
+        self.data = None
+        self.label = None
+
+    def augmentation(self, data, label):
+        if self.is_agu:
+            datanew = []
+            labelnew = []
+            nb_samples = data.shape[0]
+            for i in range(nb_samples):
+                d0 = data[i, ...].reshape([10, 10])
+                l0 = label[i, ...]
+                datanew.append(d0)
+                labelnew.append(l0)
+                l1 = np.array(l0)
+                d1 = d0[9::-1, :]
+                l1[1] = - l0[1]
+                datanew.append(d1)
+                labelnew.append(l1)
+                l2 = np.array(l0)
+                d2 = d0[:, 9::-1]
+                l2[0] = - l0[0]
+                datanew.append(d2)
+                labelnew.append(l2)
+                d3 = np.array(d0)
+                d3 = d3.T
+                l3 = np.array(l0)
+                l3[0], l3[1] = l0[1], l0[0]
+                datanew.append(d3)
+                labelnew.append(l3)
+            idx = list(range(nb_samples * 4))
+            random.shuffle(idx)
+            datanew_shuffle = []
+            labelnew_shuffle = []
+            for i in idx:
+                datanew_shuffle.append(datanew[i])
+                labelnew_shuffle.append(labelnew[i])
+            datanew = np.array(datanew_shuffle)
+            labelnew = np.array(labelnew_shuffle)
+        else:
+            datanew = np.array(data)
+            labelnew = np.array(label)
+        return datanew, labelnew
 
     def initialize(self):
-        self.fin = h5py.File(self.file_data, 'r')
-        self.data = self.fin[self.data_key['data']]
-        self.label = self.fin[self.data_key['label']]
+        with h5py.File(self.file_data, 'r') as fin:
+            data = np.array(fin[self.data_key['data']])
+            label = np.array(fin[self.data_key['label']])
+        self.data, self.label = self.augmentation(data, label)
         nb_total = self.data.shape[0]
 
         nb_train = nb_total // 5 * 4
@@ -53,30 +97,12 @@ class CalibrationDataSet(DataSetBase):
         })
         super(CalibrationDataSet, self).initialize()
 
-    def finalize(self):
-        self.fin.close()
-        super(CalibrationDataSet, self).finalize()
-
     def _sample_single(self):
         """ interface of sampling """
         while True:
             idx = next(self.sampler)[0]
             data = self.data[idx, ...]
-            data = data.reshape([10, 10])
             label = self.label[idx, ...]
-            if self.is_agu:
-                isflip = random.randint(0, 1)
-                if isflip == 1:
-                    data = data[9::-1, :]
-                    label[1] = - label[1]
-                isflip = random.randint(0, 1)
-                if isflip == 1:
-                    data = data[:, 9::-1]
-                    label[0] = - label[0]
-                istrans = random.randint(0, 1)
-                if istrans == 1:
-                    data = data.T
-                    label[0], label[1] = label[1], label[0]
             data = data.reshape([1, 10, 10])
             if not self.with_z:
                 label = label[:2]

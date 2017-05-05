@@ -16,7 +16,7 @@ flags = tf.flags.FLAGS
 
 
 def trian(net):
-    net.train(steps=100000, phase=10, decay=2.0)
+    net.train(steps=300000, phase=10, decay=2.0)
     net.save()
 
 
