@@ -3,8 +3,11 @@ from xlearn.datasets.mnist_recon import MNISTRecon
 import xlearn.nets as nets
 import xlearn.datasets as datasets
 from xlearn.utils.general import enter_debug
+from xlearn.datasets.base import PATH_DATASETS
 import sys
-
+import h5py
+import pathlib
+import numpy as np
 from keras.layers import Dense, Input, Flatten, Dropout
 from keras.models import Model
 from keras.optimizers import RMSprop
@@ -16,15 +19,28 @@ flags = tf.flags.FLAGS
 
 
 def trian(net):
-    net.train(steps=300000, phase=10, decay=2.0)
+    net.train(steps=[800000]*1, decay=10.0)
     net.save()
 
 
 def predict(net, dataset):
     ss = dataset.sample()
     result = net.predict(ss)
-    print(result)
-    print(ss['label'])
+    compare = [result['pos_pred'][:, 0], ss['label'][:, 0], result['pos_pred'][:, 1], ss['label'][:, 1]]
+    compare = np.array(compare)
+    print(compare)
+
+def predict_cali(net):
+    p = pathlib.Path(PATH_DATASETS) / 'cali.h5'
+    with h5py.File(str(p.absolute()), 'r') as fin:
+        data = np.array(fin['evt_all'])
+        ipos = np.array(fin['inc_all'])
+        ipos = ipos[:, :2]
+        data = data.reshape([-1, 1, 10, 10])
+        pred = net.predict_auto({'data': data})
+        np.save('ipos.npy', ipos)
+        np.save('pred.npy', pred)
+
 
 def loss(pred, lable):
     error = pred - lable
@@ -63,6 +79,13 @@ def main(*args, **kwargs):
         net.init()
         net.set_dataset({'train': dataset_train, 'test': dataset_test})
         predict(net, dataset_test)
+    elif flags.task == 'predict_cali':
+        if flags.version == 0:
+            net = nets.Cali0(filenames='cali0.json', load_step=-1)
+        else:
+            net = nets.Cali1(filenames='cali0.json', load_step=-1)
+        net.init()
+        predict_cali(net)
     # elif flags.task == 'keras':
 
     #     ip = Input(shape=(1, 10, 10))

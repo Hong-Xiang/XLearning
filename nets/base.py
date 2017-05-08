@@ -1,3 +1,5 @@
+""" Base class definition """
+
 import pathlib
 import tensorflow as tf
 import os
@@ -21,7 +23,8 @@ class Net:
                  dataset=None,
                  load_step=None,
                  ckpt_name='model.ckpt',
-                 ** kwargs):
+                 keep_prob=0.5,
+                 **kwargs):
         # JSON serilizeable hyper-parameter dict.
         self.params = dict()
         self.params['log_dir'] = log_dir
@@ -33,6 +36,7 @@ class Net:
         self.params['load_step'] = load_step
         self.params['ckpt_name'] = ckpt_name
         self.params['save_freq'] = save_freq
+        self.params['keep_prob'] = keep_prob
         # Supervisor and managed session
         self.sv = None
         self.sess = None
@@ -54,6 +58,7 @@ class Net:
         self.feed_dict = dict()
         self.run_op = {'global_step': self.gs}
         self.kp = tf.placeholder(dtype=tf.float32, name='keep_prob')
+        self.training = tf.placeholder(dtype=tf.bool, name='training')
         self.params['lr'] = lr
         self.lr = dict()
         for k in self.params['lr']:
@@ -147,7 +152,7 @@ class Net:
             feed_dict.update({self.input[k]: data[k]})
         for k in self.label.keys():
             feed_dict.update({self.label[k]: data[k]})
-        train_kp = self.params.get('keep_prob', 0.5)
+        train_kp = self.params.get('keep_prob', self.params['keep_prob'])
         feed_dict.update({self.kp: train_kp})
         feed_dict.update(self.feed_dict)
         run_op = dict()
@@ -158,11 +163,13 @@ class Net:
         return results
 
     def train(self, steps=None, phase=1, decay=2.0):
-        pt = ProgressTimer(steps)
-        steps_phase = int(np.ceil(steps // phase))
+        if not isinstance(steps, (list, tuple)):
+            steps = [steps] * phase
+        total_step = sum(steps)
+        pt = ProgressTimer(total_step)
         cstep = 0
-        for _ in range(phase):
-            for i in range(steps_phase):
+        for sp in steps:
+            for i in range(sp):
                 ss = self.dataset['train'].sample()
                 res = self.partial_fit(ss)
                 msg = "LOSS=%6e, STEP=%5d" % (res['loss'], res['global_step'])
@@ -177,6 +184,7 @@ class Net:
             self.reset_lr(decay=decay)
 
     def predict(self, data, **kwargs):
+        """ predict a mini-batch """
         feed_dict = dict()
         for k in self.input.keys():
             feed_dict.update({self.input[k]: data[k]})
@@ -186,6 +194,37 @@ class Net:
         run_op.update(self.run_op)
         run_op.update(self.output)
         results = self.sess.run(run_op, feed_dict=feed_dict)
+        return results
+
+    def predict_auto(self, data, batch_size=32, **kwargs):
+        """ predict a large tensor, automatically seperate it into mini-batches. """
+        nb_sample = None
+        for k in data.keys():
+            if nb_sample is None:
+                nb_sample = data[k].shape[0]
+            else:
+                if nb_sample != data[k].shape[0]:
+                    raise ValueError("Wrong data shape.")
+        nb_blocks = nb_sample // batch_size + 1
+        preds = []
+        pt = ProgressTimer(nb_blocks)
+        for i in range(nb_blocks):
+            data_block = dict()
+            for k in data.keys():
+                i_start = (i - 1) * batch_size
+                i_end = min([i * batch_size, nb_sample])
+                if i_start >= i_end:
+                    break
+                data_block[k] = data[k][i_start:i_end, ...]
+            preds.append(self.predict(data_block))
+            pt.event(i)
+        results = dict()
+        for k in preds[0].keys():
+            results[k] = []
+        for item in preds:
+            results[k].append(item[k])
+        for k in results.keys():
+            results[k] = np.concatenate(results[k], 0)
         return results
 
     def evaluate(self, data, **kwargs):

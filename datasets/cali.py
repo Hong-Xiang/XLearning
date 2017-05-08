@@ -12,12 +12,14 @@ class CalibrationDataSet(DataSetBase):
     def __init__(self,
                  is_good=False,
                  is_agu=True,
+                 is_mix=False,
                  with_z=False,
                  with_y=True,
                  **kwargs):
         DataSetBase.__init__(self, **kwargs)
         self.is_good = is_good
         self.is_agu = is_agu
+        self.is_mix = is_mix
         self.with_z = with_z
         self.with_y = with_y
         if self.is_good:
@@ -64,7 +66,18 @@ class CalibrationDataSet(DataSetBase):
                 l3[0], l3[1] = l0[1], l0[0]
                 datanew.append(d3)
                 labelnew.append(l3)
-            idx = list(range(nb_samples * 4))
+                l4 = np.array(l3)
+                d4 = d3[9::-1, :]
+                l4[1] = - l3[1]
+                datanew.append(d4)
+                labelnew.append(l4)
+                l5 = np.array(l3)
+                d5 = d3[:, 9::-1]
+                l5[0] = - l5[0]
+                datanew.append(d5)
+                labelnew.append(l5)
+
+            idx = list(range(nb_samples * 6))
             random.shuffle(idx)
             datanew_shuffle = []
             labelnew_shuffle = []
@@ -82,7 +95,19 @@ class CalibrationDataSet(DataSetBase):
         with h5py.File(self.file_data, 'r') as fin:
             data = np.array(fin[self.data_key['data']])
             label = np.array(fin[self.data_key['label']])
-        self.data, self.label = self.augmentation(data, label)
+        if self.is_mix:
+            self.data, self.label = self.augmentation(data, label)
+        else:
+            nb_total = data.shape[0]
+            nb_train = nb_total // 5 * 4    
+            data_train = data[:nb_train, ...]
+            data_test = data[nb_train:, ...]
+            label_train = label[:nb_train, ...]
+            label_test = label[nb_train:, ...]
+            data_train, label_train = self.augmentation(data_train, label_train)
+            data_test, label_test = self.augmentation(data_test, label_test)
+            self.data = np.concatenate([data_train, data_test])
+            self.label = np.concatenate([label_train, label_test])
         nb_total = self.data.shape[0]
 
         nb_train = nb_total // 5 * 4
