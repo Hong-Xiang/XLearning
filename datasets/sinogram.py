@@ -28,6 +28,7 @@ class Sinograms:
                  data_mean=6.0,
                  data_std=0.5,
                  offset=(0, 0),
+                 method='mean',
                  **kwargs):
         """ init of Sinograms """
         dataset_dir = os.environ.get('PATH_DATASETS')
@@ -51,6 +52,7 @@ class Sinograms:
         self.mode = mode
         self.offset = offset
         self.rnz = rnz
+        self.method = method
 
     def _load_sample(self):
         while True:

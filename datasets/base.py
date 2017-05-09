@@ -16,7 +16,6 @@ from ..utils.cells import Sampler
 
 PATH_DATASETS = os.environ['PATH_DATASETS']
 
-
 class DataSetBase(object):
     """ base class of general dataset
 
@@ -38,6 +37,9 @@ class DataSetBase(object):
                  file_data=None,
                  name='dataset',
                  **kwargs):
+        """
+        Dataset Base class
+        """
         self.batch_size = batch_size
         self.mode = mode
         self.random_seed = random_seed
@@ -61,21 +63,15 @@ class DataSetBase(object):
         self.nb_examples = None
         self.sampler = None
 
-    def randint(self, minv=0, maxv=100):
+    def rand_int(self, minv=0, maxv=100):
         return random.randint(minv, maxv)
 
-    def randnorm(self, mean=0, sigma=1, size=None):
-        if size is None:
-            s = numpy.random.normal(loc=mean, scale=sigma)
-        else:
-            s = numpy.random.normal(loc=mean, scale=sigma, size=size)
+    def rand_norm(self, mean=0, sigma=1, size=None):
+        s = numpy.random.normal(loc=mean, scale=sigma, size=size)
         return s
 
-    def randunif(self, minv=0.0, maxv=1.0, size=None):
-        if size is None:
-            s = numpy.random.uniform(minv, maxv)
-        else:
-            s = numpy.random.uniform(minv, maxv, size)
+    def rand_unif(self, minv=0.0, maxv=1.0, size=None):
+        s = numpy.random.uniform(low=minv, high=maxv, size=size)
         return s
 
     def initialize(self):
@@ -175,6 +171,7 @@ class DataSetImages(DataSetBase):
                  nnz_ratio=0.0,
                  padding=None,
                  period=None,
+                 data_format='channels_first',
                  **kwargs):
         super(DataSetImages, self).__init__(**kwargs)
         self.is_gray = is_gray
@@ -198,6 +195,7 @@ class DataSetImages(DataSetBase):
         self.nnz_ratio = nnz_ratio
         self.padding = padding
         self.period = period
+        self.data_format = data_format
         self.pp_dict.update({
             'padding': self.padding,
             'period': self.period,
@@ -215,7 +213,8 @@ class DataSetImages(DataSetBase):
             'down_sample_ratio': self.down_sample_ratio,
             'data_key': self.data_key,
             'is_from_npy': self.is_from_npy,
-            'nnz_ratio': self.nnz_ratio
+            'nnz_ratio': self.nnz_ratio,
+            'data_format': self.data_format
         })
         self._sampler = None
         self._dataset = None
@@ -331,7 +330,7 @@ class DataSetImages(DataSetBase):
             if image.shape[2] < self.crop_offset[1] + self.crop_shape[1]:
                 failed = True
             if not failed:
-                image = self.crop(image)            
+                image = self.crop(image)
             nnz = len(numpy.nonzero(image > 1e-5)[0])
             rnz = nnz / numpy.size(image)
             if rnz < self.nnz_ratio:

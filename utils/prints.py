@@ -5,25 +5,24 @@ from functools import wraps
 import click
 
 
-def pprint(contents):
-    click.echo(contents)
+def pprint(contents, file=None):
+    click.echo(contents, file=file)
 
-
-def hline(level=0):
+def hline(level=0, file=None):
     if level == 0:
-        pprint("=" * 60)
+        pprint("=" * 60, file)
     elif level == 1:
-        pprint("-" * 60)
+        pprint("-" * 60, file)
 
 
-def pp_json(dict_to_print, title=None, length=30):
-    hline()
+def pp_json(dict_to_print, title=None, length=30, file=None):
+    hline(file)
     if title is not None:
-        pprint(title)
-        hline(1)
+        pprint(title, file)
+        hline(1, file)
     pprint(json.dumps(dict_to_print, indent=4,
-                      separators=[',', '： '], sort_keys=True))
-    hline()
+                      separators=[',', '： '], sort_keys=True), file)
+    hline(file)
 
 
 def get_args(func, all_vars):

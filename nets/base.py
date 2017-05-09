@@ -45,6 +45,7 @@ class Net:
         self.input = dict()
         self.output = dict()
         self.label = dict()
+        self.node = dict()
         self.loss = dict()
         self.train_op = dict()
         self.metric = dict()

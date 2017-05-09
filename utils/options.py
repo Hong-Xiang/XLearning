@@ -1,4 +1,4 @@
-""" Option class 
+""" Option class
 Support get options from (in priority):
 CLI
 Arguments
@@ -30,6 +30,8 @@ def standarize_configs(configs):
 
 class Options(dict):
     """ base class for Options
+        Options is a dict of options or paremeters.
+        Each parameters has a id and name.
     """
 
     def __init__(self, configs=None, **kwargs):
