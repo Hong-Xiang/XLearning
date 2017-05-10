@@ -45,7 +45,7 @@ def AutoEncoderImage(Net):
         dim_latent = int(np.prod(dim_latent[1:]))
         self.latent = tf.layers.dense(h, dim_latent)
         h = tf.reshape(self.latent, [-1, shape_last[1], shape_last[2], shape_last[3]])
-        
+        h = tf.layers.conv2d(h, f, )
 
 
         for f in reversed(self.params['filters']):

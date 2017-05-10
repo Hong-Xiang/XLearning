@@ -1,13 +1,13 @@
 """ base class for samples generator for Keras models."""
 # TODO: batch mode ?
 # TODO: Add tensorflow queue support?
+# TODO: Put options into configs
 import os
 import json
 import random
 import numpy
 import h5py
 import pathlib
-import tensorflow as tf
 
 from ..utils.prints import pp_json
 from ..utils.general import with_config, empty_list
@@ -18,6 +18,14 @@ PATH_DATASETS = os.environ['PATH_DATASETS']
 
 class DataSetBase(object):
     """ base class of general dataset
+        # Sample
+        ## methods:
+            sample()
+            __next__()
+        ##
+            samper from a dataset.
+
+
 
         # Initialization
             self._initialize()
@@ -89,7 +97,10 @@ class DataSetBase(object):
         self.finalize()
 
     def sample(self):
-        """ Genreate a new sample """
+        """ Genreate a new sample
+        Returns:
+            A dict of mini-batch tensors.
+        """
         out = {}
         for k in self.keys:
             out[k] = []
@@ -171,7 +182,7 @@ class DataSetImages(DataSetBase):
                  nnz_ratio=0.0,
                  padding=None,
                  period=None,
-                 data_format='channels_first',
+                 data_format='channels_last',
                  **kwargs):
         super(DataSetImages, self).__init__(**kwargs)
         self.is_gray = is_gray
