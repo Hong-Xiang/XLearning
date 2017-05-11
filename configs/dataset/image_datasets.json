@@ -35,7 +35,8 @@
         "file_type": "h5",
         "data_key": "sinograms",
         "data_mean": 26.0,
-        "data_std": 27.0
+        "data_std": 27.0,
+        "period": [363, 360]
     },
     "sino_obil": {
         "todo": true

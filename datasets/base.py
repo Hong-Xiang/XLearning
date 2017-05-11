@@ -269,7 +269,11 @@ class DataSetImages(DataSetBase):
     def crop(self, image_ip):
         """ crop *ONE* image into small patch """
         image = numpy.array(image_ip, dtype=numpy.float32)
-        target_shape = self.p.crop_shape
+        target_shape = list(self.p.crop_shape)        
+        # if self.p.is_down_sample:
+        #     target_shape[0] *= (self.p.down_sample_ratio[0] ** self.p.nb_down_sample)
+        #     target_shape[1] *= (self.p.down_sample_ratio[1] ** self.p.nb_down_sample)
+        
         offsets = list(self.p.crop_offset)
         is_crop_random = self.p.is_crop_random
         if is_crop_random:
@@ -284,9 +288,9 @@ class DataSetImages(DataSetBase):
             else:
                 offsets[1] = 0
         if offsets[0] + target_shape[0] > image.shape[0]:
-            raise ValueError('Too large crop shape or offset.')
+            raise ValueError('Too large crop shape or offset with image.shape[0]=%d, offset[0]+target_shape[0]=%d.'%(image.shape[0], offsets[0] + target_shape[0]))
         if offsets[1] + target_shape[1] > image.shape[1]:
-            raise ValueError('Too large crop shape or offset.')
+            raise ValueError('Too large crop shape or offset with image.shape[1]=%d, offset[1]+target_shape[1]=%d.'%(image.shape[1], offsets[1] + target_shape[1]))
 
         image = image[offsets[0]:offsets[0] + target_shape[0],
                       offsets[1]:offsets[1] + target_shape[1]]
