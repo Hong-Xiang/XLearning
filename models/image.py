@@ -1,6 +1,6 @@
-from tensorflow.contrib.keras.models import Model, Sequential
-from tensorflow.contrib.keras.layers import Dense, Activation, Dropout, Convolution2D, BatchNormalization, merge, ELU, LeakyReLU, UpSampling2D, Conv2D, Concatenate, add, Lambda, Cropping2D
-import tensorflow.contrib.keras.backend as K
+from tensorflow.contrib.keras.api.keras.models import Model, Sequential
+from tensorflow.contrib.keras.api.keras.layers import Dense, Activation, Dropout, Convolution2D, BatchNormalization, merge, ELU, LeakyReLU, UpSampling2D, Conv2D, Concatenate, add, Lambda, Cropping2D
+import tensorflow.contrib.keras.api.keras.backend as K
 import tensorflow as tf
 
 from ..models.merge import sub
