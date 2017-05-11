@@ -17,6 +17,7 @@ class Net:
                  model_dir=None,
                  lr=None,
                  is_load=False,
+                 batch_size=None,
                  summary_freq=10,
                  summary_type='time',
                  save_freq=100,
@@ -37,6 +38,7 @@ class Net:
         self.params['ckpt_name'] = ckpt_name
         self.params['save_freq'] = save_freq
         self.params['keep_prob'] = keep_prob
+        self.params['batch_size'] = batch_size
         # Supervisor and managed session
         self.sv = None
         self.sess = None
@@ -169,7 +171,7 @@ class Net:
         total_step = sum(steps)
         pt = ProgressTimer(total_step)
         cstep = 0
-        for sp in steps:
+        for idx, sp in enumerate(steps):
             for i in range(sp):
                 ss = self.dataset['train'].sample()
                 res = self.partial_fit(ss)
@@ -182,7 +184,8 @@ class Net:
                 if i % self.params['save_freq'] == 0 and i > 0:
                     self.save()
             self.save()
-            self.reset_lr(decay=decay)
+            if idx < len(steps) - 1:
+                self.reset_lr(decay=decay)
 
     def predict(self, data, **kwargs):
         """ predict a mini-batch """

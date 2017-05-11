@@ -36,15 +36,15 @@ def residual_block(input_, channels, kxs=None, kys=None, id=0, cat=False, scope=
 #     return x
 
 def upsampling2d(inputs, size, method='nearest', filters=None, name='upsampling'):
-    input_shape = inputs.shape().as_list()
+    input_shape = inputs.shape.as_list()
     h0, w0 = input_shape[1:3]
     h1 = int(h0 * size[0])
     w1 = int(w0 * size[1])
     with tf.name_scope(name):
         if method == 'nearest':
-            h = tf.image.resize_nearest_neighbor(inputs, size=size)
+            h = tf.image.resize_nearest_neighbor(inputs, size=[h1, w1])
         elif method == 'bilinear':
-            h = tf.image.resize_bilinear(inputs, size=size)
+            h = tf.image.resize_bilinear(inputs, size=[h1, w1])
         elif method == 'deconv':
             h = tf.layers.conv2d_transpose(
                 inputs, filters, 3, strides=size, padding='same')

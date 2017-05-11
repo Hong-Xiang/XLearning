@@ -14,16 +14,18 @@ def train():
 
 @train.command()
 def auto():
-    with open('train.json', 'r') as fin:
+    with open('task.train.json', 'r') as fin:
         train_task = json.load(fin)
         pp_json(train_task, "TASK PARAMS")
         net_name = train_task['net_name']
         dataset_name = train_task['dataset_name']
         steps = train_task['steps']
         decay = train_task['decay']
-        load_step = train_task.get['load_step']
+        load_step = train_task.get('load_step')
         filenames = train_task.get('filenames', [])
-        is_test = train_task.get('is_test', True)
+    train_core(net_name, dataset_name, filenames, steps, decay, load_step)
+
+def train_core(net_name, dataset_name, filenames, steps, decay, load_step):        
         data_cls = getattr(datasets, dataset_name)
         net_cls = getattr(nets, net_name)
         net = net_cls(filenames=filenames, load_step=load_step)
