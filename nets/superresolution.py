@@ -3,7 +3,7 @@ from ..utils.general import with_config
 from .base import Net
 from ..models.image import conv2d, upsampling2d
 from tensorflow.contrib import slim
-
+import numpy as np
 
 class SRNetBase(Net):
     @with_config
@@ -86,7 +86,8 @@ class SRNet1(SRNetBase):
                  **kwargs):
         SRNetBase.__init__(self, **kwargs)
         self.params['name'] = "SRNet1"
-    
+
+
     def _set_model(self):        
         low_res = tf.placeholder(
             dtype=tf.float32, shape=self.params['low_shape'], name='low_resolution')
@@ -96,8 +97,11 @@ class SRNet1(SRNetBase):
             dtype=tf.float32, shape=self.params['high_shape'], name='high_resolution')
         self.node['high_resolution'] = high_res
         self.label['label'] = high_res
-        h = self.node['low_resolution']        
+        h = self.node['low_resolution']
+        self.debug_tensor['low_reso'] = h
+        self.debug_tensor['high_reso'] = high_res
         itp = upsampling2d(h, size=self.params['down_sample_ratio'])
+        self.debug_tensor['ipt'] = itp
         tf.summary.image('interp', h)
         res_ref = high_res - itp
         tf.summary.image('res_ref', res_ref)
@@ -108,7 +112,9 @@ class SRNet1(SRNetBase):
                                 name='conv_%d'%i, activation=tf.nn.elu)        
         h = tf.layers.conv2d(h, 1, 5, padding='same', name='conv_end')
         tf.summary.image('res_inf', h)
+        self.debug_tensor['inf'] = h
         sr_res = h + itp
+        self.debug_tensor['inf_full'] = sr_res
         tf.summary.image('sr_res', sr_res)
         self.node['super_resolution'] = sr_res
         with tf.name_scope('loss'):

@@ -71,6 +71,8 @@ class Net:
         self.dataset = None
         self.saver = None
         self.summary_writer = None
+        self.debug_tensor = dict()
+    
 
     def reset_lr(self, lr=None, decay=10.0):
         for k in self.lr.keys():
@@ -164,6 +166,25 @@ class Net:
         run_op.update(self.loss)
         results = self.sess.run(run_op, feed_dict=feed_dict)
         return results
+       
+    def dump(self, data):
+        feed_dict = dict()
+        for k in self.input.keys():
+            feed_dict.update({self.input[k]: data[k]})
+        for k in self.label.keys():
+            feed_dict.update({self.label[k]: data[k]})
+        train_kp = self.params.get('keep_prob', self.params['keep_prob'])
+        feed_dict.update({self.kp: train_kp})
+        feed_dict.update(self.feed_dict)
+        run_op = dict()
+        run_op.update(self.run_op)
+        # run_op.update(self.train_op)
+        run_op.update(self.loss)
+        run_op.update(self.debug_tensor)
+        results = self.sess.run(run_op, feed_dict=feed_dict)
+        result = self.sess.run(self.key_tensor, feed_dict=feed_dict)
+        step = self.sess.run(self.gs)
+        np.save('d%d.npy'%step, result)
 
     def train(self, steps=None, phase=1, decay=2.0):
         if not isinstance(steps, (list, tuple)):
@@ -176,6 +197,8 @@ class Net:
                 ss = self.dataset['train'].sample()
                 res = self.partial_fit(ss)
                 msg = "LOSS=%6e, STEP=%5d" % (res['loss'], res['global_step'])
+                if res > 1e-2:
+                    self.dump(ss)
                 cstep += 1
                 pt.event(cstep, msg)
                 if self.params['summary_type'] == 'step':
