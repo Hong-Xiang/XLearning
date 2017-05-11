@@ -1,7 +1,5 @@
 import tensorflow as tf
 
-from ..models.merge import sub
-
 # import tensorflow.contrib.framework.python.framework
 
 
