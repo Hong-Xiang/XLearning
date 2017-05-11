@@ -101,10 +101,12 @@ class SRNet1(SRNetBase):
         tf.summary.image('interp', h)
         res_ref = high_res - itp
         tf.summary.image('res_ref', res_ref)
+        h = tf.layers.conv2d(itp, 64, 3, padding='same',
+                                name='conv_stem', activation=tf.nn.elu)        
         for i in range(20):
-            h = tf.layers.conv2d(itp, 64, 3, padding='same',
+            h = tf.layers.conv2d(h, 64, 3, padding='same',
                                 name='conv_%d'%i, activation=tf.nn.elu)        
-        h = tf.layers.conv2d(h, 1, 5, padding='same', name='conv2')
+        h = tf.layers.conv2d(h, 1, 5, padding='same', name='conv_end')
         tf.summary.image('res_inf', h)
         sr_res = h + itp
         tf.summary.image('sr_res', sr_res)
