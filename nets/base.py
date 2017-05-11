@@ -182,7 +182,7 @@ class Net:
         run_op.update(self.loss)
         run_op.update(self.debug_tensor)
         results = self.sess.run(run_op, feed_dict=feed_dict)
-        result = self.sess.run(self.key_tensor, feed_dict=feed_dict)
+        result = self.sess.run(self.debug_tensor, feed_dict=feed_dict)
         step = self.sess.run(self.gs)
         np.save('d%d.npy'%step, result)
 
