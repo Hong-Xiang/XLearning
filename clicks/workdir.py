@@ -35,7 +35,7 @@ def cfgs(target, kind=None, name=None, **kwargs):
         'origin': str(cfg_file)
     }
     pp_json(cfgs_dict, 'COPY CONFIG OPTIONS:')
-    shutil.copy(cfg_file, name)
+    shutil.copy(cfg_file, str(kind)+'.'+name)
 
 
 @workdir.command()
