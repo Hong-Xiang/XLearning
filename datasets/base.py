@@ -330,7 +330,7 @@ class DataSetImages(DataSetBase):
             self.fin = str(p.absolute())
             self.dataset = numpy.load(self.fin)
         elif self.p.file_type == 'h5':
-            self.fin = h5py.File(p, 'r')
+            self.fin = h5py.File(str(p.absolute()), 'r')
             if self.p.is_full_load:
                 self.dataset = numpy.array(self.fin[self.p.data_key[self.p.mode]])
             else:
