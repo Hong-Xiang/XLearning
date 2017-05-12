@@ -1,0 +1,9 @@
+{
+    "input_shape": [64, 64],
+    "base_filter": 8,
+    "lr": {"default": 1e-3},
+    "log_dir": "log",
+    "model_dir": "save",
+    "summary_type": "step",
+    "summary_freq": 10
+}

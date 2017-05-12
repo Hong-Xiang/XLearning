@@ -22,6 +22,8 @@ def AutoEncoderImage(Net):
             x_in = tf.placeholder(
                 dtype=tf.float32, shape=self.input_shape['input'], name='data')
             self.add_node(x_in, 'data')
+            self.input['data'] = x_in
+            self.label['label'] = x_in
         h = data
         conv_cfgs = {
             'activation': tf.nn.elu,

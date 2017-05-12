@@ -113,12 +113,14 @@ class SRNet1(SRNetBase):
         h = tf.layers.conv2d(h, 1, 5, padding='same', name='conv_end')
         tf.summary.image('res_inf', h)
         self.debug_tensor['inf'] = h
-        sr_res = h + itp
-        self.debug_tensor['inf_full'] = sr_res
-        tf.summary.image('sr_res', sr_res)
-        self.node['super_resolution'] = sr_res
+        sr_inf = h + itp
+        self.debug_tensor['inf_full'] = sr_inf
+        tf.summary.image('sr_inf', sr_inf)
+        self.node['super_resolution'] = sr_inf
+        sr_res = high_res - sr_inf
+        tf.summary.image('res_inf', sr_res)
         with tf.name_scope('loss'):
-            self.loss['loss'] = tf.losses.mean_squared_error(high_res, sr_res)/self.params['batch_size']
+            self.loss['loss'] = tf.losses.mean_squared_error(high_res, sr_inf)/self.params['batch_size']
         tf.summary.scalar('loss', self.loss['loss'])
         optim = tf.train.RMSPropOptimizer(self.lr['default'])
         self.train_op['main'] = optim.minimize(
