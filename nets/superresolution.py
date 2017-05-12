@@ -105,11 +105,14 @@ class SRNet1(SRNetBase):
         tf.summary.image('interp', h)
         res_ref = high_res - itp
         tf.summary.image('res_ref', res_ref)
+        itp_err = tf.abs(res_ref)
+        tf.summary.image('itp_err', itp_err)
         h = tf.layers.conv2d(itp, 64, 3, padding='same',
                                 name='conv_stem', activation=tf.nn.elu)        
         for i in range(20):
             h = tf.layers.conv2d(h, 64, 3, padding='same',
-                                name='conv_%d'%i, activation=tf.nn.elu)        
+                                name='conv_%d'%i, activation=tf.nn.elu)
+            tf.summary.histogram('activ_%d'%i, h)     
         h = tf.layers.conv2d(h, 1, 5, padding='same', name='conv_end')
         tf.summary.image('res_inf', h)
         self.debug_tensor['inf'] = h
@@ -117,8 +120,8 @@ class SRNet1(SRNetBase):
         self.debug_tensor['inf_full'] = sr_inf
         tf.summary.image('sr_inf', sr_inf)
         self.node['super_resolution'] = sr_inf
-        sr_res = high_res - sr_inf
-        tf.summary.image('res_inf', sr_res)
+        sr_err = tf.abs(high_res - sr_inf)
+        tf.summary.image('err_inf', sr_err)
         with tf.name_scope('loss'):
             self.loss['loss'] = tf.losses.mean_squared_error(high_res, sr_inf)/self.params['batch_size']
         tf.summary.scalar('loss', self.loss['loss'])
