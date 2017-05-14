@@ -2,6 +2,8 @@
     "low_shape": [64, 64],
     "high_shape": [64, 512],
     "lr": 1e-3,
+    "filters": 128,
+    "depths": 10,
     "log_dir": "log",
     "model_dir": "save",
     "summary_type": "step",

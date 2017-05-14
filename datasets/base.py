@@ -299,7 +299,7 @@ class DataSetImages(DataSetBase):
     def downsample(self, image):
         """ down sample *ONE* image/patch """
         image = numpy.array(image, dtype=numpy.float32)
-        image_d = down_sample_nd(image, self.p.down_sample_ratio)
+        image_d = down_sample_nd(image, self.p.down_sample_ratio, method=self.p.down_sample_method)
         return image_d
 
     def visualize(self, sample, is_no_change=False):

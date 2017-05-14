@@ -15,7 +15,7 @@ class Net:
     def __init__(self,
                  log_dir=None,
                  model_dir=None,
-                 lr=None,
+                 lr=1e-3,
                  is_load=False,
                  batch_size=None,
                  summary_freq=10,
@@ -26,6 +26,19 @@ class Net:
                  ckpt_name='model.ckpt',
                  keep_prob=0.5,
                  **kwargs):
+        """
+            data - net couple:
+                data {name: np.ndarray}
+                node {name: tf.tensor}
+            task - run_op, feed_dict coutple:
+                name: task name
+                run_op {name: tf.tensors/tf.ops}
+                feed_dict {name: node_names}
+            lr - optimizer - train_step couple:
+                loss {name: tf.tensor}
+                optimizer {name: optimizer}
+                train_step {name: tf.op}
+        """
         # JSON serilizeable hyper-parameter dict.
         self.params = dict()
         self.params['log_dir'] = log_dir
@@ -44,12 +57,12 @@ class Net:
         self.sess = None
 
         # Ops
-        self.input = dict()
-        self.output = dict()
-        self.label = dict()
+        # self.input = dict()
+        # self.output = dict()
+        # self.label = dict()
         self.node = dict()
-        self.loss = dict()
         self.train_op = dict()
+        self.loss = dict()
         self.metric = dict()
         self.summary_op = dict()
         # Variables:
@@ -58,38 +71,53 @@ class Net:
             0, dtype=tf.int32, trainable=False, name='global_step')
         self.__gs_value = tf.placeholder(dtype=tf.int32, name='gs_value')
         self.__gs_setter = self.gs.assign(self.__gs_value)
-        self.feed_dict = dict()
-        self.run_op = {'global_step': self.gs}
+
+        # keep prob
         self.kp = tf.placeholder(dtype=tf.float32, name='keep_prob')
+        self.add_node(self.kp, 'keep_prob')
+        # training switch
         self.training = tf.placeholder(dtype=tf.bool, name='training')
+        self.add_node(self.training, 'training')
+
+        # learning rates
         self.params['lr'] = lr
-        self.lr = dict()
-        for k in self.params['lr']:
-            self.lr[k] = tf.placeholder(dtype=tf.float32, name=k)
-            self.feed_dict.update({self.lr[k]: self.params['lr'][k]})
-            tf.summary.scalar('lr/' + k, self.lr[k])
-        self.dataset = None
+        self.lr = tf.placeholder(dtype=tf.float32, name='lr')
+        self.add_node(self.lr, 'lr')
+        self.optimizer = dict()
+
+        self.dataset = dict()
         self.saver = None
         self.summary_writer = None
         self.debug_tensor = dict()
-    
+        self.feed_dict = dict()
+        self.feed_dict['default'] = ['lr']
+        self.run_op = {
+            'default': {'global_step': self.gs}
+        }
 
+    def add_node(self, tensor, name=None):
+        if name is None:
+            name = tensor.name
+        self.node[name] = tensor
+    
     def reset_lr(self, lr=None, decay=10.0):
-        for k in self.lr.keys():
-            if lr is None:
-                self.params['lr'][k] /= decay
-                self.feed_dict.update({self.lr[k]: self.params['lr'][k]})
-            else:
-                self.feed_dict.update({self.lr[k]: lr[k]})
+        if lr is None:
+            self.params['lr'] /= decay
+        else:
+            self.params['lr'] = lr
         pp_json(self.params, self.params['name'] + " PARAMS:")
 
-    def set_dataset(self, dataset):
-        self.dataset = dataset
+    def set_dataset(self, name, dataset):
+        self.dataset[name] = dataset
 
     def init(self):
+        
         self._set_model()
+        
         self._set_saver()
+        
         self._set_sesssv()
+        
         self._set_summary()
         pp_json(self.params, self.params['name'] + " PARAMS:")
 
@@ -150,20 +178,21 @@ class Net:
         self.sv = tf.train.Supervisor(**sv_para)
         self.sess = self.sv.prepare_or_wait_for_session()
 
-    def partial_fit(self, data, **kwargs):
+    def partial_fit(self, data, task='train', **kwargs):
         """ features are dict of mini batch numpy.ndarrays """
+        feed_dict_keys = list(self.feed_dict['default'])
+        feed_dict_keys += self.feed_dict['train']
+        hypers = dict()
+        hypers['lr'] = self.params.get('lr')
+        hypers['keep_prob'] = self.params.get('keep_prob', 0.5)
+        hypers['training'] = True
+        inputs = dict(data)
+        inputs.update(hypers)
         feed_dict = dict()
-        for k in self.input.keys():
-            feed_dict.update({self.input[k]: data[k]})
-        for k in self.label.keys():
-            feed_dict.update({self.label[k]: data[k]})
-        train_kp = self.params.get('keep_prob', self.params['keep_prob'])
-        feed_dict.update({self.kp: train_kp})
-        feed_dict.update(self.feed_dict)
-        run_op = dict()
-        run_op.update(self.run_op)
-        run_op.update(self.train_op)
-        run_op.update(self.loss)
+        for k in feed_dict_keys:
+            feed_dict[self.node[k]] = inputs[k]
+        run_op = dict(self.run_op['default'])
+        run_op.update(self.run_op['train'])
         results = self.sess.run(run_op, feed_dict=feed_dict)
         return results
        
@@ -212,14 +241,19 @@ class Net:
 
     def predict(self, data, **kwargs):
         """ predict a mini-batch """
+        feed_dict_keys = list(self.feed_dict['default'])
+        feed_dict_keys += self.feed_dict['predict']
+        hypers = dict()
+        hypers['lr'] = self.params.get('lr')
+        hypers['keep_prob'] = self.params.get('keep_prob', 1.0)
+        hypers['training'] = False
+        inputs = dict(data)
+        inputs.update(hypers)
         feed_dict = dict()
-        for k in self.input.keys():
-            feed_dict.update({self.input[k]: data[k]})
-        feed_dict.update(self.feed_dict)
-        feed_dict.update({self.kp: 1.0})
-        run_op = dict()
-        run_op.update(self.run_op)
-        run_op.update(self.output)
+        for k in feed_dict_keys:
+            feed_dict[self.node[k]] = inputs[k]
+        run_op = dict(self.run_op['default'])
+        run_op.update(self.run_op['predict'])
         results = self.sess.run(run_op, feed_dict=feed_dict)
         return results
 
@@ -270,19 +304,22 @@ class Net:
         return results
 
     def summary(self, data, mode='train', **kwargs):
+        feed_dict_keys = list(self.feed_dict['default'])
+        feed_dict_keys += self.feed_dict['summary']
+        hypers = dict()
+        hypers['lr'] = self.params.get('lr')
+        hypers['keep_prob'] = self.params.get('keep_prob', 1.0)
+        hypers['training'] = False
+        inputs = dict(data)
+        inputs.update(hypers)
         feed_dict = dict()
-        for k in self.input.keys():
-            feed_dict.update({self.input[k]: data[k]})
-        for k in self.label.keys():
-            feed_dict.update({self.label[k]: data[k]})
-        feed_dict.update(self.feed_dict)
-        feed_dict.update({self.kp: 1.0})
-        run_op = dict()
-        run_op.update(self.summary_op)
-        run_op.update({'global_step': self.gs})
+        for k in feed_dict_keys:
+            feed_dict[self.node[k]] = inputs[k]
+        run_op = dict(self.run_op['default'])
+        run_op.update(self.run_op['summary'])
         results = self.sess.run(run_op, feed_dict=feed_dict)
-        step = results.pop('global_step')
-        for k in results.keys():
+        step = results['global_step']
+        for k in self.run_op['summary'].keys():
             self.summary_writer[mode].add_summary(results[k], global_step=step)
         self.summary_writer[mode].flush()
         return results

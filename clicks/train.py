@@ -32,6 +32,7 @@ def train_core(net_name, dataset_name, filenames, steps, decay, load_step):
         net.init()
         with data_cls(filenames=filenames, mode='train') as dataset_train:
             with data_cls(filenames=filenames, mode='test') as dataset_test:
-                net.set_dataset({'train': dataset_train, 'test': dataset_test})
+                net.set_dataset('train', dataset_train)
+                net.set_dataset('test', dataset_test)
                 net.train(steps=steps, decay=decay)
                 net.save()
