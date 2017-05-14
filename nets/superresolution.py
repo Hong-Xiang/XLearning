@@ -184,7 +184,10 @@ class SRNet1(SRNetBase):
             err_inf = tf.abs(res_inf)
             l2_err_itp = tf.reduce_sum(tf.square(err_itp), axis=[1, 2, 3])
             l2_err_inf = tf.reduce_sum(tf.square(err_inf), axis=[1, 2, 3])
-            ratio = tf.reduce_mean(l2_err_inf / l2_err_itp)
+
+            l2_inf = tf.reduce_mean(l2_err_inf)
+            l2_itp = tf.reduce_mean(l2_err_itp)
+            ratio = tf.reduce_mean(l2_err_inf/(l2_err_itp+1e-3))
             tf.summary.image('low_res', low_res)
             tf.summary.image('high_res', high_res)
             tf.summary.image('interp', interp)
@@ -195,6 +198,8 @@ class SRNet1(SRNetBase):
             tf.summary.image('err_inf', err_inf)
             tf.summary.scalar('loss', self.losses['train'])     
             tf.summary.scalar('ratio', ratio)
+            tf.summary.scalar('l2_inf', l2_inf)
+            tf.summary.scalar('l2_itp', l2_itp)
 
         train_step = self.train_step(grads, self.optimizers['train'])
         self.train_steps['train'] = train_step

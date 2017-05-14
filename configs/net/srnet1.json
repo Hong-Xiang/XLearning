@@ -7,5 +7,6 @@
     "log_dir": "log",
     "model_dir": "save",
     "summary_type": "step",
-    "summary_freq": 10
+    "summary_freq": 10,
+    "nb_gpus": 2
 }
