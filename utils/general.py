@@ -18,6 +18,13 @@ import click
 from inspect import getfullargspec, signature
 from functools import wraps
 
+def analysis_device(device):
+    p = re.compile('/([a-z]*):([0-9]*)')
+    m = p.match(device)
+    device_type = m[1]
+    device_id = int(m[2])
+    return device_type, device_id
+
 
 def pp_json(title, cfg_dict, length=30):
     click.echo(title)

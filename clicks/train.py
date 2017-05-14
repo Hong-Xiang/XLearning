@@ -1,5 +1,6 @@
 import click
 import json
+import os
 from xlearn.utils.general import enter_debug
 from xlearn.utils.prints import pp_json
 import xlearn.nets as nets

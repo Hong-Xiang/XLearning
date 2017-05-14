@@ -4,7 +4,7 @@ from .base import Net
 from ..models.image import conv2d, upsampling2d
 from tensorflow.contrib import slim
 import numpy as np
-
+from ..utils.general import analysis_device
 
 class SRNetBase(Net):
     @with_config
@@ -42,6 +42,7 @@ class SRNetBase(Net):
         else:
             self.params['high_shape'] = [
                 self.params['batch_size']] + list(high_shape) + [1]
+        self.params.update_short_cut()
 
 
 class SRNet0(SRNetBase):
@@ -51,6 +52,7 @@ class SRNet0(SRNetBase):
                  **kwargs):
         SRNetBase.__init__(self, **kwargs)
         self.params['name'] = "SRNet0"
+        self.params.update_short_cut()
 
     def _set_model(self):
         low_res = tf.placeholder(
@@ -60,7 +62,8 @@ class SRNet0(SRNetBase):
             dtype=tf.float32, shape=self.params['high_shape'], name='high_resolution')
         self.add_node(high_res, 'label')
         h = self.node['low_resolution']
-        itp = upsampling2d(h, size=self.params['down_sample_ratio'], method='bilinear')
+        itp = upsampling2d(
+            h, size=self.params['down_sample_ratio'], method='bilinear')
         tf.summary.image('interp', h)
         res_ref = high_res - itp
         tf.summary.image('res_ref', res_ref)
@@ -93,57 +96,118 @@ class SRNet1(SRNetBase):
         self.params['name'] = "SRNet1"
         self.params['filters'] = filters
         self.params['depths'] = depths
+    
+    def super_resolution(self, low_res, high_res, with_summary=False, reuse=None, name=None):
+        with tf.name_scope(name):
+            h = low_res            
+            interp = upsampling2d(h, size=self.params['down_sample_ratio'])                        
+            res_ref = high_res - interp       
+            err_itp = tf.abs(res_ref)
+            
+            h = tf.layers.conv2d(interp, 64, 5, padding='same',
+                                name='conv_stem', activation=tf.nn.elu, reuse=reuse)
+            for i in range(self.params['depths']):
+                h = tf.layers.conv2d(
+                    h, self.params['filters'], 3, padding='same', name='conv_%d' % i, activation=tf.nn.elu, reuse=reuse)
+                if with_summary:
+                    tf.summary.histogram('activ_%d' % i, h)
+            res_inf = tf.layers.conv2d(h, 1, 5, padding='same', name='conv_end', reuse=reuse)            
+            sr_inf = interp + res_inf
+            err_inf = tf.abs(high_res - sr_inf)
+            
+            
+            loss = tf.losses.mean_squared_error(high_res, sr_inf) / self.p.batch_size * self.p.nb_gpus
+            grad = self.optimizers['train'].compute_gradients(loss)
+            
+            if with_summary:
+                tf.summary.image('low_res', low_res)
+                tf.summary.image('high_res', high_res)
+                tf.summary.image('interp', interp)
+                tf.summary.image('sr_inf', sr_inf)
+                tf.summary.image('res_ref', res_ref)
+                tf.summary.image('res_inf', res_inf)
+                tf.summary.image('err_itp', err_itp)
+                tf.summary.image('err_inf', err_inf)
+                tf.summary.scalar('loss', loss)            
+            return sr_inf, loss, grad
+                
 
     def _set_model(self):
-        low_res = tf.placeholder(
-            dtype=tf.float32, shape=self.params['low_shape'], name='low_resolution')
-        self.add_node(low_res, 'data')
-        tf.summary.image('low_res', low_res)
+        bs_gpu = self.p.batch_size // self.p.nb_gpus
+        sliced_low_res = []
+        sliced_high_res = []
+        with tf.device('/cpu:0'):
+            with tf.name_scope('low_resolution'):
+                low_res = tf.placeholder(
+                    dtype=tf.float32, shape=self.params['low_shape'], name='low_resolution')
+                self.add_node(low_res, 'data')
+                gpu_shape = low_res.shape.as_list()
+                gpu_shape[0] = bs_gpu
+                for i in range(self.p.nb_gpus):
+                    with tf.name_scope('device_%d'%i):
+                        sliced_low_res.append(tf.slice(low_res, [i*bs_gpu, 0, 0, 0], gpu_shape))                
+            with tf.name_scope('high_resolution'):
+                high_res = tf.placeholder(                
+                    dtype=tf.float32, shape=self.params['high_shape'], name='high_resolution')
+                self.add_node(high_res, 'label')
+                gpu_shape = high_res.shape.as_list()
+                gpu_shape[0] = bs_gpu
+                for i in range(self.p.nb_gpus):
+                    with tf.name_scope('device_%d'%i):
+                        sliced_high_res.append(tf.slice(high_res, [i*bs_gpu, 0, 0, 0], gpu_shape))                
+            self.optimizers['train'] = tf.train.RMSPropOptimizer(self.lr['train'])
+            self.super_resolution(sliced_low_res[0], sliced_high_res[0], with_summary=False, reuse=None, name='cpu_tower')
+        
+        sr_infs = []
+        losses = []
+        grads = []
+        for i in range(self.p.nb_gpus):
+            device = '/gpu:%d'%i
+            with tf.device(device):
+                sr_inf, loss, grad = self.super_resolution(sliced_low_res[i], sliced_high_res[i], with_summary=False, reuse=True, name='gpu_%d'%i)
+            sr_infs.append(sr_inf)
+            losses.append(loss)
+            grads.append(grad)
 
-        high_res = tf.placeholder(
-            dtype=tf.float32, shape=self.params['high_shape'], name='high_resolution')
-        self.add_node(high_res, 'label')
-        tf.summary.image('high_res', high_res)
-
-        h = low_res
-        self.debug_tensor['low_reso'] = h
-        self.debug_tensor['high_reso'] = high_res
-        itp = upsampling2d(h, size=self.params['down_sample_ratio'])
-        self.debug_tensor['ipt'] = itp
-        tf.summary.image('interp', h)
-        res_ref = high_res - itp
-        tf.summary.image('res_ref', res_ref)
-        itp_err = tf.abs(res_ref)
-        tf.summary.image('itp_err', itp_err)
-        h = tf.layers.conv2d(itp, 64, 5, padding='same',
-                             name='conv_stem', activation=tf.nn.elu)
-        for i in range(self.params['depths']):
-            h = tf.layers.conv2d(h, self.params['filters'], 3, padding='same',
-                                 name='conv_%d' % i, activation=tf.nn.elu)
-            tf.summary.histogram('activ_%d' % i, h)
-        h = tf.layers.conv2d(h, 1, 5, padding='same', name='conv_end')
-        tf.summary.image('res_inf', h)
-        self.debug_tensor['inf'] = h
-
-        sr_inf = h + itp
-        self.debug_tensor['inf_full'] = sr_inf
-        tf.summary.image('sr_inf', sr_inf)
-        self.node['super_resolution'] = sr_inf
-        sr_err = tf.abs(high_res - sr_inf)
-        tf.summary.image('err_inf', sr_err)
         with tf.name_scope('loss'):
-            self.loss['loss'] = tf.losses.mean_squared_error(
-                high_res, sr_inf) / self.params['batch_size']
-        tf.summary.scalar('loss', self.loss['loss'])
-        optim = tf.train.RMSPropOptimizer(self.lr)
-        self.train_op['main'] = optim.minimize(
-            self.loss['loss'], global_step=self.gs)
-        self.summary_op['all'] = tf.summary.merge_all()
+            self.losses['train'] = tf.add_n(losses)
+        
+        with tf.name_scope('infer'):
+            sr_inf = tf.concat(sr_infs, axis=0)
+            self.add_node(sr_inf, 'inference')
+        
+        with tf.name_scope('cpu_summary'):
+            interp = upsampling2d(low_res, size=self.params['down_sample_ratio'])                        
+            res_ref = high_res - interp
+            res_inf = high_res - sr_inf      
+            err_itp = tf.abs(res_ref)            
+            err_inf = tf.abs(res_inf)
+            l2_err_itp = tf.reduce_sum(tf.square(err_itp), axis=[1, 2, 3])
+            l2_err_inf = tf.reduce_sum(tf.square(err_inf), axis=[1, 2, 3])
+            ratio = tf.reduce_mean(l2_err_inf / l2_err_itp)
+            tf.summary.image('low_res', low_res)
+            tf.summary.image('high_res', high_res)
+            tf.summary.image('interp', interp)
+            tf.summary.image('sr_inf', sr_inf)
+            tf.summary.image('res_ref', res_ref)
+            tf.summary.image('res_inf', res_inf)
+            tf.summary.image('err_itp', err_itp)
+            tf.summary.image('err_inf', err_inf)
+            tf.summary.scalar('loss', self.losses['train'])     
+            tf.summary.scalar('ratio', ratio)
+
+        train_step = self.train_step(grads, self.optimizers['train'])
+        self.train_steps['train'] = train_step
+        self.summary_ops['all'] = tf.summary.merge_all()
 
         self.feed_dict['train'] = ['data', 'label']
         self.feed_dict['predict'] = ['data']
         self.feed_dict['summary'] = ['data', 'label']
 
-        self.run_op['train'] = {'train_step': self.train_op['main'], 'loss': self.loss['loss'], 'global_step': self.gs}
-        self.run_op['predict'] = {'sr_inf': sr_inf}
-        self.run_op['summary'] = {'summary_all': self.summary_op['all']}
+        self.run_op['train'] = {'train_step': self.train_steps['train'],
+                                'loss': self.losses['train'], 'global_step': self.gs}
+        self.run_op['predict'] = {'infernce': sr_inf}
+        self.run_op['summary'] = {'summary_all': self.summary_ops['all']}
+    
+    def _set_train(self):
+        pass

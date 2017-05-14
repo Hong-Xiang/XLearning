@@ -8,6 +8,7 @@ import numpy as np
 
 from ..utils.general import with_config, ProgressTimer
 from ..utils.prints import pp_json, pprint
+from ..utils.options import Params
 
 
 class Net:
@@ -25,11 +26,15 @@ class Net:
                  load_step=None,
                  ckpt_name='model.ckpt',
                  keep_prob=0.5,
+                 grad_clip=1.0,
+                 nb_gpus=1,
+                 is_show_device_placement=False,
                  **kwargs):
         """
             data - net couple:
                 data {name: np.ndarray}
                 node {name: tf.tensor}
+                node_name_proxy {name_in_node: name_in_data}
             task - run_op, feed_dict coutple:
                 name: task name
                 run_op {name: tf.tensors/tf.ops}
@@ -40,7 +45,7 @@ class Net:
                 train_step {name: tf.op}
         """
         # JSON serilizeable hyper-parameter dict.
-        self.params = dict()
+        self.params = Params()
         self.params['log_dir'] = log_dir
         self.params['model_dir'] = model_dir
         self.params['name'] = 'Net'
@@ -52,19 +57,15 @@ class Net:
         self.params['save_freq'] = save_freq
         self.params['keep_prob'] = keep_prob
         self.params['batch_size'] = batch_size
-        # Supervisor and managed session
-        self.sv = None
-        self.sess = None
+        self.params['grad_clip'] = grad_clip
+        self.params['nb_gpus'] = nb_gpus
+        self.params['is_show_device_placement'] = is_show_device_placement
+        self.params.update_short_cut()
+        self.p = self.params.short_cut
+        # model external nodes
+        self.nodes = dict()
+        self.nodes_name_proxy = dict()
 
-        # Ops
-        # self.input = dict()
-        # self.output = dict()
-        # self.label = dict()
-        self.node = dict()
-        self.train_op = dict()
-        self.loss = dict()
-        self.metric = dict()
-        self.summary_op = dict()
         # Variables:
         #global step
         self.gs = tf.Variable(
@@ -80,46 +81,240 @@ class Net:
         self.add_node(self.training, 'training')
 
         # learning rates
+        if not isinstance(lr, dict):
+            lr = {'train': lr}
         self.params['lr'] = lr
-        self.lr = tf.placeholder(dtype=tf.float32, name='lr')
-        self.add_node(self.lr, 'lr')
-        self.optimizer = dict()
+        self.lr = dict()
+        with tf.name_scope('learning_rates'):
+            for k in self.params['lr']:
+                name = 'lr/' + k
+                self.lr[k] = tf.placeholder(dtype=tf.float32, name=name)
+                self.add_node(self.lr[k], name)
 
-        self.dataset = dict()
-        self.saver = None
-        self.summary_writer = None
-        self.debug_tensor = dict()
+
+        # Key by sub-graph:
+        self.grads = dict()
+        self.losses = dict()
+        self.metrices = dict()
+
+        # Key by task
+        self.optimizers = dict()
+        self.train_steps = dict()
+        self.summary_ops = dict()
+
         self.feed_dict = dict()
-        self.feed_dict['default'] = ['lr']
+        self.feed_dict['default'] = ['lr/train']
         self.run_op = {
             'default': {'global_step': self.gs}
         }
 
+        # Debug tensors
+        self.debug_tensor = dict()
+
+        # Key with 'train' and 'test'
+        self.dataset = dict()
+
+        # Session and managers
+        self.sess = None
+        self.saver = None
+        self.summary_writer = None
+        self.sv = None
+
+
+# helper methods for constructing net:
+    def init(self):
+        self._set_model()
+        self._set_train()
+        self._set_saver()
+        self._set_sesssv()
+        self._set_summary()
+        pp_json(self.params, self.params['name'] + " PARAMS:")
+
     def add_node(self, tensor, name=None):
         if name is None:
             name = tensor.name
-        self.node[name] = tensor
-    
-    def reset_lr(self, lr=None, decay=10.0):
-        if lr is None:
-            self.params['lr'] /= decay
+        self.nodes[name] = tensor
+
+    def _set_model(self):
+        """
+        Need to fill:
+            self.losses
+            self.grads
+        """
+        pass
+
+    def train_step(self, tower_grads, opt, summary_verbose=0, name='train_step'):
+        with tf.name_scope(name), tf.device('/cpu:0'):
+            average_grads = []
+            for grad_and_vars in zip(*tower_grads):
+                # Note that each grad_and_vars looks like the following:
+                #   ((grad0_gpu0, var0_gpu0), ... , (grad0_gpuN, var0_gpuN))
+                grads = []
+                for g, _ in grad_and_vars:
+                    # Add 0 dimension to the gradients to represent the tower.
+                    expanded_g = tf.expand_dims(g, 0)
+
+                    # Append on a 'tower' dimension which we will average over
+                    # below.
+                    grads.append(expanded_g)
+
+                # Average over the 'tower' dimension.
+                grad = tf.concat(axis=0, values=grads)
+                grad = tf.reduce_mean(grad, 0)
+                clipv = self.params['grad_clip']
+                if clipv is not None:
+                    grad = tf.clip_by_value(grad, -clipv, clipv)
+                # Keep in mind that the Variables are redundant because they are shared
+                # across towers. So .. we will just return the first tower's pointer to
+                # the Variable.
+                v = grad_and_vars[0][1]
+                grad_and_var = (grad, v)
+            average_grads.append(grad_and_var)
+            train_op = opt.apply_gradients(average_grads, global_step=self.gs)
+
+            if summary_verbose > 0:
+                for grad, var in average_grads:
+                    if grad is not None:
+                        tf.summary.histogram(var.op.name + '/gradients', grad)
+                    for var in tf.trainable_variables():
+                        tf.summary.histogram(var.op.name, var)
+        return(train_op)
+
+    def _set_train(self):
+        pass
+
+    def _set_saver(self):
+        self.saver = tf.train.Saver()
+
+    def _set_sesssv(self):
+        sv_para = {'summary_op': None}
+        sms = self.params.get('save_model_secs')
+        if sms is not None:
+            sv_para['save_model_secs'] = sms
+        if self.params['load_step'] is not None:
+            sv_para['init_fn'] = self.load
+        self.sv = tf.train.Supervisor(**sv_para)
+        if self.params['is_show_device_placement']:
+            config = tf.ConfigProto(log_device_placement=True)
         else:
-            self.params['lr'] = lr
+            config = tf.ConfigProto()
+        config.gpu_options.allow_growth = True
+        self.sess = self.sv.prepare_or_wait_for_session(config=config)
+
+    def _set_summary(self):
+        self.summary_writer = dict()
+        path_log_train = str(pathlib.Path(self.params['log_dir']) / 'train')
+        path_log_test = str(pathlib.Path(self.params['log_dir']) / 'test')
+        self.summary_writer['train'] = tf.summary.FileWriter(
+            path_log_train, self.sess.graph)
+        self.summary_writer['test'] = tf.summary.FileWriter(
+            path_log_test, self.sess.graph)
+        if self.params['summary_type'] == 'time':
+            if self.dataset is None:
+                raise TypeError(
+                    'summary_type is time and no dataset is given.')
+            self.sv.loop(self.params['summary_freq'], self.summary_auto)
+
+    def _run_helper(self, run_ops, feed_dict_keys, feed_dict_values_list):
+        feed_dict = dict()
+        for key in feed_dict_keys:
+            key = self.nodes_name_proxy.get(key, key)
+            value = None
+            for d in feed_dict_values_list:
+                if value is not None:
+                    break
+                value = d.get(key)
+            if value is None:
+                raise KeyError('No value of key: {} in all dicts.'.format(key))
+            feed_dict[self.nodes[key]] = value
+        results = self.sess.run(run_ops, feed_dict=feed_dict)
+        return results
+
+# low level api
+    def partial_fit(self, data, task='train'):
+        """ features are dict of mini batch numpy.ndarrays """
+        feed_dict_keys = list(self.feed_dict['default'])
+        feed_dict_keys += self.feed_dict['train']
+        hypers = dict()
+        hypers['lr/' + task] = self.params.get('lr')[task]
+        hypers['keep_prob'] = self.params.get('keep_prob', 0.5)
+        hypers['training'] = True
+        run_op = dict(self.run_op['default'])
+        run_op.update(self.run_op['train'])
+        results = self._run_helper(run_op, feed_dict_keys, [hypers, data])
+        return results
+
+    def dump(self, data, task='train'):
+        feed_dict_keys = list(self.feed_dict['default'])
+        feed_dict_keys += self.feed_dict['train']
+        hypers = dict()
+        hypers['lr/' + task] = self.params.get('lr')[task]
+        hypers['keep_prob'] = self.params.get('keep_prob', 0.5)
+        hypers['training'] = True
+        run_op = dict(self.debug_tensor)
+        results = self._run_helper(run_op, feed_dict_keys, [hypers, data])
+        step = self.sess.run(self.gs)
+        np.save('d%d.npy' % step, result)
+
+    def predict(self, data, **kwargs):
+        """ predict a mini-batch """
+        feed_dict_keys = list(self.feed_dict['default'])
+        feed_dict_keys += self.feed_dict['predict']
+        hypers = dict()
+        hypers['keep_prob'] = self.params.get('keep_prob', 1.0)
+        hypers['training'] = True
+        run_op = dict(self.run_op['default'])
+        run_op.update(self.run_op['predict'])
+        results = self._run_helper(run_op, feed_dict_keys, [hypers, data])
+        return results
+
+    def evaluate(self, data, **kwargs):
+        feed_dict = dict()
+        feed_dict_keys = list(self.feed_dict['default'])
+        feed_dict_keys += self.feed_dict['evaluate']
+        hypers = dict()
+        hypers['keep_prob'] = self.params.get('keep_prob', 1.0)
+        hypers['training'] = True
+        run_op = dict(self.run_op['default'])
+        run_op.update(self.run_op['evaluate'])
+        results = self._run_helper(run_op, feed_dict_keys, [hypers, data])
+        return results
+
+    def summary(self, data, mode='train', **kwargs):
+        feed_dict = dict()
+        feed_dict_keys = list(self.feed_dict['default'])
+        feed_dict_keys += self.feed_dict['summary']
+        hypers = dict()
+        for k in self.params['lr'].keys():
+            hypers['lr/' + k] = self.params.get('lr')[k]
+        if mode == 'train':
+            hypers['keep_prob'] = self.params.get('keep_prob', 0.5)
+            hypers['training'] = True
+        else:
+            hypers['keep_prob'] = self.params.get('keep_prob', 1.0)
+            hypers['training'] = False
+        run_op = dict(self.run_op['default'])
+        run_op.update(self.run_op['summary'])
+        results = self._run_helper(run_op, feed_dict_keys, [hypers, data])
+        step = results['global_step']
+        for k in self.run_op['summary'].keys():
+            self.summary_writer[mode].add_summary(results[k], global_step=step)
+        self.summary_writer[mode].flush()
+        return results
+
+    def reset_lr(self, name=None, lr=None, decay=10.0):
+        if name is None:
+            for n in self.params['lr'].keys():
+                self.reset_lr(n, lr, decay)
+            return None
+        if lr is None:
+            self.params['lr'][name] /= decay
+        else:
+            self.params['lr'][name] = lr
         pp_json(self.params, self.params['name'] + " PARAMS:")
 
     def set_dataset(self, name, dataset):
         self.dataset[name] = dataset
-
-    def init(self):
-        
-        self._set_model()
-        
-        self._set_saver()
-        
-        self._set_sesssv()
-        
-        self._set_summary()
-        pp_json(self.params, self.params['name'] + " PARAMS:")
 
     def save(self):
         path_save = pathlib.Path(self.params['model_dir'])
@@ -148,73 +343,7 @@ class Net:
         self.saver.restore(sess, path_load)
         sess.run(self.__gs_setter, feed_dict={self.__gs_value: step})
 
-    def _set_model(self):
-        pass
-
-    def _set_summary(self):
-        self.summary_writer = dict()
-        path_log_train = str(pathlib.Path(self.params['log_dir']) / 'train')
-        path_log_test = str(pathlib.Path(self.params['log_dir']) / 'test')
-        self.summary_writer['train'] = tf.summary.FileWriter(
-            path_log_train, self.sess.graph)
-        self.summary_writer['test'] = tf.summary.FileWriter(
-            path_log_test, self.sess.graph)
-        if self.params['summary_type'] == 'time':
-            if self.dataset is None:
-                raise TypeError(
-                    'summary_type is time and no dataset is given.')
-            self.sv.loop(self.params['summary_freq'], self.summary_auto)
-
-    def _set_saver(self):
-        self.saver = tf.train.Saver()
-
-    def _set_sesssv(self):
-        sv_para = {'summary_op': None}
-        sms = self.params.get('save_model_secs')
-        if sms is not None:
-            sv_para['save_model_secs'] = sms
-        if self.params['load_step'] is not None:
-            sv_para['init_fn'] = self.load
-        self.sv = tf.train.Supervisor(**sv_para)
-        self.sess = self.sv.prepare_or_wait_for_session()
-
-    def partial_fit(self, data, task='train', **kwargs):
-        """ features are dict of mini batch numpy.ndarrays """
-        feed_dict_keys = list(self.feed_dict['default'])
-        feed_dict_keys += self.feed_dict['train']
-        hypers = dict()
-        hypers['lr'] = self.params.get('lr')
-        hypers['keep_prob'] = self.params.get('keep_prob', 0.5)
-        hypers['training'] = True
-        inputs = dict(data)
-        inputs.update(hypers)
-        feed_dict = dict()
-        for k in feed_dict_keys:
-            feed_dict[self.node[k]] = inputs[k]
-        run_op = dict(self.run_op['default'])
-        run_op.update(self.run_op['train'])
-        results = self.sess.run(run_op, feed_dict=feed_dict)
-        return results
-       
-    def dump(self, data):
-        feed_dict = dict()
-        for k in self.input.keys():
-            feed_dict.update({self.input[k]: data[k]})
-        for k in self.label.keys():
-            feed_dict.update({self.label[k]: data[k]})
-        train_kp = self.params.get('keep_prob', self.params['keep_prob'])
-        feed_dict.update({self.kp: train_kp})
-        feed_dict.update(self.feed_dict)
-        run_op = dict()
-        run_op.update(self.run_op)
-        # run_op.update(self.train_op)
-        run_op.update(self.loss)
-        run_op.update(self.debug_tensor)
-        results = self.sess.run(run_op, feed_dict=feed_dict)
-        result = self.sess.run(self.debug_tensor, feed_dict=feed_dict)
-        step = self.sess.run(self.gs)
-        np.save('d%d.npy'%step, result)
-
+# high level api
     def train(self, steps=None, phase=1, decay=2.0):
         if not isinstance(steps, (list, tuple)):
             steps = [steps] * phase
@@ -238,24 +367,6 @@ class Net:
             self.save()
             if idx < len(steps) - 1:
                 self.reset_lr(decay=decay)
-
-    def predict(self, data, **kwargs):
-        """ predict a mini-batch """
-        feed_dict_keys = list(self.feed_dict['default'])
-        feed_dict_keys += self.feed_dict['predict']
-        hypers = dict()
-        hypers['lr'] = self.params.get('lr')
-        hypers['keep_prob'] = self.params.get('keep_prob', 1.0)
-        hypers['training'] = False
-        inputs = dict(data)
-        inputs.update(hypers)
-        feed_dict = dict()
-        for k in feed_dict_keys:
-            feed_dict[self.node[k]] = inputs[k]
-        run_op = dict(self.run_op['default'])
-        run_op.update(self.run_op['predict'])
-        results = self.sess.run(run_op, feed_dict=feed_dict)
-        return results
 
     def predict_auto(self, data, batch_size=32, **kwargs):
         """ predict a large tensor, automatically seperate it into mini-batches. """
@@ -286,42 +397,6 @@ class Net:
             results[k].append(item[k])
         for k in results.keys():
             results[k] = np.concatenate(results[k], 0)
-        return results
-
-    def evaluate(self, data, **kwargs):
-        feed_dict = dict()
-        for k in self.input.keys():
-            feed_dict.update({self.input[k]: data[k]})
-        for k in self.label.keys():
-            feed_dict.update({self.label[k]: data[k]})
-        feed_dict.update(self.feed_dict)
-        feed_dict.update({self.kp: 1.0})
-        run_op = dict()
-        run_op.update(self.run_op)
-        run_op.update(self.loss)
-        run_op.update(self.metric)
-        results = self.sess.run(run_op, feed_dict=feed_dict)
-        return results
-
-    def summary(self, data, mode='train', **kwargs):
-        feed_dict_keys = list(self.feed_dict['default'])
-        feed_dict_keys += self.feed_dict['summary']
-        hypers = dict()
-        hypers['lr'] = self.params.get('lr')
-        hypers['keep_prob'] = self.params.get('keep_prob', 1.0)
-        hypers['training'] = False
-        inputs = dict(data)
-        inputs.update(hypers)
-        feed_dict = dict()
-        for k in feed_dict_keys:
-            feed_dict[self.node[k]] = inputs[k]
-        run_op = dict(self.run_op['default'])
-        run_op.update(self.run_op['summary'])
-        results = self.sess.run(run_op, feed_dict=feed_dict)
-        step = results['global_step']
-        for k in self.run_op['summary'].keys():
-            self.summary_writer[mode].add_summary(results[k], global_step=step)
-        self.summary_writer[mode].flush()
         return results
 
     def summary_auto(self):
