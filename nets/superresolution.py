@@ -420,7 +420,7 @@ class SRNet3(SRNetBase):
             interp = upsampling2d(h, size=self.params['down_sample_ratio'])                        
 
             
-            h = tf.layers.conv2d(interp, 64, 5, padding='same',
+            h = tf.layers.conv2d(interp,  self.params['filters'], 5, padding='same',
                                 name='conv_stem', activation=tf.nn.elu, reuse=reuse)
             for i in range(self.params['depths']):
                 hpre = h
