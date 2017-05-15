@@ -93,6 +93,7 @@ class SRNet1(SRNetBase):
                  depths=20,
                  train_verbose=0,
                  is_bn=True,
+                 is_res=True,
                  **kwargs):
         SRNetBase.__init__(self, **kwargs)
         self.params['name'] = "SRNet1"
@@ -100,6 +101,7 @@ class SRNet1(SRNetBase):
         self.params['depths'] = depths
         self.params['train_verbose'] = train_verbose
         self.params['is_bn'] = is_bn
+        self.params['is_res'] = is_res
         self.params.update_short_cut()
     
     def super_resolution(self, low_res, high_res, with_summary=False, reuse=None, name=None):
@@ -112,11 +114,15 @@ class SRNet1(SRNetBase):
             h = tf.layers.conv2d(interp, 64, 5, padding='same',
                                 name='conv_stem', activation=tf.nn.elu, reuse=reuse)
             for i in range(self.params['depths']):
+                hpre = h
                 h = tf.layers.conv2d(
                     h, self.params['filters'], 3, padding='same', name='conv_%d' % i, reuse=reuse)
                 if self.p.is_bn:
-                    h = tf.layers.batch_normalization(h, training=self.training, reuse=reuse, name='bn_%d'%i)
-                h = tf.nn.crelu(h)
+                    h = tf.layers.batch_normalization(h, training=self.training, reuse=reuse, name='bn_%d'%i, scale=False)
+                if self.p.is_res:
+                    h = 0.2 * h + hpre
+                h = tf.nn.relu(h)
+                
                 if with_summary:
                     tf.summary.histogram('activ_%d' % i, h)
             res_inf = tf.layers.conv2d(h, 1, 5, padding='same', name='conv_end', reuse=reuse)            
@@ -213,9 +219,9 @@ class SRNet1(SRNetBase):
         self.train_steps['train'] = train_step
         self.summary_ops['all'] = tf.summary.merge_all()
 
-        self.feed_dict['train'] = ['data', 'label']
-        self.feed_dict['predict'] = ['data']
-        self.feed_dict['summary'] = ['data', 'label']
+        self.feed_dict['train'] = ['data', 'label', 'training']
+        self.feed_dict['predict'] = ['data', 'training']
+        self.feed_dict['summary'] = ['data', 'label', 'training']
 
         self.run_op['train'] = {'train_step': self.train_steps['train'],
                                 'loss': self.losses['train'], 'global_step': self.gs}
