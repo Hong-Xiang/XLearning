@@ -288,7 +288,7 @@ class Net:
         for k in self.params['lr'].keys():
             hypers['lr/' + k] = self.params.get('lr')[k]
         if mode == 'train':
-            hypers['keep_prob'] = self.params.get('keep_prob', 0.5)
+            hypers['keep_prob'] = self.params.get('keep_prob', 1.0)
             hypers['training'] = True
         else:
             hypers['keep_prob'] = self.params.get('keep_prob', 1.0)

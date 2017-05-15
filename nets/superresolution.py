@@ -91,7 +91,7 @@ class SRNet1(SRNetBase):
     def __init__(self,
                  filters=64,
                  depths=20,
-                 train_verbose=1,
+                 train_verbose=0,
                  **kwargs):
         SRNetBase.__init__(self, **kwargs)
         self.params['name'] = "SRNet1"
@@ -119,7 +119,7 @@ class SRNet1(SRNetBase):
             err_inf = tf.abs(high_res - sr_inf)
             
             patch_size = self.p.high_shape[1] * self.p.high_shape[2]
-            loss = tf.losses.mean_squared_error(high_res, sr_inf) / patch_size
+            loss = tf.losses.mean_squared_error(high_res, sr_inf)
             grad = self.optimizers['train'].compute_gradients(loss)
             
             if with_summary:
