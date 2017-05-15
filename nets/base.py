@@ -355,8 +355,8 @@ class Net:
                 ss = self.dataset['train'].sample()
                 res = self.partial_fit(ss)
                 msg = "LOSS=%6e, STEP=%5d" % (res['loss'], res['global_step'])
-                if res['loss'] > 1e-2:
-                    self.dump(ss)
+                # if res['loss'] > 1e-2:
+                #     self.dump(ss)
                 cstep += 1
                 pt.event(cstep, msg)
                 if self.params['summary_type'] == 'step':
