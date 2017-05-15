@@ -103,7 +103,7 @@ class SRNet1(SRNetBase):
     def super_resolution(self, low_res, high_res, with_summary=False, reuse=None, name=None):
         with tf.name_scope(name):
             h = low_res            
-            interp = upsampling2d(h, size=self.params['down_sample_ratio'])                        
+            interp = upsampling2d(h, size=self.params['down_sample_ratio'], method='bilinear')                        
             res_ref = high_res - interp       
             err_itp = tf.abs(res_ref)
             
@@ -205,6 +205,165 @@ class SRNet1(SRNetBase):
             tf.summary.scalar('l2_itp', l2_itp)
 
         train_step = self.train_step(grads, self.optimizers['train'], summary_verbose=self.p.train_verbose)
+        self.train_steps['train'] = train_step
+        self.summary_ops['all'] = tf.summary.merge_all()
+
+        self.feed_dict['train'] = ['data', 'label']
+        self.feed_dict['predict'] = ['data']
+        self.feed_dict['summary'] = ['data', 'label']
+
+        self.run_op['train'] = {'train_step': self.train_steps['train'],
+                                'loss': self.losses['train'], 'global_step': self.gs}
+        self.run_op['predict'] = {'infernce': sr_inf}
+        self.run_op['summary'] = {'summary_all': self.summary_ops['all']}
+    
+    def _set_train(self):
+        pass
+
+
+class SRNet2(SRNetBase):
+    @with_config
+    def __init__(self,
+                 filters=64,
+                 depths=20,
+                 hidden_num=8,
+                 train_verbose=0,
+                 **kwargs):
+        SRNetBase.__init__(self, **kwargs)
+        self.params['name'] = "SRNet1"
+        self.params['filters'] = filters
+        self.params['depths'] = depths
+        self.params['train_verbose'] = train_verbose
+        self.params['hidden_num'] = hidden_num
+        self.params.update_short_cut()
+    
+    def gen(self, z, low_res, reuse=None):        
+        hidden_num = self.p.hidden_num
+        filters = self.p.filters
+        num_output = int(np.prod([8, 8, hidden_num]))
+        with tf.variable_scope('gen', reuse=reuse) as vs:
+            h = tf.layers.dense(z, num_output, activation_fn=None, name='dense')
+            h = tf.reshape(x, shape=[-1, 8, 8, filters], name='reshape_latent')
+            h = tf.layers.conv2d(h, filters, 3, padding='same', name='conv_0', activation=tf.nn.elu)
+            h = tf.layers.conv2d(h, filters, 3, padding='same', name='conv_1', activation=tf.nn.elu)
+            h = tf.image.resize_nearest_neighbor(h, size=[16, 16])
+            h = tf.layers.conv2d(h, filters, 3, padding='same', name='conv_2', activation=tf.nn.elu)
+            h = tf.layers.conv2d(h, filters, 3, padding='same', name='conv_3', activation=tf.nn.elu)
+            h = tf.image.resize_nearest_neighbor(h, size=[32, 32])
+            h = tf.layers.conv2d(h, filters, 3, padding='same', name='conv_4', activation=tf.nn.elu)
+            h = tf.layers.conv2d(h, filters, 3, padding='same', name='conv_5', activation=tf.nn.elu)
+            h = tf.image.resize_nearest_neighbor(h, size=[64, 32])
+            h = [h, low_res]
+            h = tf.concat(h, axis=-1)
+            h = tf.layers.conv2d(h, filters, 3, padding='same', name='conv_6', activation=tf.nn.elu)
+            h = tf.layers.conv2d(h, filters, 3, padding='same', name='conv_7', activation=tf.nn.elu)
+            h = tf.image.resize_nearest_neighbor(h, size=[64, 64])
+            h = tf.layers.conv2d(h, filters, 3, padding='same', name='conv_8', activation=tf.nn.elu)
+            h = tf.layers.conv2d(h, filters, 3, padding='same', name='conv_9', activation=tf.nn.elu)
+            out = tf.layers.conv2d(h, filters, 1, padding='same', name='conv_10')
+        variables = tf.contrib.framework.get_variables(vs)
+        return out, variables
+
+    def dis(self, x, low_res, reuse=None):        
+        hidden_num = self.p.hidden_num
+        filters = self.p.filters
+        with tf.name_scope('dis'):
+            with tf.name_scope('enc'):
+                with tf.variable_scope('enc', reuse=reuse) as vs0:
+                    h = tf.layers.conv2d(h, filters, 3, padding='same', name='conv_0', activation=tf.nn.elu)
+                    h = tf.layers.conv2d(h, filters, 3, padding='same', name='conv_1', activation=tf.nn.elu)
+                    h = tf.layers.conv2d(h, filters, 3, (1, 2), padding='same', name='conv_2', activation=tf.nn.elu)
+                    h = tf.concat(h, axis=-1)
+                    h = tf.layers.conv2d(h, filters, 3, padding='same', name='conv_3', activation=tf.nn.elu)
+                    h = tf.layers.conv2d(h, filters, 3, padding='same', name='conv_4', activation=tf.nn.elu)
+                    h = tf.layers.conv2d(h, filters*2, 3, (2, 1), padding='same', name='conv_5', activation=tf.nn.elu)
+                    h = tf.layers.conv2d(h, filters*2, 3, padding='same', name='conv_6', activation=tf.nn.elu)
+                    h = tf.layers.conv2d(h, filters*2, 3, padding='same', name='conv_7', activation=tf.nn.elu)
+                    h = tf.layers.conv2d(h, filters*3, 3, 2, padding='same', name='conv_8', activation=tf.nn.elu)
+                    h = tf.layers.conv2d(h, filters*3, 3, padding='same', name='conv_9', activation=tf.nn.elu)
+                    h = tf.layers.conv2d(h, filters*3, 3, padding='same', name='conv_10', activation=tf.nn.elu)
+                    h = tf.layers.conv2d(h, filters*3, 3, 2, padding='same', name='conv_11', activation=tf.nn.elu)
+                    h = tf.layers.conv2d(h, filters*4, 3, padding='same', name='conv_9', activation=tf.nn.elu)
+                    h = tf.layers.conv2d(h, filters*4, 3, padding='same', name='conv_10', activation=tf.nn.elu)
+                    h = tf.contrib.slim.flatten(h)            
+                    embed = tf.layers.dense(h, hidden_num, name='dense')
+                variables = tf.contrib.framework.get_variables(vs0)
+            with tf.name_scope('dec'):
+                with tf.variable_scope('dec', reuse=reuse) as vs1:                                                       
+                    h = tf.layers.dense(embed, num_output, activation_fn=None, name='dense')
+                    h = tf.reshape(x, shape=[-1, 8, 8, filters], name='reshape_latent')
+                    h = tf.layers.conv2d(h, filters, 3, padding='same', name='conv_0', activation=tf.nn.elu)
+                    h = tf.layers.conv2d(h, filters, 3, padding='same', name='conv_1', activation=tf.nn.elu)
+                    h = tf.image.resize_nearest_neighbor(h, size=[16, 16])
+                    h = tf.layers.conv2d(h, filters, 3, padding='same', name='conv_2', activation=tf.nn.elu)
+                    h = tf.layers.conv2d(h, filters, 3, padding='same', name='conv_3', activation=tf.nn.elu)
+                    h = tf.image.resize_nearest_neighbor(h, size=[32, 32])
+                    h = tf.layers.conv2d(h, filters, 3, padding='same', name='conv_4', activation=tf.nn.elu)
+                    h = tf.layers.conv2d(h, filters, 3, padding='same', name='conv_5', activation=tf.nn.elu)
+                    h = tf.image.resize_nearest_neighbor(h, size=[64, 32])
+                    h = [h, low_res]
+                    h = tf.concat(h, axis=-1)
+                    h = tf.layers.conv2d(h, filters, 3, padding='same', name='conv_6', activation=tf.nn.elu)
+                    h = tf.layers.conv2d(h, filters, 3, padding='same', name='conv_7', activation=tf.nn.elu)
+                    h = tf.image.resize_nearest_neighbor(h, size=[64, 64])
+                    h = tf.layers.conv2d(h, filters, 3, padding='same', name='conv_8', activation=tf.nn.elu)
+                    h = tf.layers.conv2d(h, filters, 3, padding='same', name='conv_9', activation=tf.nn.elu)
+                    out = tf.layers.conv2d(h, filters, 1, padding='same', name='conv_10')        
+                variables.append(tf.contrib.framework.get_variables(vs1))
+        return out, variables
+
+    def _set_model(self):        
+        with tf.name_scope('low_resolution'):
+            low_res = tf.placeholder(
+                dtype=tf.float32, shape=self.params['low_shape'], name='low_resolution')
+            self.add_node(low_res, 'data')
+        with tf.name_scope('high_resolution'):
+            high_res = tf.placeholder(                
+                dtype=tf.float32, shape=self.params['high_shape'], name='high_resolution')
+            self.add_node(high_res, 'label')
+        self.optimizers['train'] = tf.train.RMSPropOptimizer(self.lr['train'])
+        interp = upsampling2d(low_res, size=self.params['down_sample_ratio'], name='interp_low_res')
+        h = tf.layers.conv2d(low_res, self.p.filters, 5, padding='same', activation=tf.nn.elu, name='conv_stem')
+        for i in range(self.p.depths):
+            h = tf.layers.conv2d(h, self.p.filters, 3, padding='same', activation=tf.nn.elu, name='conv_%d'%i)
+        rep_int = upsampling2d(h, size=self.params['down_sample_ratio'], name='interp_reps')
+        res_inf = tf.layers.conv2d(h, self.p.filters, 5, padding='same', activation=tf.nn.elu, name='conv_end'%i)
+        sr_inf = res_inf + interp
+        
+        loss = tf.losses.mean_squared_error(high_res, sr_inf)
+
+        self.losses['train'] = loss
+
+        train_step = self.optimizers['train'].minimize(loss)
+
+
+
+
+
+        res_ref = high_res - interp
+        res_inf = high_res - sr_inf      
+        err_itp = tf.abs(res_ref)            
+        err_inf = tf.abs(res_inf)
+        l2_err_itp = tf.reduce_sum(tf.square(err_itp), axis=[1, 2, 3])
+        l2_err_inf = tf.reduce_sum(tf.square(err_inf), axis=[1, 2, 3])
+
+        l2_inf = tf.reduce_mean(l2_err_inf)
+        l2_itp = tf.reduce_mean(l2_err_itp)
+        ratio = tf.reduce_mean(l2_err_inf/(l2_err_itp+1e-3))
+        tf.summary.image('low_res', low_res)
+        tf.summary.image('high_res', high_res)
+        tf.summary.image('interp', interp)
+        tf.summary.image('sr_inf', sr_inf)
+        tf.summary.image('res_ref', res_ref)
+        tf.summary.image('res_inf', res_inf)
+        tf.summary.image('err_itp', err_itp)
+        tf.summary.image('err_inf', err_inf)
+        tf.summary.scalar('loss', self.losses['train'])     
+        tf.summary.scalar('ratio', ratio)
+        tf.summary.scalar('l2_inf', l2_inf)
+        tf.summary.scalar('l2_itp', l2_itp)
+
+        
         self.train_steps['train'] = train_step
         self.summary_ops['all'] = tf.summary.merge_all()
 
