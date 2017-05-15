@@ -92,12 +92,14 @@ class SRNet1(SRNetBase):
                  filters=64,
                  depths=20,
                  train_verbose=0,
+                 is_bn=True,
                  **kwargs):
         SRNetBase.__init__(self, **kwargs)
         self.params['name'] = "SRNet1"
         self.params['filters'] = filters
         self.params['depths'] = depths
         self.params['train_verbose'] = train_verbose
+        self.params['is_bn'] = is_bn
         self.params.update_short_cut()
     
     def super_resolution(self, low_res, high_res, with_summary=False, reuse=None, name=None):
@@ -111,7 +113,10 @@ class SRNet1(SRNetBase):
                                 name='conv_stem', activation=tf.nn.elu, reuse=reuse)
             for i in range(self.params['depths']):
                 h = tf.layers.conv2d(
-                    h, self.params['filters'], 3, padding='same', name='conv_%d' % i, activation=tf.nn.elu, reuse=reuse)
+                    h, self.params['filters'], 3, padding='same', name='conv_%d' % i, reuse=reuse)
+                if self.p.is_bn:
+                    h = tf.layers.batch_normalization(h, training=self.training, reuse=reuse, name='bn_%d'%i)
+                h = tf.nn.crelu(h)
                 if with_summary:
                     tf.summary.histogram('activ_%d' % i, h)
             res_inf = tf.layers.conv2d(h, 1, 5, padding='same', name='conv_end', reuse=reuse)            
@@ -158,7 +163,7 @@ class SRNet1(SRNetBase):
                 for i in range(self.p.nb_gpus):
                     with tf.name_scope('device_%d'%i):
                         sliced_high_res.append(tf.slice(high_res, [i*bs_gpu, 0, 0, 0], gpu_shape))                
-            self.optimizers['train'] = tf.train.RMSPropOptimizer(self.lr['train'])
+            self.optimizers['train'] = tf.train.AdamOptimizer(self.lr['train'])
             self.super_resolution(sliced_low_res[0], sliced_high_res[0], with_summary=False, reuse=None, name='cpu_tower')
         
         sr_infs = []
