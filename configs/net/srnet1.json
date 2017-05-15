@@ -8,5 +8,6 @@
     "model_dir": "save",
     "summary_type": "step",
     "summary_freq": 10,
-    "nb_gpus": 2
+    "nb_gpus": 2,
+    "grad_clip": 0.1
 }
