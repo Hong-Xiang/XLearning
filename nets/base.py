@@ -292,7 +292,7 @@ class Net:
             hypers['training'] = True
         else:
             hypers['keep_prob'] = self.params.get('keep_prob', 1.0)
-            hypers['training'] = False
+            hypers['training'] = True
         run_op = dict(self.run_op['default'])
         run_op.update(self.run_op['summary'])
         results = self._run_helper(run_op, feed_dict_keys, [hypers, data])
