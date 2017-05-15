@@ -107,7 +107,7 @@ class SRNet1(SRNetBase):
     def super_resolution(self, low_res, high_res, with_summary=False, reuse=None, name=None):
         with tf.name_scope(name):
             h = low_res            
-            interp = upsampling2d(h, size=self.params['down_sample_ratio'], method='bilinear')                        
+            interp = upsampling2d(h, size=self.params['down_sample_ratio'])                        
             res_ref = high_res - interp       
             err_itp = tf.abs(res_ref)
             
