@@ -169,7 +169,7 @@ class Net:
                 # the Variable.
                 v = grad_and_vars[0][1]
                 grad_and_var = (grad, v)
-            average_grads.append(grad_and_var)
+                average_grads.append(grad_and_var)            
             train_op = opt.apply_gradients(average_grads, global_step=self.gs)
 
             if summary_verbose > 0:
@@ -178,7 +178,7 @@ class Net:
                         tf.summary.histogram(var.op.name + '/gradients', grad)
                     for var in tf.trainable_variables():
                         tf.summary.histogram(var.op.name, var)
-        return(train_op)
+        return train_op
 
     def _set_train(self):
         pass

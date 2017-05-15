@@ -91,11 +91,14 @@ class SRNet1(SRNetBase):
     def __init__(self,
                  filters=64,
                  depths=20,
+                 train_verbose=1,
                  **kwargs):
         SRNetBase.__init__(self, **kwargs)
         self.params['name'] = "SRNet1"
         self.params['filters'] = filters
         self.params['depths'] = depths
+        self.params['train_verbose'] = train_verbose
+        self.params.update_short_cut()
     
     def super_resolution(self, low_res, high_res, with_summary=False, reuse=None, name=None):
         with tf.name_scope(name):
@@ -115,8 +118,8 @@ class SRNet1(SRNetBase):
             sr_inf = interp + res_inf
             err_inf = tf.abs(high_res - sr_inf)
             
-            
-            loss = tf.losses.mean_squared_error(high_res, sr_inf) / self.p.batch_size * self.p.nb_gpus
+            patch_size = self.p.high_shape[1] * self.p.high_shape[2]
+            loss = tf.losses.mean_squared_error(high_res, sr_inf) / patch_size
             grad = self.optimizers['train'].compute_gradients(loss)
             
             if with_summary:
@@ -201,7 +204,7 @@ class SRNet1(SRNetBase):
             tf.summary.scalar('l2_inf', l2_inf)
             tf.summary.scalar('l2_itp', l2_itp)
 
-        train_step = self.train_step(grads, self.optimizers['train'])
+        train_step = self.train_step(grads, self.optimizers['train'], summary_verbose=self.p.train_verbose)
         self.train_steps['train'] = train_step
         self.summary_ops['all'] = tf.summary.merge_all()
 
