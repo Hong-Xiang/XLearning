@@ -18,7 +18,7 @@ import tensorflow as tf
 #     x = ELU(name='upscale_%d_elu_1' % id)(x)
 #     return x
 
-def upsampling2d(inputs, size, method='nearest', filters=None, name='bilinear'):
+def upsampling2d(inputs, size, method='bilinear', filters=None, name='upsampling'):
     input_shape = inputs.shape.as_list()
     h0, w0 = input_shape[1:3]
     h1 = int(h0 * size[0])
