@@ -484,7 +484,7 @@ class SRNet3(SRNetBase):
                 gpu_shape[2] -= 2*self.p.crop_size
                 for i in range(self.p.nb_gpus):
                     with tf.name_scope('device_%d'%i):
-                        sliced_high_res.append(tf.slice(high_res, [i*bs_gpu, 0, 0, 0], gpu_shape))                
+                        sliced_high_res.append(tf.slice(high_res, [i*bs_gpu, self.p.crop_size, self.p.crop_size, 0], gpu_shape))                
             self.optimizers['train'] = tf.train.AdamOptimizer(self.lr['train'])
             self.super_resolution(sliced_low_res[0], sliced_high_res[0], with_summary=False, reuse=None, name='cpu_tower')
         
