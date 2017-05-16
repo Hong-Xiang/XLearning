@@ -430,7 +430,7 @@ class SRNet3(SRNetBase):
                     h = tf.layers.batch_normalization(h, training=self.training, reuse=reuse, name='bn_%d'%i, scale=False)
                 if self.p.is_res:
                     h = 0.2 * h + hpre
-                h = tf.nn.relu(h)
+                h = tf.nn.elu(h)
                 
                 if with_summary:
                     tf.summary.histogram('activ_%d' % i, h)
