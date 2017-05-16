@@ -238,3 +238,13 @@ def align_by_crop(target_tensor, input_tensors, batch_size=None, name='align_cro
             target_shape_now[-1] = input_shape[-1]
             ops.append(tf.slice(t, [0, crop_h, crop_w, 0], target_shape_now))
     return ops
+
+def residual2(inputs, filters=64, activation=tf.nn.elu, scale=0.1, name='res_u'):
+    with tf.name_scope('residual_unit'):
+        with tf.variable_scope(name):
+            h = tf.layers.conv2d(inputs, filters, 3, padding='same', activation=activation, name='conv0')
+            h = tf.layers.conv2d(inputs, filters, 1, padding='same', activation=activation, name='conv1')
+            h = tf.layers.conv2d(inputs, filters, 3, padding='same', name='conv2')
+        with tf.name_scope('shorcut'):
+            out = scale * h + inputs
+    return out

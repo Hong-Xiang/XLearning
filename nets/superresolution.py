@@ -1,7 +1,7 @@
 import tensorflow as tf
 from ..utils.general import with_config
 from .base import Net
-from ..models.image import conv2d, upsampling2d, align_by_crop
+from ..models.image import conv2d, upsampling2d, align_by_crop, residual2
 from tensorflow.contrib import slim
 import numpy as np
 from ..utils.general import analysis_device
@@ -241,7 +241,7 @@ class SRNet2(SRNetBase):
     @with_config
     def __init__(self,
                  filters=64,
-                 depths=20,
+                 depths=2,
                  hidden_num=8,
                  train_verbose=0,
                  **kwargs):
@@ -255,25 +255,27 @@ class SRNet2(SRNetBase):
     
     def gen(self, z, low_res, reuse=None):        
         hidden_num = self.p.hidden_num
-        filters = self.p.filters
-        num_output = int(np.prod([8, 8, hidden_num]))
+        filters = self.p.filters        
         with tf.variable_scope('gen', reuse=reuse) as vs:
-            h = tf.layers.dense(z, num_output, activation_fn=None, name='dense')
-            h = tf.reshape(x, shape=[-1, 8, 8, filters], name='reshape_latent')
-            h = tf.layers.conv2d(h, filters, 3, padding='same', name='conv_0', activation=tf.nn.elu)
-            h = tf.layers.conv2d(h, filters, 3, padding='same', name='conv_1', activation=tf.nn.elu)
-            h = tf.image.resize_nearest_neighbor(h, size=[16, 16])
-            h = tf.layers.conv2d(h, filters, 3, padding='same', name='conv_2', activation=tf.nn.elu)
-            h = tf.layers.conv2d(h, filters, 3, padding='same', name='conv_3', activation=tf.nn.elu)
-            h = tf.image.resize_nearest_neighbor(h, size=[32, 32])
-            h = tf.layers.conv2d(h, filters, 3, padding='same', name='conv_4', activation=tf.nn.elu)
-            h = tf.layers.conv2d(h, filters, 3, padding='same', name='conv_5', activation=tf.nn.elu)
-            h = tf.image.resize_nearest_neighbor(h, size=[64, 32])
+            with tf.name_scope('z1d2img8x8'):
+                num_output = int(np.prod([8, 8, self.p.filters]))
+                h = tf.layers.dense(z, num_output, activation_fn=None, name='dense')
+                h = tf.reshape(x, shape=[-1, 8, 8, filters], name='reshape_latent')
+            with tf.name_scope('img8x8'):
+                h = residual2(h, filters, name='res_0')
+                h = residual2(h, filters, name='res_1')
+            h = tf.image.resize_nearest_neighbor(h, size=[16, 8])
+            h = residual2(h, filters, name='res_2')
+            h = residual2(h, filters, name='res_3')
+            h = tf.image.resize_nearest_neighbor(h, size=[32, 8])
+            h = residual2(h, filters, name='res_4')
+            h = residual2(h, filters, name='res_5')
+            h = tf.image.resize_nearest_neighbor(h, size=[64, 8])
             h = [h, low_res]
             h = tf.concat(h, axis=-1)
             h = tf.layers.conv2d(h, filters, 3, padding='same', name='conv_6', activation=tf.nn.elu)
             h = tf.layers.conv2d(h, filters, 3, padding='same', name='conv_7', activation=tf.nn.elu)
-            h = tf.image.resize_nearest_neighbor(h, size=[64, 64])
+            h = tf.image.resize_nearest_neighbor(h, size=[64, 16])
             h = tf.layers.conv2d(h, filters, 3, padding='same', name='conv_8', activation=tf.nn.elu)
             h = tf.layers.conv2d(h, filters, 3, padding='same', name='conv_9', activation=tf.nn.elu)
             out = tf.layers.conv2d(h, filters, 1, padding='same', name='conv_10')
@@ -289,6 +291,7 @@ class SRNet2(SRNetBase):
                     h = tf.layers.conv2d(h, filters, 3, padding='same', name='conv_0', activation=tf.nn.elu)
                     h = tf.layers.conv2d(h, filters, 3, padding='same', name='conv_1', activation=tf.nn.elu)
                     h = tf.layers.conv2d(h, filters, 3, (1, 2), padding='same', name='conv_2', activation=tf.nn.elu)
+                    h = [h, low_res]
                     h = tf.concat(h, axis=-1)
                     h = tf.layers.conv2d(h, filters, 3, padding='same', name='conv_3', activation=tf.nn.elu)
                     h = tf.layers.conv2d(h, filters, 3, padding='same', name='conv_4', activation=tf.nn.elu)
@@ -547,7 +550,7 @@ class SRNet3(SRNetBase):
 
         self.run_op['train'] = {'train_step': self.train_steps['train'],
                                 'loss': self.losses['train'], 'global_step': self.gs}
-        self.run_op['predict'] = {'infernce': sr_inf}
+        self.run_op['predict'] = {'inference': sr_inf, 'interp': interp}
         self.run_op['summary'] = {'summary_all': self.summary_ops['all']}
     
     def _set_train(self):

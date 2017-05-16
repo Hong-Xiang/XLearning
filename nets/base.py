@@ -258,8 +258,9 @@ class Net:
 
     def predict(self, data, **kwargs):
         """ predict a mini-batch """
-        feed_dict_keys = list(self.feed_dict['default'])
-        feed_dict_keys += self.feed_dict['predict']
+        # feed_dict_keys = list(self.feed_dict['default'])
+        # feed_dict_keys += self.feed_dict['predict']
+        feed_dict_keys = list(self.feed_dict['predict'])
         hypers = dict()
         hypers['keep_prob'] = self.params.get('keep_prob', 1.0)
         hypers['training'] = True
