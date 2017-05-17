@@ -38,6 +38,22 @@
         "data_std": 27.0,
         "period": [363, 360]
     },
+    "sino_shep_test": {
+        "file_data": "shepplogan_sinograms_test.h5",
+        "file_type": "h5",
+        "data_key": "sinograms",
+        "data_mean": 26.0,
+        "data_std": 27.0,
+        "period": [360, 360]
+    },
+    "sino_dero": {
+        "file_data": "derenzo_sinograms.h5",
+        "file_type": "h5",
+        "data_key": "sinograms",
+        "data_mean": 15.8,
+        "data_std": 17.8,
+        "period": [360, 360]
+    },
     "sino_obil": {
         "todo": true
     },

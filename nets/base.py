@@ -30,6 +30,7 @@ class Net:
                  nb_gpus=1,
                  is_show_device_placement=False,
                  warmup_step=100,
+                 optimizer_name='Adam',
                  **kwargs):
         """
             data - net couple:
@@ -62,6 +63,7 @@ class Net:
         self.params['nb_gpus'] = nb_gpus
         self.params['is_show_device_placement'] = is_show_device_placement
         self.params['warmup_step'] = warmup_step
+        self.params['optimizer_name'] = optimizer_name
         self.params.update_short_cut()
         self.p = self.params.short_cut
         # model external nodes
@@ -355,14 +357,19 @@ class Net:
         cstep = 0
         lr_bak = self.p.lr['train']
         #warmup
-        self.reset_lr(decay=10000.0)
+        self.reset_lr(decay=1024.0)
         pp_json(self.params, self.params['name'] + " PARAMS:")
-        warming_up = True
+        warming_up = 10
+        warmup_step = self.params['warmup_step']
         for idx, sp in enumerate(steps):
             for i in range(sp):
-                if i > self.params['warmup_step']  and warming_up:
-                    self.reset_lr(lr=lr_bak)
-                    warming_up = False
+                if warming_up > 0:
+                    if warmup_step <= 0
+                        self.reset_lr(decay=0.5)
+                        warming_up -= 1
+                        warmup_step = warmup_step = self.params['warmup_step']
+                    else:
+                        warmup_step -= 1
                 ss = self.dataset['train'].sample()
                 res = self.partial_fit(ss)
                 msg = "LOSS=%6e, STEP=%5d" % (res['loss'], res['global_step'])

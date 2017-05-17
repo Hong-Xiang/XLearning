@@ -683,8 +683,10 @@ class SRNet4(SRNetBase):
             sliced3x = self.add_data(2, shape3x)            
             sliced2x = self.add_data(1, shape2x)            
             sliced1x = self.add_data(0, shape1x)            
-
-            self.optimizers['train'] = tf.train.AdamOptimizer(self.lr['train'])
+            if self.p.optimizer_name == 'Adam':
+                self.optimizers['train'] = tf.train.AdamOptimizer(self.lr['train'])
+            elif self.p.optimizer_name == 'rmsporp':
+                self.optimizers['train'] = tf.train.RMSPropOptimizer(self.lr['train'])
             self.super_resolution(sliced4x[0], sliced3x[0], sliced2x[0], sliced1x[0], with_summary=False, reuse=None, name='cpu_tower')
         
         sr_infs = []

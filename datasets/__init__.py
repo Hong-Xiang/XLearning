@@ -3,4 +3,4 @@
 from .synthetic import Syn4, Wave, MoG
 from .pet_rebin import SinogramsPETRebin
 from .cali import CalibrationDataSet
-from .images import Celeba, Flickr25k, MNISTImage, SinoShep, PETRebin
+from .images import Celeba, Flickr25k, MNISTImage, SinoShep, SinoShepTest, PETRebin, SinoDero
