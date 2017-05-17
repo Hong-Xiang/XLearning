@@ -406,7 +406,7 @@ class SRNet3(SRNetBase):
                  depths=20,
                  train_verbose=0,
                  is_bn=True,
-                 is_res=True,
+                 is_res=True,                 
                  **kwargs):
         SRNetBase.__init__(self, **kwargs)
         self.params['name'] = "SRNet3"
@@ -566,6 +566,7 @@ class SRNet4(SRNetBase):
                  train_verbose=0,
                  is_bn=True,
                  is_res=True,
+                 res_scale=0.1,
                  **kwargs):
         SRNetBase.__init__(self, **kwargs)
         self.params['name'] = "SRNet4"
@@ -574,6 +575,7 @@ class SRNet4(SRNetBase):
         self.params['train_verbose'] = train_verbose
         self.params['is_bn'] = is_bn
         self.params['is_res'] = is_res
+        self.params['res_scale'] = res_scale
         if self.params['down_sample_ratio'][0] > 1:
             self.params['down_sample_ratio'][0] = 2
         if self.params['down_sample_ratio'][1] > 1:
@@ -583,12 +585,13 @@ class SRNet4(SRNetBase):
     def super_resolution(self, img8x, img4x, img2x, img1x, with_summary=False, reuse=None, name=None):
         cid = 0
         filters = self.p.filters
+        scale = self.p.res_scale
         with tf.name_scope(name):            
             with tf.name_scope('net8x4x'):
                 h = tf.layers.conv2d(img8x,  self.params['filters'], 5, padding='same',
                                     name='conv_stem', activation=tf.nn.elu, reuse=reuse)            
                 for i in range(self.params['depths']//3):
-                    h = residual2(h, filters, name='res_u_%d'%cid, reuse=reuse)
+                    h = residual2(h, filters, name='res_u_%d'%cid, reuse=reuse, scale=scale)
                     cid += 1                    
                 h = upsampling2d(h, size=[2, 2])
                 res4x = tf.layers.conv2d(h, 1, 5, padding='same', name='conv_4x',  use_bias=True, reuse=reuse)
@@ -597,7 +600,7 @@ class SRNet4(SRNetBase):
 
             with tf.name_scope('net8x4x'):
                 for i in range(self.params['depths']//3):
-                    h = residual2(h, filters, name='res_u_%d'%cid, reuse=reuse)
+                    h = residual2(h, filters, name='res_u_%d'%cid, reuse=reuse, scale=scale)
                     cid += 1
                 itp2x = upsampling2d(itp4x, size=[2, 2])
                 h = upsampling2d(h, size=[2, 2])            
@@ -606,7 +609,7 @@ class SRNet4(SRNetBase):
 
             with tf.name_scope('net8x4x'):
                 for i in range(self.params['depths']//3):
-                    h = residual2(h, filters, name='res_u_%d'%cid, reuse=reuse)
+                    h = residual2(h, filters, name='res_u_%d'%cid, reuse=reuse, scale=scale)
                     cid += 1                                        
                 itp1x = upsampling2d(itp2x, size=[2, 2])
                 h = upsampling2d(h, size=[2, 2])  
