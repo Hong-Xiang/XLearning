@@ -42,7 +42,11 @@ from tqdm import tqdm
 
 def main():
     enter_debug()
-    net = nets.SRNet3(filenames=['data.sino8x.json', 'net.srnet1.json'], batch_size=2, low_shape=[90, 90], high_shape=[360, 360], nb_down_sample=2, load_step=-1)
+    is_net3 = False
+    if is_net3:
+        net = nets.SRNet3(filenames=['data.sino8x.json', 'net.srnet1.json'], batch_size=2, low_shape=[90, 90], high_shape=[360, 360], nb_down_sample=2, load_step=-1)
+    else:
+        net = nets.SRNet4(filenames=['data.sino8x.json', 'net.srnet1.json'], batch_size=2, low_shape=[45, 45], high_shape=[360, 360], nb_down_sample=2, load_step=-1)
     # net = nets.SRNet3(filenames=['data.sino8x.json', 'net.srnet1.json'], load_step=-1)    
     net.init()
     # with datasets.SinoShep(filenames='data.sino8x.json') as dataset:
@@ -52,13 +56,15 @@ def main():
     srs = []
     its = []
     for i in tqdm(range(nb_images//2)):
-        feed = {
-        # 'data3': ss['data3'][2*i:2*i+2, :, :, :],
-        'data': ss['data2'][2*i:2*i+2, :, :, :],
-        'data2': ss['data2'][2*i:2*i+2, :, :, :],
-        'data1': ss['data1'][2*i:2*i+2, :, :, :],
-        'data0': ss['data0'][2*i:2*i+2, :, :, :]}
-        # feed = ss
+        if is_net3:
+            feed = ss
+        else:
+            feed = {
+            'data3': ss['data3'][2*i:2*i+2, :, :, :],
+            'data': ss['data2'][2*i:2*i+2, :, :, :],
+            'data2': ss['data2'][2*i:2*i+2, :, :, :],
+            'data1': ss['data1'][2*i:2*i+2, :, :, :],
+            'data0': ss['data0'][2*i:2*i+2, :, :, :]}        
         pred = net.predict(feed)             
         srs.append(pred['inference'])       
         its.append(pred['interp'])

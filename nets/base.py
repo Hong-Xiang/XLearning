@@ -351,8 +351,15 @@ class Net:
         total_step = sum(steps)
         pt = ProgressTimer(total_step)
         cstep = 0
+        lr_bak = self.p.lr['train']
+        #warmup
+        self.reset_lr(decay=10000.0)
+        warming_up = True
         for idx, sp in enumerate(steps):
             for i in range(sp):
+                if i > 100  and warming_up:
+                    self.reset_lr(lr=lr_bak)
+                    warming_up = False
                 ss = self.dataset['train'].sample()
                 res = self.partial_fit(ss)
                 msg = "LOSS=%6e, STEP=%5d" % (res['loss'], res['global_step'])
