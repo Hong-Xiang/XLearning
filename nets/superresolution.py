@@ -555,3 +555,222 @@ class SRNet3(SRNetBase):
     
     def _set_train(self):
         pass
+
+
+
+class SRNet4(SRNetBase):
+    @with_config
+    def __init__(self,
+                 filters=64,
+                 depths=20,
+                 train_verbose=0,
+                 is_bn=True,
+                 is_res=True,
+                 **kwargs):
+        SRNetBase.__init__(self, **kwargs)
+        self.params['name'] = "SRNet4"
+        self.params['filters'] = filters
+        self.params['depths'] = depths
+        self.params['train_verbose'] = train_verbose
+        self.params['is_bn'] = is_bn
+        self.params['is_res'] = is_res
+        self.params.update_short_cut()
+    
+    def super_resolution(self, img8x, img4x, img2x, img1x, with_summary=False, reuse=None, name=None):
+        cid = 0
+        with tf.name_scope(name):            
+            with tf.name_scope('net8x4x'):
+                h = tf.layers.conv2d(img8x,  self.params['filters'], 5, padding='same',
+                                    name='conv_stem', activation=tf.nn.elu, reuse=reuse)            
+                for i in range(self.params['depths']//3):
+                    hpre = h
+                    h = tf.layers.conv2d(
+                        h, self.params['filters'], 3, padding='same', name='conv_%d' % cid, reuse=reuse)
+                    cid += 1
+                    if self.p.is_bn:
+                        h = tf.layers.batch_normalization(h, training=self.training, reuse=reuse, name='bn_%d'%cid, scale=False)
+                    if self.p.is_res:
+                        h = 0.2 * h + hpre
+                    h = tf.nn.elu(h)
+                    
+                    if with_summary:
+                        tf.summary.histogram('activ_%d' % i, h)                        
+                h = upsampling2d(h, size=[1, 2])
+                res4x = tf.layers.conv2d(h, 1, 5, padding='same', name='conv_4x', reuse=reuse)
+                itp4x = upsampling2d(img8x, size=[1, 2])
+                inf4x = res4x + itp4x
+
+            with tf.name_scope('net8x4x'):
+                for i in range(self.params['depths']//3):
+                    hpre = h
+                    h = tf.layers.conv2d(
+                        h, self.params['filters'], 3, padding='same', name='conv_%d' % cid, reuse=reuse)
+                    
+                    if self.p.is_bn:
+                        h = tf.layers.batch_normalization(h, training=self.training, reuse=reuse, name='bn_%d'%cid, scale=False)
+                    if self.p.is_res:
+                        h = 0.2 * h + hpre
+                    cid += 1
+                    h = tf.nn.elu(h)
+                    
+                    if with_summary:
+                        tf.summary.histogram('activ_%d' % i, h)
+                itp2x = upsampling2d(itp4x, size=[1, 2])
+                h = upsampling2d(h, size=[1, 2])            
+                res2x = tf.layers.conv2d(h, 1, 5, padding='same', name='conv_2x', reuse=reuse)
+                inf2x = res2x + itp2x
+
+            with tf.name_scope('net8x4x'):
+                for i in range(self.params['depths']//3):
+                    hpre = h
+                    h = tf.layers.conv2d(
+                        h, self.params['filters'], 3, padding='same', name='conv_%d' % cid, reuse=reuse)
+                    if self.p.is_bn:
+                        h = tf.layers.batch_normalization(h, training=self.training, reuse=reuse, name='bn_%d'%cid, scale=False)
+                    if self.p.is_res:
+                        h = 0.2 * h + hpre
+                    cid += 1
+                    h = tf.nn.elu(h)
+                    
+                    if with_summary:
+                        tf.summary.histogram('activ_%d' % i, h)                                    
+                itp1x = upsampling2d(itp2x, size=[1, 2])
+                h = upsampling2d(h, size=[1, 2])  
+                res1x = tf.layers.conv2d(h, 1, 5, padding='same', name='conv_1x', reuse=reuse)
+                inf1x = res1x + itp1x
+
+            with tf.name_scope('crop'):
+                shape4x = img4x.shape.as_list()
+                shape2x = img2x.shape.as_list()
+                shape1x = img1x.shape.as_list()
+                shape4x[1] -= self.p.crop_size // 2
+                shape4x[2] -= self.p.crop_size // 2
+                shape2x[1] -= self.p.crop_size
+                shape2x[2] -= self.p.crop_size
+                shape1x[1] -= self.p.crop_size*2 
+                shape1x[2] -= self.p.crop_size*2
+                img4x = tf.slice(img4x, [0, self.p.crop_size//4, self.p.crop_size//4, 0], shape4x)
+                img2x = tf.slice(img2x, [0, self.p.crop_size//2, self.p.crop_size//2, 0], shape2x)
+                img1x = tf.slice(img1x, [0, self.p.crop_size, self.p.crop_size, 0], shape1x)
+                
+                inf4x, res4x, itp4x = align_by_crop(img4x, [inf4x, res4x, itp4x])
+                inf2x, res2x, itp2x = align_by_crop(img2x, [inf2x, res2x, itp2x])
+                inf1x, res1x, itp1x = align_by_crop(img1x, [inf1x, res1x, itp1x])
+                # res_inf, sr_inf, interp = align_by_crop(img1x, [res_inf, sr_inf, interp])
+
+            
+            with tf.name_scope('loss'):
+                loss4x = tf.losses.mean_squared_error(img4x, inf4x)
+                loss2x = tf.losses.mean_squared_error(img2x, inf2x)
+                loss1x = tf.losses.mean_squared_error(img1x, inf1x)
+                loss = 0.1 * loss4x + 0.5 * loss2x + loss1x            
+                grad = self.optimizers['train'].compute_gradients(loss)
+            
+            return inf1x, loss, grad, itp1x, img1x
+                
+    def add_data(self, nb_down, shape):
+        sliced = []
+        bs_gpu = self.p.batch_size // self.p.nb_gpus
+        name = 'data%d'%nb_down
+        with tf.name_scope(name):
+            data = tf.placeholder(
+                dtype=tf.float32, shape=shape, name=name)
+            self.add_node(data, name)
+            gpu_shape = data.shape.as_list()
+            gpu_shape[0] = bs_gpu
+            for i in range(self.p.nb_gpus):
+                with tf.name_scope('device_%d'%i):
+                    sliced.append(tf.slice(data, [i*bs_gpu, 0, 0, 0], gpu_shape))
+        return sliced
+
+    def _set_model(self):
+        bs_gpu = self.p.batch_size // self.p.nb_gpus
+
+        sliced_data0 = []
+        sliced_data1 = []
+        sliced_data2 = []
+        sliced_data3 = []
+        shape4x = self.params['low_shape']
+        shape3x = list(shape4x)
+        shape3x[2] *= 2
+        shape2x = list(shape3x)
+        shape2x[2] *= 2
+        shape1x = list(shape2x)
+        shape1x[2] *= 2
+        
+        with tf.device('/cpu:0'):
+            sliced4x = self.add_data(3, shape4x)            
+            sliced3x = self.add_data(2, shape3x)            
+            sliced2x = self.add_data(1, shape2x)            
+            sliced1x = self.add_data(0, shape1x)            
+
+            self.optimizers['train'] = tf.train.AdamOptimizer(self.lr['train'])
+            self.super_resolution(sliced4x[0], sliced3x[0], sliced2x[0], sliced1x[0], with_summary=False, reuse=None, name='cpu_tower')
+        
+        sr_infs = []
+        losses = []
+        grads = []
+        interps = []
+        high_ress = []
+        for i in range(self.p.nb_gpus):
+            device = '/gpu:%d'%i
+            with tf.device(device):
+                sr_inf, loss, grad, interp, high_res = self.super_resolution(sliced4x[i], sliced3x[i], sliced2x[i], sliced1x[i],  with_summary=False, reuse=True, name='gpu_%d'%i)
+            print('sr', sr_inf)
+            print('loss', loss)
+            # print('grad', grad)
+            print('interp', interp)
+            sr_infs.append(sr_inf)
+            losses.append(loss)
+            grads.append(grad)
+            interps.append(interp)
+            high_ress.append(high_res)
+
+        with tf.name_scope('loss'):
+            self.losses['train'] = tf.add_n(losses)
+        
+        with tf.name_scope('infer'):
+            sr_inf = tf.concat(sr_infs, axis=0)
+            self.add_node(sr_inf, 'inference')
+            interp = tf.concat(interps, axis=0)
+            high_res = tf.concat(high_ress, axis=0)
+        tf.summary.scalar('lr/train', self.lr['train'])
+        with tf.name_scope('cpu_summary'):
+            
+            res_ref = high_res - interp
+            res_inf = high_res - sr_inf      
+            err_itp = tf.abs(res_ref)            
+            err_inf = tf.abs(res_inf)
+            l2_err_itp = tf.reduce_sum(tf.square(err_itp), axis=[1, 2, 3])
+            l2_err_inf = tf.reduce_sum(tf.square(err_inf), axis=[1, 2, 3])
+
+            l2_inf = tf.reduce_mean(l2_err_inf)
+            l2_itp = tf.reduce_mean(l2_err_itp)
+            ratio = tf.reduce_mean(l2_err_inf/(l2_err_itp+1e-3))            
+            tf.summary.image('high_res', high_res)
+            tf.summary.image('interp', interp)
+            tf.summary.image('sr_inf', sr_inf)
+            tf.summary.image('res_ref', res_ref)
+            tf.summary.image('res_inf', res_inf)
+            tf.summary.image('err_itp', err_itp)
+            tf.summary.image('err_inf', err_inf)
+            tf.summary.scalar('loss', self.losses['train'])     
+            tf.summary.scalar('ratio', ratio)
+            tf.summary.scalar('l2_inf', l2_inf)
+            tf.summary.scalar('l2_itp', l2_itp)
+
+        train_step = self.train_step(grads, self.optimizers['train'], summary_verbose=self.p.train_verbose)
+        self.train_steps['train'] = train_step
+        self.summary_ops['all'] = tf.summary.merge_all()
+
+        self.feed_dict['train'] = ['data3', 'data2', 'data1', 'data0', 'training']
+        self.feed_dict['predict'] = ['data3', 'training']
+        self.feed_dict['summary'] = ['data3', 'data2', 'data1', 'data0','training']
+
+        self.run_op['train'] = {'train_step': self.train_steps['train'],
+                                'loss': self.losses['train'], 'global_step': self.gs}
+        self.run_op['predict'] = {'inference': sr_inf, 'interp': interp}
+        self.run_op['summary'] = {'summary_all': self.summary_ops['all']}
+    
+    def _set_train(self):
+        pass
