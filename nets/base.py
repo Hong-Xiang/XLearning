@@ -29,6 +29,7 @@ class Net:
                  grad_clip=1.0,
                  nb_gpus=1,
                  is_show_device_placement=False,
+                 warmup_step=100,
                  **kwargs):
         """
             data - net couple:
@@ -60,6 +61,7 @@ class Net:
         self.params['grad_clip'] = grad_clip
         self.params['nb_gpus'] = nb_gpus
         self.params['is_show_device_placement'] = is_show_device_placement
+        self.params['warmup_step'] = warmup_step
         self.params.update_short_cut()
         self.p = self.params.short_cut
         # model external nodes
@@ -358,7 +360,7 @@ class Net:
         warming_up = True
         for idx, sp in enumerate(steps):
             for i in range(sp):
-                if i > 1000  and warming_up:
+                if i > self.params['warmup_step']  and warming_up:
                     self.reset_lr(lr=lr_bak)
                     warming_up = False
                 ss = self.dataset['train'].sample()
