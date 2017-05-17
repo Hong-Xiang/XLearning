@@ -361,7 +361,7 @@ class Net:
                 cstep += 1
                 pt.event(cstep, msg)
                 if self.params['summary_type'] == 'step':
-                    if i % self.params['summary_freq'] == 0:
+                    if i % self.params['summary_freq'] == 0 and i > 0:
                         self.summary_auto()
                 if i % self.params['save_freq'] == 0 and i > 0:
                     self.save()
