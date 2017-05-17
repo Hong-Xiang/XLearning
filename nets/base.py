@@ -354,10 +354,11 @@ class Net:
         lr_bak = self.p.lr['train']
         #warmup
         self.reset_lr(decay=10000.0)
+        pp_json(self.params, self.params['name'] + " PARAMS:")
         warming_up = True
         for idx, sp in enumerate(steps):
             for i in range(sp):
-                if i > 100  and warming_up:
+                if i > 1000  and warming_up:
                     self.reset_lr(lr=lr_bak)
                     warming_up = False
                 ss = self.dataset['train'].sample()
