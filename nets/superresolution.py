@@ -589,7 +589,7 @@ class SRNet4(SRNetBase):
                 for i in range(self.params['depths']//3):
                     hpre = h
                     h = tf.layers.conv2d(
-                        h, self.params['filters'], 3, padding='same', name='conv_%d' % cid, reuse=reuse)
+                        h, self.params['filters'], 3, padding='same', name='conv_%d' % cid, use_bias=True, reuse=reuse)
                     cid += 1
                     if self.p.is_bn:
                         h = tf.layers.batch_normalization(h, training=self.training, reuse=reuse, name='bn_%d'%cid, scale=False)
@@ -600,7 +600,7 @@ class SRNet4(SRNetBase):
                     if with_summary:
                         tf.summary.histogram('activ_%d' % i, h)                        
                 h = upsampling2d(h, size=[2, 2])
-                res4x = tf.layers.conv2d(h, 1, 5, padding='same', name='conv_4x', reuse=reuse)
+                res4x = tf.layers.conv2d(h, 1, 5, padding='same', name='conv_4x',  use_bias=True, reuse=reuse)
                 itp4x = upsampling2d(img8x, size=[2, 2])
                 inf4x = res4x + itp4x
 
@@ -611,7 +611,7 @@ class SRNet4(SRNetBase):
                         h, self.params['filters'], 3, padding='same', name='conv_%d' % cid, reuse=reuse)
                     
                     if self.p.is_bn:
-                        h = tf.layers.batch_normalization(h, training=self.training, reuse=reuse, name='bn_%d'%cid, scale=False)
+                        h = tf.layers.batch_normalization(h, training=self.training, reuse=reuse,  use_bias=True, name='bn_%d'%cid, scale=False)
                     if self.p.is_res:
                         h = 0.2 * h + hpre
                     cid += 1
@@ -621,14 +621,14 @@ class SRNet4(SRNetBase):
                         tf.summary.histogram('activ_%d' % i, h)
                 itp2x = upsampling2d(itp4x, size=[2, 2])
                 h = upsampling2d(h, size=[2, 2])            
-                res2x = tf.layers.conv2d(h, 1, 5, padding='same', name='conv_2x', reuse=reuse)
+                res2x = tf.layers.conv2d(h, 1, 5, padding='same', name='conv_2x', reuse=reuse, use_bias=True,)
                 inf2x = res2x + itp2x
 
             with tf.name_scope('net8x4x'):
                 for i in range(self.params['depths']//3):
                     hpre = h
                     h = tf.layers.conv2d(
-                        h, self.params['filters'], 3, padding='same', name='conv_%d' % cid, reuse=reuse)
+                        h, self.params['filters'], 3, padding='same',  use_bias=True, name='conv_%d' % cid, reuse=reuse)
                     if self.p.is_bn:
                         h = tf.layers.batch_normalization(h, training=self.training, reuse=reuse, name='bn_%d'%cid, scale=False)
                     if self.p.is_res:
@@ -640,7 +640,7 @@ class SRNet4(SRNetBase):
                         tf.summary.histogram('activ_%d' % i, h)                                    
                 itp1x = upsampling2d(itp2x, size=[2, 2])
                 h = upsampling2d(h, size=[2, 2])  
-                res1x = tf.layers.conv2d(h, 1, 5, padding='same', name='conv_1x', reuse=reuse)
+                res1x = tf.layers.conv2d(h, 1, 5, padding='same', name='conv_1x', use_bias=True, reuse=reuse)
                 inf1x = res1x + itp1x
 
             with tf.name_scope('crop'):
