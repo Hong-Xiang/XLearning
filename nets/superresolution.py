@@ -437,7 +437,7 @@ class SRNet3(SRNetBase):
                 
                 if with_summary:
                     tf.summary.histogram('activ_%d' % i, h)
-            res_inf = tf.layers.conv2d(h, 1, 5, padding='same', name='conv_end', reuse=reuse)            
+            res_inf = tf.layers.conv2d(h, 1, 5, padding='same', name='conv_end', use_bias=True, reuse=reuse)            
             sr_inf = interp + res_inf
             
             res_inf, sr_inf, interp = align_by_crop(high_res, [res_inf, sr_inf, interp])
@@ -574,6 +574,10 @@ class SRNet4(SRNetBase):
         self.params['train_verbose'] = train_verbose
         self.params['is_bn'] = is_bn
         self.params['is_res'] = is_res
+        if self.params['down_sample_ratio'][0] > 1:
+            self.params['down_sample_ratio'][0] = 2
+        if self.params['down_sample_ratio'][1] > 1:
+            self.params['down_sample_ratio'][1] = 2
         self.params.update_short_cut()
     
     def super_resolution(self, img8x, img4x, img2x, img1x, with_summary=False, reuse=None, name=None):
@@ -595,9 +599,9 @@ class SRNet4(SRNetBase):
                     
                     if with_summary:
                         tf.summary.histogram('activ_%d' % i, h)                        
-                h = upsampling2d(h, size=[1, 2])
+                h = upsampling2d(h, size=[2, 2])
                 res4x = tf.layers.conv2d(h, 1, 5, padding='same', name='conv_4x', reuse=reuse)
-                itp4x = upsampling2d(img8x, size=[1, 2])
+                itp4x = upsampling2d(img8x, size=[2, 2])
                 inf4x = res4x + itp4x
 
             with tf.name_scope('net8x4x'):
@@ -615,8 +619,8 @@ class SRNet4(SRNetBase):
                     
                     if with_summary:
                         tf.summary.histogram('activ_%d' % i, h)
-                itp2x = upsampling2d(itp4x, size=[1, 2])
-                h = upsampling2d(h, size=[1, 2])            
+                itp2x = upsampling2d(itp4x, size=[2, 2])
+                h = upsampling2d(h, size=[2, 2])            
                 res2x = tf.layers.conv2d(h, 1, 5, padding='same', name='conv_2x', reuse=reuse)
                 inf2x = res2x + itp2x
 
@@ -634,8 +638,8 @@ class SRNet4(SRNetBase):
                     
                     if with_summary:
                         tf.summary.histogram('activ_%d' % i, h)                                    
-                itp1x = upsampling2d(itp2x, size=[1, 2])
-                h = upsampling2d(h, size=[1, 2])  
+                itp1x = upsampling2d(itp2x, size=[2, 2])
+                h = upsampling2d(h, size=[2, 2])  
                 res1x = tf.layers.conv2d(h, 1, 5, padding='same', name='conv_1x', reuse=reuse)
                 inf1x = res1x + itp1x
 
@@ -692,10 +696,13 @@ class SRNet4(SRNetBase):
         sliced_data3 = []
         shape4x = self.params['low_shape']
         shape3x = list(shape4x)
+        shape3x[1] *= 2
         shape3x[2] *= 2
         shape2x = list(shape3x)
+        shape2x[1] *= 2
         shape2x[2] *= 2
         shape1x = list(shape2x)
+        shape1x[1] *= 2
         shape1x[2] *= 2
         
         with tf.device('/cpu:0'):
