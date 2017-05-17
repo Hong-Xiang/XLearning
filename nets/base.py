@@ -364,7 +364,7 @@ class Net:
         for idx, sp in enumerate(steps):
             for i in range(sp):
                 if warming_up > 0:
-                    if warmup_step <= 0
+                    if warmup_step <= 0:
                         self.reset_lr(decay=0.5)
                         warming_up -= 1
                         warmup_step = warmup_step = self.params['warmup_step']
