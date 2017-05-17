@@ -151,13 +151,13 @@ class Net:
                 #   ((grad0_gpu0, var0_gpu0), ... , (grad0_gpuN, var0_gpuN))
                 grads = []
                 for g, _ in grad_and_vars:
-                    # Add 0 dimension to the gradients to represent the tower.
+                                                          
+                    # Add 0 dimension to the gradients to represent the tower.                    
                     expanded_g = tf.expand_dims(g, 0)
 
                     # Append on a 'tower' dimension which we will average over
                     # below.
-                    grads.append(expanded_g)
-
+                    grads.append(expanded_g)                
                 # Average over the 'tower' dimension.
                 grad = tf.concat(axis=0, values=grads)
                 grad = tf.reduce_mean(grad, 0)
@@ -172,12 +172,12 @@ class Net:
                 average_grads.append(grad_and_var)            
             train_op = opt.apply_gradients(average_grads, global_step=self.gs)
 
-            if summary_verbose > 0:
-                for grad, var in average_grads:
-                    if grad is not None:
-                        tf.summary.histogram(var.op.name + '/gradients', grad)
-                    for var in tf.trainable_variables():
-                        tf.summary.histogram(var.op.name, var)
+            # if summary_verbose > 0:
+            #     for grad, var in average_grads:
+            #         if grad is not None:
+            #             tf.summary.histogram(var.op.name + '/gradients', grad)
+            #         for var in tf.trainable_variables():
+            #             tf.summary.histogram(var.op.name, var)
         return train_op
 
     def _set_train(self):

@@ -582,23 +582,14 @@ class SRNet4(SRNetBase):
     
     def super_resolution(self, img8x, img4x, img2x, img1x, with_summary=False, reuse=None, name=None):
         cid = 0
+        filters = self.p.filters
         with tf.name_scope(name):            
             with tf.name_scope('net8x4x'):
                 h = tf.layers.conv2d(img8x,  self.params['filters'], 5, padding='same',
                                     name='conv_stem', activation=tf.nn.elu, reuse=reuse)            
                 for i in range(self.params['depths']//3):
-                    hpre = h
-                    h = tf.layers.conv2d(
-                        h, self.params['filters'], 3, padding='same', name='conv_%d' % cid, use_bias=True, reuse=reuse)
-                    cid += 1
-                    if self.p.is_bn:
-                        h = tf.layers.batch_normalization(h, training=self.training, reuse=reuse, name='bn_%d'%cid, scale=False)
-                    if self.p.is_res:
-                        h = 0.2 * h + hpre
-                    h = tf.nn.elu(h)
-                    
-                    if with_summary:
-                        tf.summary.histogram('activ_%d' % i, h)                        
+                    h = residual2(h, filters, name='res_u_%d'%cid, reuse=reuse)
+                    cid += 1                    
                 h = upsampling2d(h, size=[2, 2])
                 res4x = tf.layers.conv2d(h, 1, 5, padding='same', name='conv_4x',  use_bias=True, reuse=reuse)
                 itp4x = upsampling2d(img8x, size=[2, 2])
@@ -606,19 +597,8 @@ class SRNet4(SRNetBase):
 
             with tf.name_scope('net8x4x'):
                 for i in range(self.params['depths']//3):
-                    hpre = h
-                    h = tf.layers.conv2d(
-                        h, self.params['filters'], 3, padding='same', name='conv_%d' % cid, reuse=reuse)
-                    
-                    if self.p.is_bn:
-                        h = tf.layers.batch_normalization(h, training=self.training, reuse=reuse,  use_bias=True, name='bn_%d'%cid, scale=False)
-                    if self.p.is_res:
-                        h = 0.2 * h + hpre
+                    h = residual2(h, filters, name='res_u_%d'%cid, reuse=reuse)
                     cid += 1
-                    h = tf.nn.elu(h)
-                    
-                    if with_summary:
-                        tf.summary.histogram('activ_%d' % i, h)
                 itp2x = upsampling2d(itp4x, size=[2, 2])
                 h = upsampling2d(h, size=[2, 2])            
                 res2x = tf.layers.conv2d(h, 1, 5, padding='same', name='conv_2x', reuse=reuse, use_bias=True,)
@@ -626,18 +606,8 @@ class SRNet4(SRNetBase):
 
             with tf.name_scope('net8x4x'):
                 for i in range(self.params['depths']//3):
-                    hpre = h
-                    h = tf.layers.conv2d(
-                        h, self.params['filters'], 3, padding='same',  use_bias=True, name='conv_%d' % cid, reuse=reuse)
-                    if self.p.is_bn:
-                        h = tf.layers.batch_normalization(h, training=self.training, reuse=reuse, name='bn_%d'%cid, scale=False)
-                    if self.p.is_res:
-                        h = 0.2 * h + hpre
-                    cid += 1
-                    h = tf.nn.elu(h)
-                    
-                    if with_summary:
-                        tf.summary.histogram('activ_%d' % i, h)                                    
+                    h = residual2(h, filters, name='res_u_%d'%cid, reuse=reuse)
+                    cid += 1                                        
                 itp1x = upsampling2d(itp2x, size=[2, 2])
                 h = upsampling2d(h, size=[2, 2])  
                 res1x = tf.layers.conv2d(h, 1, 5, padding='same', name='conv_1x', use_bias=True, reuse=reuse)
@@ -766,7 +736,7 @@ class SRNet4(SRNetBase):
             tf.summary.scalar('l2_inf', l2_inf)
             tf.summary.scalar('l2_itp', l2_itp)
 
-        train_step = self.train_step(grads, self.optimizers['train'], summary_verbose=self.p.train_verbose)
+        train_step = self.train_step(grads, self.optimizers['train'], summary_verbose=0)
         self.train_steps['train'] = train_step
         self.summary_ops['all'] = tf.summary.merge_all()
 
