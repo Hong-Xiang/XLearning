@@ -39,32 +39,42 @@ import numpy as np
 #                 net.save()
 
 from tqdm import tqdm
+import json
 
 def main():
     enter_debug()
     is_net3 = False
-    if is_net3:
-        net = nets.SRNet3(filenames=['data.sino8x.json', 'net.srnet1.json'], batch_size=2, low_shape=[90, 90], high_shape=[360, 360], nb_down_sample=2, load_step=-1)
+    with open('task.train.json','r') as fin:
+        cfgs = json.load(fin)
+    load_step = cfgs['load_step']
+    net_name = cfgs['net_name']
+    if net_name == 'SRNet3':
+        is_net3 = True
     else:
-        net = nets.SRNet4(filenames=['data.sino8x.json', 'net.srnet1.json'], batch_size=2, low_shape=[45, 45], high_shape=[360, 360], nb_down_sample=2, load_step=-1)
+        is_net3 = False
+    if is_net3:
+        net = nets.SRNet3(filenames=['data.sino8x.json', 'net.srnet1.json'], batch_size=2, low_shape=[90, 90], high_shape=[360, 360], nb_down_sample=2, load_step=load_step)
+    else:
+        net = nets.SRNet4(filenames=['data.sino8x.json', 'net.srnet1.json'], batch_size=2, low_shape=[45, 45], high_shape=[360, 360], nb_down_sample=2, load_step=load_step)
     # net = nets.SRNet3(filenames=['data.sino8x.json', 'net.srnet1.json'], load_step=-1)    
     net.init()
     # with datasets.SinoShep(filenames='data.sino8x.json') as dataset:
         # ss = dataset.sample()
-    ss = np.load('to_sr.npy').item()
-    nb_images = ss['data'].shape[0]
+    ss = np.load('to_sr.npz')
+    nb_images = ss['data0'].shape[0]
     srs = []
     its = []
     for i in tqdm(range(nb_images//2)):
-        if is_net3:
-            feed = ss
-        else:
-            feed = {
+        # if is_net3:
+        #     feed = ss
+        # else:
+        feed = {
             'data3': ss['data3'][2*i:2*i+2, :, :, :],
             'data': ss['data2'][2*i:2*i+2, :, :, :],
             'data2': ss['data2'][2*i:2*i+2, :, :, :],
             'data1': ss['data1'][2*i:2*i+2, :, :, :],
-            'data0': ss['data0'][2*i:2*i+2, :, :, :]}        
+            'data0': ss['data0'][2*i:2*i+2, :, :, :],
+            'label': ss['data0'][2*i:2*i+2, :, :, :]}        
         pred = net.predict(feed)             
         srs.append(pred['inference'])       
         its.append(pred['interp'])
