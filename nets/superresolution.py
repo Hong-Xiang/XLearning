@@ -841,9 +841,9 @@ class SRNet5(SRNetBase):
 
             
             with tf.name_scope('loss'):
-                loss4x = tf.nn.log_poisson_loss(img4x, tf.log(inf4x), compute_full_loss=True)
-                loss2x = tf.nn.log_poisson_loss(img2x, tf.log(inf2x), compute_full_loss=True)
-                loss1x = tf.nn.log_poisson_loss(img1x, tf.log(inf1x), compute_full_loss=True)
+                loss4x = tf.reduce_mean(tf.nn.log_poisson_loss(img4x, tf.log(inf4x), compute_full_loss=True))
+                loss2x = tf.reduce_mean(tf.nn.log_poisson_loss(img2x, tf.log(inf2x), compute_full_loss=True))
+                loss1x = tf.reduce_mean(tf.nn.log_poisson_loss(img1x, tf.log(inf1x), compute_full_loss=True))
                 loss = 0.1 * loss4x + 0.5 * loss2x + loss1x            
                 grad = self.optimizers['train'].compute_gradients(loss)
             
