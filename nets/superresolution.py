@@ -798,7 +798,7 @@ class SRNet5(SRNetBase):
                 res4x = tf.layers.conv2d(h, 1, 5, padding='same', name='conv_4x',  use_bias=True, reuse=reuse)
                 itp4x = upsampling2d(img8x, size=[2, 2])
                 inf4x = res4x + itp4x
-                inf4x = tf.nn.abs(inf4x)
+                inf4x = tf.abs(inf4x)
 
             with tf.name_scope('net8x4x'):
                 for i in range(self.params['depths']//3):
