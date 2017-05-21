@@ -798,7 +798,7 @@ class SRNet5(SRNetBase):
                 res4x = tf.layers.conv2d(h, 1, 5, padding='same', name='conv_4x',  use_bias=True, reuse=reuse)
                 itp4x = upsampling2d(img8x, size=[2, 2])
                 inf4x = res4x + itp4x
-                inf4x = tf.nn.softplus(inf4x)
+                inf4x = tf.nn.abs(inf4x)
 
             with tf.name_scope('net8x4x'):
                 for i in range(self.params['depths']//3):
@@ -808,7 +808,7 @@ class SRNet5(SRNetBase):
                 h = upsampling2d(h, size=[2, 2])            
                 res2x = tf.layers.conv2d(h, 1, 5, padding='same', name='conv_2x', reuse=reuse, use_bias=True,)
                 inf2x = res2x + itp2x
-                inf2x = tf.nn.softplus(inf2x)
+                inf2x = tf.abs(inf2x)
 
             with tf.name_scope('net8x4x'):
                 for i in range(self.params['depths']//3):
@@ -818,7 +818,7 @@ class SRNet5(SRNetBase):
                 h = upsampling2d(h, size=[2, 2])  
                 res1x = tf.layers.conv2d(h, 1, 5, padding='same', name='conv_1x', use_bias=True, reuse=reuse)
                 inf1x = res1x + itp1x
-                inf1x = tf.nn.softplus(inf1x)
+                inf1x = tf.abs(inf1x)
 
             with tf.name_scope('crop'):
                 shape4x = img4x.shape.as_list()
