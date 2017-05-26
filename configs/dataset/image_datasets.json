@@ -1,0 +1,74 @@
+{
+    "mnist": {
+        "file_data": "mnist.h5",
+        "file_type": "h5",
+        "is_full_load": true,
+        "data_key": {
+            "train": "x_train",
+            "test": "x_test"
+        },
+        "is_uint8": "true"
+    },
+    "mnist2": {
+        "todo": true
+    },
+    "celeba": {
+        "file_data": "celeba.h5",
+        "file_type": "h5",
+        "data_key": "images",
+        "is_uint8": "true"
+    },
+    "flickr25k": {
+        "file_data": "flickr25k.h5",
+        "file_type": "h5",
+        "data_key": "images",
+        "is_uint8": "true"
+    },
+    "svhn": {
+        "file_data": "svhn_small.h5",
+        "file_type": "h5",
+        "data_key": "images",
+        "is_uint8": "true"
+    },
+    "sino_shep": {
+        "file_data": "shepplogan_sinograms.h5",
+        "file_type": "h5",
+        "data_key": "sinograms",
+        "data_mean": 26.0,
+        "data_std": 27.0,
+        "period": [363, 360]
+    },
+    "sino_shep_test": {
+        "file_data": "shepplogan_sinograms_test.h5",
+        "file_type": "h5",
+        "data_key": "sinograms",
+        "data_mean": 26.0,
+        "data_std": 27.0,
+        "period": [360, 360]
+    },
+    "sino_dero": {
+        "file_data": "derenzo_sinograms.h5",
+        "file_type": "h5",
+        "data_key": "sinograms",
+        "data_mean": 15.8,
+        "data_std": 17.8,
+        "period": [360, 360]
+    },
+    "sino_obil": {
+        "todo": true
+    },
+    "sino_rebin": {
+        "file_data": "pet_rebin2.h5",
+        "file_type": "h5",
+        "data_key": "sinograms",
+        "data_mean": 0.2,
+        "data_std": 50,
+        "period": [128, 320]
+    },
+    "sino_spect": {
+        "todo": true
+    },
+    "nature_image": {
+        "todo": true
+    }
+}

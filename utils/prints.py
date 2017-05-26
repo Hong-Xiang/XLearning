@@ -3,27 +3,33 @@ import json
 from inspect import getfullargspec, signature
 from functools import wraps
 import click
+import tensorflow as tf
 
+def pprint(contents, file=None):
+    click.echo(contents, file=file)
 
-def pprint(contents):
-    click.echo(contents)
-
-
-def hline(level=0):
+def hline(level=0, file=None):
     if level == 0:
-        pprint("=" * 60)
+        pprint("=" * 60, file)
     elif level == 1:
-        pprint("-" * 60)
+        pprint("-" * 60, file)
 
 
-def pp_json(dict_to_print, title=None, length=30):
-    hline()
+class SpecialEncoder(json.JSONEncoder):    
+    SPECIAL_TYPES = (tf.Variable, tf.Tensor, tf.Operation)
+    def default(self, obj):
+        if isinstance(obj, SpecialEncoder.SPECIAL_TYPES):
+            return obj.__str__()
+        return json.JSONEncoder.default(self, obj)
+
+def pp_json(dict_to_print, title=None, length=30, file=None):
+    hline(file)
     if title is not None:
-        pprint(title)
-        hline(1)
+        pprint(title, file)
+        hline(1, file)
     pprint(json.dumps(dict_to_print, indent=4,
-                      separators=[',', '： '], sort_keys=True))
-    hline()
+                      separators=[',', '： '], sort_keys=True, cls=SpecialEncoder), file)
+    hline(file)
 
 
 def get_args(func, all_vars):

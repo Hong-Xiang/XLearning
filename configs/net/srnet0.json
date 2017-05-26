@@ -1,0 +1,9 @@
+{
+    "low_shape": [64, 64],
+    "high_shape": [64, 512],
+    "lr": 1e-3,
+    "log_dir": "log",
+    "model_dir": "save",
+    "summary_type": "step",
+    "summary_freq": 10
+}

@@ -9,17 +9,36 @@ Process images:
     crop image into patches    
 Storage save into .npy files
 """
-from __future__ import absolute_import, division, print_function
 import random
 import numpy as np
 from scipy import misc
-from six.moves import xrange
 
 import matplotlib.pyplot as plt
 
 import xlearn.utils.general as utg
 import xlearn.utils.tensor as utt
 
+def shape_check(target, label=None):
+    """ check whether target.shape is NHWC, and (optional) same as label.shape
+    """
+    target_shape = list(target.shape)
+    if not len(target_shape) == 4:
+        raise ValueError('Invalid target shape {}.'.format(target_shape))
+    if label is not None:
+        label_shape = list(label.shape)
+    if not target_shape == label_shape:
+        raise ValueError('Target shape {} differ to label shape {}.'.format(target_shape, label_shape))
+    return None
+
+def psnr(target, label, max_value=None, tor=1e-7):
+    shape_check(target, label)
+    if max_value is None:
+        max_value = np.max([target, label])
+    err_square = np.square(target - label)    
+    err_sum = np.sum(err_square, axis=(1, 2, 3))        
+    err_sum[err_sum < tor] = tor
+    psnr_value = 10.0 * (1.0 + np.log(np.prod(target.shape[1:])*max_value*max_value/err_sum))    
+    return psnr_value
 
 def subplot_images(images, nb_max_row=8, cmap=None, is_gray=True, size=2.0, is_axis=False, tight_c=0.3, is_save=False, filename='images.png', window=None):
     """ subplot list of images of multiple categories into grid subplots
@@ -111,7 +130,7 @@ def proj2sino(input_):
     width = input_.shape[1]
     nangles = input_.shape[2]
     output = []
-    for iheight in xrange(height):
+    for iheight in range(height):
         sinogram = np.zeros([width, nangles])
         for iwidth in range(width):
             for iangle in range(nangles):
@@ -128,7 +147,7 @@ def sino2proj(input_):
     height = len(input_)
     width, nangles = input_[0].shape
     output = np.zeros([height, width, nangles])
-    for iheight in xrange(height):
+    for iheight in range(height):
         for iwidth in range(width):
             for iangle in range(nangles):
                 output[iheight, iwidth, iangle] = input_[
@@ -175,7 +194,7 @@ def tensor2image(input_, id_list=None, offset=3, n_image_row=None):
     """
     shape = input_.shape
     if id_list is None:
-        id_list = list(xrange(shape[0]))
+        id_list = list(range(shape[0]))
     if len(id_list) == 1:
         id_list = [[id_list[0]]]
     n_img = len(id_list)
@@ -213,9 +232,9 @@ def split_channel(input_, id_N_list=None, id_C_list=None, offset=3, n_image_row=
         a large image
     """
     if id_N_list is None:
-        id_N_list = list(xrange(input_.shape[0]))
+        id_N_list = list(range(input_.shape[0]))
     if id_C_list is None:
-        id_C_list = list(xrange(input_.shape[3]))
+        id_C_list = list(range(input_.shape[3]))
     if len(id_N_list) == 1:
         id_N_list = [[id_N_list[0]]]
     if len(id_C_list) == 1:

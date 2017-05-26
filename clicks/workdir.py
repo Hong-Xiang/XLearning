@@ -35,8 +35,41 @@ def cfgs(target, kind=None, name=None, **kwargs):
         'origin': str(cfg_file)
     }
     pp_json(cfgs_dict, 'COPY CONFIG OPTIONS:')
-    shutil.copy(cfg_file, name)
+    shutil.copy(cfg_file, str(kind)+'.'+name)
 
+@workdir.command()
+@click.option('--target', '-t', type=str, default='.')
+@click.option('--net', '-n', type=str)
+@click.option('--dataset', '-d', type=str)
+@click.option('--task', '-a', type=str, default='train')
+def new(target, net, dataset, task, **kwargs):
+    """ copy config files (automatically adding .json suffix)."""
+    click.echo("COPY CONFIGS...")
+    if not net.endswith('.json'):
+        net += '.json'
+    if not dataset.endswith('.json'):
+        dataset += '.json'
+    if not task.endswith('.json'):
+        task += '.json'
+    target = Path(target)
+    net_file = Path(os.environ['PATH_XLEARN']) / 'configs' / 'net' / net
+    data_file = Path(os.environ['PATH_XLEARN']) / 'configs' / 'dataset' / dataset
+    task_file = Path(os.environ['PATH_XLEARN']) / 'configs' / 'train' / task
+    cfgs_dict = {
+        'target': str(target),
+        'net': net,
+        'net_origin': str(net_file),
+        'dataset': dataset,
+        'data_origin': str(data_file),
+        'task': task,
+        'task_origin': str(task_file)
+    }
+    clean_core(str(target.absolute()), level=100)
+    pp_json(cfgs_dict, 'COPY CONFIG OPTIONS:')
+    shutil.copy(net_file, 'net.'+net)
+    shutil.copy(data_file, 'data.'+dataset)
+    shutil.copy(task_file, 'task.'+task)
+    
 
 @workdir.command()
 @click.option('--target', '-t', type=str, default='.')

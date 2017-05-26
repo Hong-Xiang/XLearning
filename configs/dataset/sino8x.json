@@ -1,0 +1,15 @@
+{
+    "batch_size": 8,
+    "is_norm": true,    
+    "is_crop": true,
+    "crop_shape": [64, 512],
+    "crop_offset": [0, 0],
+    "is_crop_random": true,
+    "is_down_sample": true,
+    "is_down_sample_0": false,
+    "is_down_sample_1": true,
+    "nb_down_sample": 3,
+    "data_down_sample": 3,
+    "label_down_sample": 0,
+    "nnz_ratio": 0.5
+}

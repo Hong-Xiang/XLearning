@@ -1,0 +1,8 @@
+{
+    "net_name": "SRNet5",
+    "dataset_name": "SinoShep",
+    "steps": [1000, 10000],
+    "decay": 2.0,
+    "filenames": ["net.srnet5.json", "data.sino8x.json"],
+    "load_step": -1
+}

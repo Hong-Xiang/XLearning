@@ -1,10 +1,8 @@
 {
-    "net": "Cali0",
-    "dataset": "CalibrationDataSet",
-    "lrs": [1e-4, 1e-5, 1e-6],
-    "total_step": 10000,    
-    "summary_freq": 120,
-    "save_freq": 600,
-    "filenames": ["srsino8v3.json", "sino2_shep.json"],
-    "load_step": null
+    "net_name": "SRNet0",
+    "dataset_name": "SinoShep",
+    "steps": 100,
+    "decay": 2.0,
+    "filenames": ["net.srnet0.json", "data.sino8x.json"],
+    "load_step": -1
 }

@@ -88,7 +88,7 @@ def load_data():
     random.shuffle(idx)
     data = data[idx, :]
     label = label[idx, :]
-    label = label[:, 0:1]
+    label = label[:, 0:2]
     nb_data = data.shape[0]
     nb_train = nb_data // 5 * 4
     data = np.reshape(data, [nb_data, 10, 10, 1])
@@ -139,10 +139,10 @@ def model_define():
     h = Dense(2048, activation='relu')(h)
     h = Dense(4096, activation='relu')(h)
     h = Dense(4096*2, activation='relu')(h)
-    h = Dropout(0.5)(h)
-    out = Dense(1)(h)
+    h = Dropout(0.25)(h)
+    out = Dense(2)(h)
     m = Model(ip, out)
-    opt = RMSprop(1e-5)
+    opt = RMSprop(1e-3)
     m.compile(loss=loss, optimizer=opt)
     m.summary()
     return m
