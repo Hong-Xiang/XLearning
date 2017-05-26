@@ -14,5 +14,6 @@
     "nb_gpus": 2,
     "grad_clip": 1.0,
     "crop_size": 8,
-    "warmup_step": 10
+    "warmup_step": 10,
+    "is_bn": false
 }
