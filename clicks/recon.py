@@ -53,9 +53,9 @@ def main():
     else:
         is_net3 = False
     if is_net3:
-        net = nets.SRNet3(filenames=['data.sino8x.json', 'net.srnet1.json'], batch_size=2, low_shape=[90, 90], high_shape=[360, 360], nb_down_sample=2, load_step=load_step)
+        net = nets.SRNet3(filenames=['data.sino8x.json', 'net.srnet1.json'], batch_size=2, low_shape=[16, 80], high_shape=[128, 640], nb_down_sample=2, load_step=load_step)
     else:
-        net = nets.SRNet4(filenames=['data.sino8x.json', 'net.srnet1.json'], batch_size=2, low_shape=[45, 45], high_shape=[360, 360], nb_down_sample=2, load_step=load_step)
+        net = nets.SRNet4(filenames=['data.sino8x.json', 'net.srnet1.json'], batch_size=2, low_shape=[16, 80], high_shape=[128, 640], nb_down_sample=2, load_step=load_step)
     # net = nets.SRNet3(filenames=['data.sino8x.json', 'net.srnet1.json'], load_step=-1)    
     net.init()
     # with datasets.SinoShep(filenames='data.sino8x.json') as dataset:

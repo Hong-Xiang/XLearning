@@ -336,7 +336,7 @@ def down_sample_1d(input_, axis, ratio, offset=0, method='mean'):
         sli = multidim_slicer(index_start, index_range, strides)
         output = np.zeros(output_shape)
         output[:] = input_[sli]
-    if method == 'mean':
+    if method == 'mean' or method=='sum':
         index_start = [0] * dim
         index_range = list(input_shape)
         strides = [1] * dim
@@ -347,7 +347,8 @@ def down_sample_1d(input_, axis, ratio, offset=0, method='mean'):
             index_range[axis] = output_shape[axis] * ratio
             sli = multidim_slicer(index_start, index_range, strides)
             output = output + input_[sli]
-        output /= ratio
+        if method == 'mean':
+            output /= ratio
     return output
 
 

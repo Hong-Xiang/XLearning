@@ -22,11 +22,12 @@ def auto():
         dataset_name = train_task['dataset_name']
         steps = train_task['steps']
         decay = train_task['decay']
+        task = train_task.get('task')
         load_step = train_task.get('load_step')
         filenames = train_task.get('filenames', [])
-    train_core(net_name, dataset_name, filenames, steps, decay, load_step)
+    train_core(net_name, dataset_name, filenames, steps, decay, load_step, task)
 
-def train_core(net_name, dataset_name, filenames, steps, decay, load_step):        
+def train_core(net_name, dataset_name, filenames, steps, decay, load_step, task=None):        
         data_cls = getattr(datasets, dataset_name)
         net_cls = getattr(nets, net_name)
         net = net_cls(filenames=filenames, load_step=load_step)
@@ -35,5 +36,5 @@ def train_core(net_name, dataset_name, filenames, steps, decay, load_step):
             with data_cls(filenames=filenames, mode='test') as dataset_test:
                 net.set_dataset('train', dataset_train)
                 net.set_dataset('test', dataset_test)
-                net.train(steps=steps, decay=decay)
+                net.train(steps=steps, decay=decay, task=task)
                 net.save()

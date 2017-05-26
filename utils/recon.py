@@ -17,7 +17,7 @@ def proj(img, num_sen, sen_width, theta):
     astra.algorithm.clear()
     return sinogram
 
-def recon(sino, imgsize, num_sen, sen_width, theta):
+def recon(sino, imgsize, num_sen, sen_width, theta, method='FBP_CUDA', run_time=1):
     sino = np.array(sino)
     if len(sino.shape) == 4:
         nb_sample = sino.shape[0]
@@ -39,11 +39,11 @@ def recon(sino, imgsize, num_sen, sen_width, theta):
     sino_geom = astra.create_proj_geom('parallel', sen_width, num_sen, theta)
     sinogram_id = astra.data2d.create('-sino', sino_geom, data=sino)
     rec_id = astra.data2d.create('-vol', vol_geom)
-    cfg = astra.astra_dict('FBP_CUDA')
+    cfg = astra.astra_dict(method)
     cfg['ReconstructionDataId'] = rec_id
     cfg['ProjectionDataId'] = sinogram_id
     alg_id = astra.algorithm.create(cfg)
-    astra.algorithm.run(alg_id, 10)
+    astra.algorithm.run(alg_id, run_time)
     rec = astra.data2d.get(rec_id)
     astra.data2d.clear()
     astra.projector.clear()

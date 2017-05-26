@@ -46,6 +46,8 @@ class DataSetBase(object):
                  mode='train',
                  random_seed=None,
                  is_norm=True,
+                 is_norm_gamma=False,  
+                 data_gamma=0.5,
                  data_mean=0.0,
                  data_std=1.0,
                  file_name=None,
@@ -64,6 +66,8 @@ class DataSetBase(object):
         self.params['is_norm'] = is_norm
         self.params['data_mean'] = data_mean
         self.params['data_std'] = data_std
+        self.params['is_norm_gamma'] = is_norm_gamma
+        self.params['data_gamma'] = data_gamma
         self.params['name'] = name
 
         # Cls specifict parames
@@ -127,13 +131,18 @@ class DataSetBase(object):
         if self.p.is_norm:
             normed = ip_ - self.p.data_mean
             normed = normed / self.p.data_std
+            if self.p.is_norm_gamma:
+                normed = np.power(normed, self.p.data_gamma)
         else:
             return ip_
         return normed
 
     def denorm(self, ip_):
         if self.p.is_norm:
-            denormed = ip_ * self.p.data_std
+            denormed = np.array(ip_)
+            if self.p.is_norm_gamma:
+                normed = np.power(normed, 1.0/self.p.data_gamma)
+            denormed = denormed * self.p.data_std
             denormed = denormed + self.p.data_mean
         else:
             return ip_
@@ -184,7 +193,7 @@ class DataSetImages(DataSetBase):
                  is_gray=False,
                  is_full_load=False,
                  is_uint8=False,
-                 is_general_json=True,                 
+                 is_general_json=True,               
                  crop_shape=None,
                  crop_offset=(0, 0),
                  is_crop_random=True,
@@ -205,7 +214,7 @@ class DataSetImages(DataSetBase):
         self.params['dataset_name'] = dataset_name
         self.params['is_using_default'] = is_using_default
 
-        
+ 
 
         self.params['is_full_load'] = is_full_load
         self.params['is_gray'] = is_gray
@@ -236,7 +245,7 @@ class DataSetImages(DataSetBase):
         if self.params['is_uint8']:
             self.params['data_mean'] = 128
             self.params['data_std'] = 128
-
+        
         if self.params['is_down_sample']:
             down_sample_ratio = [1, 1]
             if self.p.is_down_sample_0:
@@ -403,8 +412,7 @@ class DataSetImages(DataSetBase):
         if self.p.is_gray:
             image = numpy.mean(image, axis=0, keepdims=True)
 
-        if self.p.is_norm:
-            image = self.norm(image)        
+    
         if self.p.is_down_sample:
             down_sampled = []
             down_sampled.append(numpy.array(image))
@@ -423,8 +431,11 @@ class DataSetImages(DataSetBase):
             out = {'data': image, 'idx': idx}
             down_sampled = numpy.reshape(image, list(image.shape)+[1])
         
+            
         for k in out:
             if k == 'idx':
                 continue            
+            if self.p.is_norm:
+                out[k] = self.norm(out[k])
             out[k] = self.padding_channel(out[k])        
         return out

@@ -72,14 +72,17 @@ class Net:
 
         # Variables:
         #global step
+        
         self.gs = tf.Variable(
             0, dtype=tf.int32, trainable=False, name='global_step')
-        self.__gs_value = tf.placeholder(dtype=tf.int32, name='gs_value')
-        self.__gs_setter = self.gs.assign(self.__gs_value)
+        with tf.name_scope('global_step_setter'):
+            self.__gs_value = tf.placeholder(dtype=tf.int32, name='gs_value')
+            self.__gs_setter = self.gs.assign(self.__gs_value)
 
-        # keep prob
+        # keep prob        
         self.kp = tf.placeholder(dtype=tf.float32, name='keep_prob')
         self.add_node(self.kp, 'keep_prob')
+
         # training switch
         self.training = tf.placeholder(dtype=tf.bool, name='training')
         self.add_node(self.training, 'training')
@@ -89,11 +92,11 @@ class Net:
             lr = {'train': lr}
         self.params['lr'] = lr
         self.lr = dict()
-        with tf.name_scope('learning_rates'):
-            for k in self.params['lr']:
-                name = 'lr/' + k
-                self.lr[k] = tf.placeholder(dtype=tf.float32, name=name)
-                self.add_node(self.lr[k], name)
+        # with tf.name_scope('learning_rates'):
+        for k in self.params['lr']:
+            name = 'lr/' + k
+            self.lr[k] = tf.placeholder(dtype=tf.float32, name=name)
+            self.add_node(self.lr[k], name)
 
 
         # Key by sub-graph:
@@ -107,7 +110,9 @@ class Net:
         self.summary_ops = dict()
 
         self.feed_dict = dict()
-        self.feed_dict['default'] = ['lr/train']
+        self.feed_dict['default'] = list()
+        for k in self.params['lr']:
+            self.feed_dict['default'].append('lr/'+k)
         self.run_op = {
             'default': {'global_step': self.gs}
         }
@@ -133,6 +138,8 @@ class Net:
         self._set_sesssv()
         self._set_summary()
         pp_json(self.params, self.params['name'] + " PARAMS:")
+        pp_json(self.run_op, "RUN OPS:")
+        pp_json(self.feed_dict, "FEED DICTS:")
 
     def add_node(self, tensor, name=None):
         if name is None:
@@ -161,7 +168,7 @@ class Net:
 
                     # Append on a 'tower' dimension which we will average over
                     # below.
-                    grads.append(expanded_g)                
+                    grads.append(expanded_g)             
                 # Average over the 'tower' dimension.
                 grad = tf.concat(axis=0, values=grads)
                 grad = tf.reduce_mean(grad, 0)
@@ -235,16 +242,17 @@ class Net:
         return results
 
 # low level api
-    def partial_fit(self, data, task='train'):
+    def partial_fit(self, data, task=None):
         """ features are dict of mini batch numpy.ndarrays """
+        task = 'train' if task is None else task
         feed_dict_keys = list(self.feed_dict['default'])
-        feed_dict_keys += self.feed_dict['train']
+        feed_dict_keys += self.feed_dict[task]
         hypers = dict()
         hypers['lr/' + task] = self.params.get('lr')[task]
         hypers['keep_prob'] = self.params.get('keep_prob', 0.5)
         hypers['training'] = True
         run_op = dict(self.run_op['default'])
-        run_op.update(self.run_op['train'])
+        run_op.update(self.run_op[task])
         results = self._run_helper(run_op, feed_dict_keys, [hypers, data])
         return results
 
@@ -349,21 +357,24 @@ class Net:
         sess.run(self.__gs_setter, feed_dict={self.__gs_value: step})
 
 # high level api
-    def train(self, steps=None, phase=1, decay=2.0):
+    def train(self, steps=None, phase=1, decay=2.0, task=None, warmup=False):
         if not isinstance(steps, (list, tuple)):
             steps = [steps] * phase
         total_step = sum(steps)
         pt = ProgressTimer(total_step)
         cstep = 0
-        lr_bak = self.p.lr['train']
-        #warmup
-        self.reset_lr(decay=1024.0)
-        pp_json(self.params, self.params['name'] + " PARAMS:")
-        warming_up = 10
-        warmup_step = self.params['warmup_step']
+        
+        
+        if warmup:
+            #warmup
+            lr_bak = self.p.lr['train']
+            self.reset_lr(decay=1024.0)
+            pp_json(self.params, self.params['name'] + " PARAMS:")
+            warming_up = 10
+            warmup_step = self.params['warmup_step']
         for idx, sp in enumerate(steps):
             for i in range(sp):
-                if warming_up > 0:
+                if warmup and warming_up > 0:
                     if warmup_step <= 0:
                         self.reset_lr(decay=0.5)
                         warming_up -= 1
@@ -371,7 +382,9 @@ class Net:
                     else:
                         warmup_step -= 1
                 ss = self.dataset['train'].sample()
-                res = self.partial_fit(ss)
+                
+                res = self.partial_fit(ss, task=task)
+                
                 msg = "LOSS=%6e, STEP=%5d" % (res['loss'], res['global_step'])
                 # if res['loss'] > 1e-2:
                 #     self.dump(ss)
