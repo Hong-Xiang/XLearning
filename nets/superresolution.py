@@ -880,7 +880,7 @@ class SRNet5(SRNetBase):
         self.params.update_short_cut()
 
         if self.p.is_poi:
-            self.loss_fn = tf.nn.log_poisson_loss
+            self.loss_fn = lambda t, x: tf.reduce_sum(tf.nn.log_poisson_loss(t, x), name='loss_poisson')
         else:
             self.loss_fn = tf.losses.mean_squared_error
         
