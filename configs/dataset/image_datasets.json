@@ -54,6 +54,14 @@
         "data_std": 17.8,
         "period": [360, 360]
     },
+    "sino_phan": {
+        "file_data": "phantom_sinograms.h5",
+        "file_type": "h5",
+        "data_key": "sinograms",
+        "data_mean": 0.0,
+        "data_std": null,
+        "period": [320, 320]
+    },
     "sino_obil": {
         "todo": true
     },

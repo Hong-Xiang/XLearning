@@ -844,6 +844,7 @@ class SRNet5(SRNetBase):
                  loss_name='mse',
                  is_norm=False,
                  is_norm_gamma=False,
+                 is_poi=False,
                  **kwargs):
         SRNetBase.__init__(self, **kwargs)
         self.params['name'] = "SRNet5"
@@ -858,7 +859,8 @@ class SRNet5(SRNetBase):
         if self.params['down_sample_ratio'][1] > 1:
             self.params['down_sample_ratio'][1] = 2
         self.params.update_short_cut()
-        self.loss_fn = tf.losses.mean_squared_error
+        self.params['is_poi'] = is_poi
+        
         
         self.params['nb_scale'] = self.p.nb_down_sample + 1
         self.params['scale_keys'] = ['x%d'%(2**i) for i in range(self.params['nb_scale'])]
@@ -876,6 +878,11 @@ class SRNet5(SRNetBase):
             self.shapes[self.sk[i]] = shapes_new
         self.params['shapes'] = dict(self.shapes)
         self.params.update_short_cut()
+
+        if self.p.is_poi:
+            self.loss_fn = tf.nn.log_poisson_loss
+        else:
+            self.loss_fn = tf.losses.mean_squared_error
         
     
     @add_arg_scope

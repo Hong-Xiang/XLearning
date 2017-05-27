@@ -9,6 +9,7 @@ import random
 import numpy
 import h5py
 import pathlib
+from queue import Queue
 
 from ..utils.prints import pp_json
 from ..utils.general import with_config, empty_list
@@ -81,6 +82,9 @@ class DataSetBase(object):
         self.nb_examples = None
         self.sampler = None
 
+        self.mean_cache = Queue()
+        self.std_cache = Queue()
+
     def rand_int(self, minv=0, maxv=100):
         return random.randint(minv, maxv)
 
@@ -111,6 +115,11 @@ class DataSetBase(object):
         Returns:
             A dict of mini-batch tensors.
         """
+        while not self.mean_cache.empty():
+            self.mean_cache.get_nowait()
+        while not self.std_cache.empty():
+            self.std_cache.get_nowait()
+
         out = {}
         # init output dict
         for k in self.p.keys:
@@ -127,18 +136,26 @@ class DataSetBase(object):
             out[k] = numpy.array(out[k])
         return out
 
-    def norm(self, ip_):
+    def norm(self, ip_, mean_value=None, std_value=None):
         if self.p.is_norm:
-            normed = ip_ - self.p.data_mean
-            normed = normed / self.p.data_std
+            if mean_value is None:
+                mean_value = self.p.data_mean
+            if std_value is None:
+                std_value = self.p.data_std
+            normed = ip_ - mean_value
+            normed = normed * std_value
             if self.p.is_norm_gamma:
                 normed = np.power(normed, self.p.data_gamma)
         else:
             return ip_
         return normed
 
-    def denorm(self, ip_):
+    def denorm(self, ip_, mean_value=None, std_value=None):        
         if self.p.is_norm:
+            if mean_value is None:
+                mean_value = self.p.data_mean
+            if std_value is None:
+                std_value = self.p.data_std
             denormed = np.array(ip_)
             if self.p.is_norm_gamma:
                 normed = np.power(normed, 1.0/self.p.data_gamma)
@@ -267,6 +284,7 @@ class DataSetImages(DataSetBase):
         self.params.update_short_cut()
         self.dataset = None
         self.fin = None
+        
 
     def load_default_json(self):
         p = pathlib.Path(PATH_XLEARN) / 'configs' / 'dataset' / IMAGE_CONFIG_FILE
