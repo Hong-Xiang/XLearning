@@ -972,7 +972,7 @@ class SRNet5(SRNetBase):
                             buffer[k] = infs[k][sk1]
                     buffer[sk1] = ips[sk1]
             # crop
-            infs, ress, itps, ips = self.__crop_tensors(infs, itps, ress, ips)
+            infs, itps, ress, ips = self.__crop_tensors(infs, itps, ress, ips)
 
             # Losses
             with tf.name_scope('losses'):
@@ -1047,7 +1047,7 @@ class SRNet5(SRNetBase):
 
     def __sum_imgs(self, dict_to_sum):
         for k, v in dict_to_sum.items():
-            tf.summary.image(k, v)
+            tf.summary.image(k, v, max_outputs=4)
     
     def __sum_scas(self, dict_to_sum):
         for k, v in dict_to_sum.items():
