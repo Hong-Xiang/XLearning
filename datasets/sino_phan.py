@@ -1,4 +1,4 @@
-import np as np
+import numpy as np
 from .base import DataSetImages
 from ..utils.general import with_config
 
