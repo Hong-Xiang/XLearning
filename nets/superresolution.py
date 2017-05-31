@@ -845,9 +845,11 @@ class SRNet5(SRNetBase):
                  is_norm=False,
                  is_norm_gamma=False,
                  is_poi=False,
+                 is_ada=False,
                  **kwargs):
         SRNetBase.__init__(self, **kwargs)
         self.params['name'] = "SRNet5"
+        self.params['ada'] = is_ada # Adaptive? loss partial
         self.params['filters'] = filters
         self.params['depths'] = depths
         self.params['train_verbose'] = train_verbose
@@ -993,7 +995,10 @@ class SRNet5(SRNetBase):
                 to_add = []
                 for i in range(self.p.nb_scale - 1):
                     if losses[self.sk[i+1]][self.sk[i]] is not None:
-                        to_add.append(losses[self.sk[i+1]][self.sk[i]])                    
+                        if self.p.is_ada:
+                            to_add.append(losses[self.sk[i+1]][self.sk[i]]*(0.5**i))                    
+                        else:
+                            to_add.append(losses[self.sk[i+1]][self.sk[i]])                    
                 loss_pre = tf.add_n(to_add)
             with tf.name_scope('loss_all'):
                 to_add = []
