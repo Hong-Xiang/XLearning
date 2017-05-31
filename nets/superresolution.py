@@ -849,7 +849,7 @@ class SRNet5(SRNetBase):
                  **kwargs):
         SRNetBase.__init__(self, **kwargs)
         self.params['name'] = "SRNet5"
-        self.params['ada'] = is_ada # Adaptive? loss partial
+        self.params['is_ada'] = is_ada # Adaptive? loss partial
         self.params['filters'] = filters
         self.params['depths'] = depths
         self.params['train_verbose'] = train_verbose
