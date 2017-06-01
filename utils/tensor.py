@@ -406,4 +406,29 @@ def downsample(inputs: np.ndarray, ratio: list, offset: list=None, method: str=N
         out /= nb_samples
     return out
 
+def crop(inputs: np.ndarray, target_shape: list, offset: list=None, method: str=None, dtype=np.float64):
+    """ nd downsample """    
+    from xlearn.utils.asserts import dim_check
+    nb_dim = len(inputs.shape)
+    if offset is None:
+        offset = [0] * nb_dim
+    input_shape = inputs.shape
+    dim_check([input_shape, target_shape], names=['inputs shape', 'target_shape'])
+    dim_check([input_shape, offset], names=['inputs shape', 'offset'])
+    offset_min = []
+    offset_max = []
+    for sz_in, sz_out, off in zip(input_shape, target_shape, offset):
+        if sz_out + off > sz_in:
+            raise ValueError("To large target shape {0} or offset {1} for input shape {2}.".format(target_shape, offset, input_shape))
+        offset_min.append(off)
+        offset_max.append(sz_in - sz_out)
+    if method is None:
+        method = 'random'    
+    out = np.zeros(target_shape, dtype=dtype)
+    if method == 'random':
+        offset_crop = [random.randint(mi, ma) if ma > mi else mi for mi, ma in zip(offset_min, offset_max)]
+    nb_samples = 0    
+    slices = tuple([slice(o, o+t) for o, t in zip(offset_crop, target_shape)])
+    out += inputs[slices]
+    return out, slices
 

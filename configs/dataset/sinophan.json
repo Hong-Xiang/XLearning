@@ -13,5 +13,7 @@
     "nb_down_sample": 3,
     "data_down_sample": 3,
     "label_down_sample": 0,
+    "down_sample_method": "sum",
+    "mix_scale": true,
     "nnz_ratio": 0.0
 }
