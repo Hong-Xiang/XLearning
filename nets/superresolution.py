@@ -846,6 +846,7 @@ class SRNet5(SRNetBase):
                  is_norm_gamma=False,
                  is_poi=False,
                  is_ada=False,
+                 ada_coe=0.5,
                  **kwargs):
         SRNetBase.__init__(self, **kwargs)
         self.params['name'] = "SRNet5"
@@ -856,6 +857,7 @@ class SRNet5(SRNetBase):
         self.params['is_bn'] = is_bn
         self.params['is_res'] = is_res
         self.params['res_scale'] = res_scale
+        self.params['ada_coe'] = ada_coe
         if self.params['down_sample_ratio'][0] > 1:
             self.params['down_sample_ratio'][0] = 2
         if self.params['down_sample_ratio'][1] > 1:
@@ -996,7 +998,7 @@ class SRNet5(SRNetBase):
                 for i in range(self.p.nb_scale - 1):
                     if losses[self.sk[i+1]][self.sk[i]] is not None:
                         if self.p.is_ada:
-                            to_add.append(losses[self.sk[i+1]][self.sk[i]]*(0.5**i))                    
+                            to_add.append(losses[self.sk[i+1]][self.sk[i]]*(self.p.ada_coe**i))                    
                         else:
                             to_add.append(losses[self.sk[i+1]][self.sk[i]])                    
                 loss_pre = tf.add_n(to_add)
