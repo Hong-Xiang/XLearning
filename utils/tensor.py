@@ -14,7 +14,7 @@ import xlearn.utils.general as utg
 
 def to_bin(x, threshold=None, zero_value=0, one_value=1):
     if threshold is None:
-        threshold = (np.min(x) + np.max(x)) / 2    
+        threshold = (np.min(x) + np.max(x)) / 2
     y = np.zeros(shape=x.shape, dtype=np.int32)
     y[x < threshold] = zero_value
     y[x >= threshold] = one_value
@@ -33,7 +33,8 @@ def to_cata(x, thresholds=None, nb_threshold=None, values=None):
         values = list(range(nb_threshold))
     y[x == thresholds[-1]] = values[-1]
     for i in range(nb_threshold):
-        y[np.logical_and(x < thresholds[i + 1], x >= thresholds[i])] = values[i]
+        y[np.logical_and(x < thresholds[i + 1], x >=
+                         thresholds[i])] = values[i]
     return y
 
 
@@ -84,7 +85,8 @@ def offset_nd(tensor_shape, patch_shape, strides=None, offsets0=None, offsets1=N
             offsets0 = [0] * dim
         if offsets1 is None:
             offsets1 = [0] * dim
-        crop = lambda x: (x[0], x[1:])
+
+        def crop(x): return (x[0], x[1:])
         tensor_shape0, tensor_shape_next = crop(tensor_shape)
         patch_shape0, patch_shape_next = crop(patch_shape)
         strides0, strides_next = crop(strides)
@@ -336,7 +338,7 @@ def down_sample_1d(input_, axis, ratio, offset=0, method='mean'):
         sli = multidim_slicer(index_start, index_range, strides)
         output = np.zeros(output_shape)
         output[:] = input_[sli]
-    if method == 'mean' or method=='sum':
+    if method == 'mean' or method == 'sum':
         index_start = [0] * dim
         index_range = list(input_shape)
         strides = [1] * dim
@@ -353,6 +355,7 @@ def down_sample_1d(input_, axis, ratio, offset=0, method='mean'):
 
 
 def down_sample_nd(input_, ratio, offset=None, method='mean'):
+    DeprecationWarning()
     """Down sample of tensor on N axises.
     """
     dim = len(input_.shape)
@@ -372,3 +375,35 @@ def down_sample_nd(input_, ratio, offset=None, method='mean'):
                                 offset=offset[axis],
                                 method=method)
     return output
+
+
+def downsample(inputs: np.ndarray, ratio: list, offset: list=None, method: str=None, dtype=np.float64):
+    """ nd downsample """
+    from itertools import product
+    from xlearn.utils.asserts import dim_check
+    nb_dim = len(inputs.shape)
+    if offset is None:
+        offset = [0] * nb_dim
+    dim_check([inputs.shape, ratio], names=['inputs shape', 'ratio'])
+    dim_check([inputs.shape, offset], names=['inputs shape', 'offset'])
+    if method is None:
+        method = 'mean'
+    result_shape = [s // r for s, r in zip(inputs.shape, ratio)]
+    out = np.zeros(result_shape, dtype=dtype)
+    if method == 'mean' or 'sum':
+        offset_iters = [list(range(o)) for o in ratio]
+        offc = product(*offset_iters)
+    elif method == 'fix':
+        offc = [o // 2 for o in ratio]
+    nb_samples = 0
+    for offn in offc:
+        offset_now = [o0 + o1 for o0, o1 in zip(offset, offn)]
+        slices = tuple([slice(o, s // r * r, r)
+                        for o, s, r in zip(offset, inputs.shape, ratio)])
+        out += inputs[slices]
+        nb_samples += 1
+    if method == 'mean':
+        out /= nb_samples
+    return out
+
+

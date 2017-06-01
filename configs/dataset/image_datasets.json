@@ -60,7 +60,7 @@
         "data_key": "sinograms",
         "data_mean": 0.0,
         "data_std": null,
-        "period": [320, 320]
+        "period": [320, 640]
     },
     "sino_obil": {
         "todo": true

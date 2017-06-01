@@ -1208,3 +1208,365 @@ class SRNet5(SRNetBase):
 
     def _set_train(self):
         pass
+
+
+class SRNet6(SRNetBase):    
+    @with_config
+    def __init__(self,
+                 filters=64,
+                 depths=20,
+                 train_verbose=0,
+                 is_bn=True,
+                 is_res=True,
+                 is_inc=True,
+                 res_scale=0.1,
+                 loss_name='mse',
+                 is_norm=False,
+                 is_norm_gamma=False,
+                 is_poi=False,
+                 is_ada=False,
+                 **kwargs):
+        SRNetBase.__init__(self, **kwargs)
+        self.params['name'] = "SRNet6"
+        self.params['filters'] = filters
+        self.params['depths'] = depths
+        self.params['train_verbose'] = train_verbose
+        self.params['is_bn'] = is_bn
+        self.params['is_res'] = is_res
+        self.params['res_scale'] = res_scale
+        if self.params['down_sample_ratio'][0] > 1:
+            self.params['down_sample_ratio'][0] = 2
+        if self.params['down_sample_ratio'][1] > 1:
+            self.params['down_sample_ratio'][1] = 2
+        self.params.update_short_cut()
+        self.params['is_poi'] = is_poi
+        
+        
+        self.params['nb_scale'] = self.p.nb_down_sample + 1
+        self.params['scale_keys'] = ['x%d'%(2**i) for i in range(self.params['nb_scale'])]
+        self.params.update_short_cut()
+        self.sk = self.params['scale_keys']
+        self.params['true_scale'] = dict()
+        for k in self.sk:
+            self.params['true_scale'][k] = int(k[1:])
+        self.shapes = OrderedDict({self.sk[0]: self.p.high_shape})
+        for i in range(1, self.p.nb_scale):
+            shape_pre = list(self.shapes.values())[i - 1]
+            shapes_new = list(shape_pre)
+            shapes_new[1] /= 2
+            shapes_new[2] /= 2                   
+            self.shapes[self.sk[i]] = shapes_new
+        self.params['shapes'] = dict(self.shapes)
+        self.params.update_short_cut()
+
+        if self.p.is_poi:
+            self.loss_fn = lambda t, x: tf.reduce_sum(tf.nn.log_poisson_loss(t, x), name='loss_poisson')
+        else:
+            self.loss_fn = tf.losses.mean_squared_error
+        
+    
+    @add_arg_scope
+    def _sr_kernel(self, low_res, reuse=None, is_stem=False, name=None):
+        """ super resolution kernel
+        Inputs:
+            low_res:            
+        Returns:
+        Yields:
+        """
+        nf = self.p.filters
+        scale = self.p.res_scale
+        dr = self.p.down_sample_ratio
+        basic_unit = incept 
+        normalization = 'bn' if self.p.is_bn else None
+        basic_unit_args = {'normalization': normalization, 'training': self.training, 'activation': celu}
+        residual_args = {'basic_unit_args': basic_unit_args, 'basic_unit': incept}
+        with tf.variable_scope(name, 'super_resolution_net', reuse=reuse):
+            if is_stem:
+                stemt = stem(low_res, filters=nf, name='stem') 
+            else:
+                stemt = low_res
+            repA = stack_residuals(stemt, self.p.depths, residual_args, name='stack_A')
+            repB = upsampling2d(repA, size=dr)
+            repC = stack_residuals(repB, self.p.depths, residual_args, name='stack_C')
+            inf, res, itp = sr_infer(low_res, repC, dr, name='infer')
+        return inf, res, itp, repC
+
+    @add_arg_scope
+    def _sr_kernel_dummy(self, low_res, reuse=None, name=None):
+        with tf.variable_scope(name, 'super_resolution_net', reuse=reuse):
+            with tf.name_scope('upsampling'):
+                itp = upsampling2d(low_res, self.p.down_sample_ratio)
+            with tf.name_scope('infer'):
+                h = tf.layers.conv2d(itp, 32, 3, padding='same')
+                inf = tf.layers.conv2d(h, 1, 3, padding='same')
+            with tf.name_scope('res'):
+                res = inf - itp
+        return inf, res, itp
+    
+    def __crop_tensors(self, infs, itps, ress, ips):        
+        with arg_scope([crop], crop_size=self.p.crop_size):            
+            ipsc = crop(ips, name='crop/ip')                                
+            infc = crop(inf, name='crop/inf')
+            itpc = crop(itp, name='crop/itp')
+            resc = crop(res, name='crop/res')        
+        return infc, itpc, resc, ipc
+
+    def _super_resolution(self, img_n: dict, img_c: dict, reuse=None, name=None):
+        """ Full model of infernce net.
+            One replica on cpu, true position of variables.
+            Multiple replica on gpus.
+        """              
+        net_name = 'kernel_net'
+
+        datas_noise = OrderedDict()
+        datas_clean = OrderedDict()
+        for k in self.sk:
+            datas_noise[k] = img_n[k]
+            datas_clean[k] = img_c[k]
+
+        with tf.variable_scope(name, 'super_resolution', reuse=reuse):
+            # Construct first kernel net:
+            if not reuse:                
+                _ = self._sr_kernel(ipt, name=net_name, reuse=False)
+            
+            # Construct kernel net on inputs of different scale:
+            losses = self.__new_tensor_table()
+            buffer = {k: None for k in self.sk}
+            with arg_scope([self._sr_kernel, self._sr_kernel], name=net_name, reuse=True):
+                for sk1 in reversed(self.sk):                    
+                    for sk0 in reversed(self.sk): 
+                        if buffer[sk0] is None:
+                            continue                        
+                        infs[sk0][sk1], ress[sk0][sk1], itps[sk0][sk1] = self._sr_kernel(buffer[sk0])                        
+                    for k in infs:
+                        if infs[k][sk1] is not None:
+                            buffer[k] = infs[k][sk1]
+                    buffer[sk1] = ips[sk1]
+            # crop
+            infs, itps, ress, ips = self.__crop_tensors(infs, itps, ress, ips)
+
+            # Losses
+            with tf.name_scope('losses'):
+                for sk0 in self.sk:
+                    for sk1 in self.sk:
+                        if infs[sk0][sk1] is not None:
+                            with tf.name_scope('loss_'+sk0+'to'+sk1):
+                                losses[sk0][sk1] = self.loss_fn(ips[sk1], infs[sk0][sk1])
+            
+            with tf.name_scope('loss_pre'):
+                to_add = []
+                for i in range(self.p.nb_scale - 1):
+                    if losses[self.sk[i+1]][self.sk[i]] is not None:
+                        if self.p.is_ada:
+                            to_add.append(losses[self.sk[i+1]][self.sk[i]]*(0.5**i))                    
+                        else:
+                            to_add.append(losses[self.sk[i+1]][self.sk[i]])                    
+                loss_pre = tf.add_n(to_add)
+            with tf.name_scope('loss_all'):
+                to_add = []
+                for k0 in self.sk:
+                    for k1 in self.sk:
+                        if losses[k0][k1] is not None:
+                            to_add.append(losses[k0][k1])                    
+                loss_all = tf.add_n(to_add)
+            
+            # Gradients
+            with tf.name_scope('grad_pre'):
+                grad_pre = self.optimizers['train_pre'].compute_gradients(loss_pre)
+            with tf.name_scope('grad_all'):
+                grad_all = self.optimizers['train_all'].compute_gradients(loss_all)
+            
+            # Outs
+            out = {
+                'loss_pre': loss_pre,
+                'loss_all': loss_all,
+                'grad_pre': grad_pre,
+                'grad_all': grad_all
+            }
+            for k in self.sk:
+                out.update({'data_'+k: ips[k]})
+                k0 = self.sk[0]                
+                out.update({'inf_'+k: infs[k][k0]})
+                out.update({'itp_'+k: itps[k][k0]})
+                out.update({'res_'+k: ress[k][k0]})
+            out_f = {k: out[k] for k in out if out[k] is not None}
+        return out_f
+
+    def _add_data(self, nb_down: int, shape: list):
+        """ Add data entry tensor, and split into GPU mini-batch.
+        Inputs:
+            nb_down: tile of down sample, which is used only for naming in graph and nodes.
+            shape: shape of tensor, in cpu (full shape), which should be able to divided by nb_gpus.
+        Returns:
+            A cpu tensor, a list of gpu tensors
+        Yield:
+            None
+        """
+        sliced = []
+        bs_gpu = self.p.batch_size // self.p.nb_gpus
+        name = 'data_%dx' % (2 ** nb_down)        
+        name_out = 'data%d'%nb_down
+        with tf.name_scope(name):            
+            data = tf.placeholder(
+                dtype=tf.float32, shape=shape, name=name)
+            self.add_node(data, name_out)
+            gpu_shape = data.shape.as_list()
+            gpu_shape[0] = bs_gpu
+            for i in range(self.p.nb_gpus):
+                with tf.name_scope('device_%d' % i):
+                    sliced.append(
+                        tf.slice(data, [i * bs_gpu, 0, 0, 0], gpu_shape))
+        return data, sliced
+
+
+    def __sum_imgs(self, dict_to_sum):
+        for k, v in dict_to_sum.items():
+            tf.summary.image(k, v, max_outputs=4)
+    
+    def __sum_scas(self, dict_to_sum):
+        for k, v in dict_to_sum.items():
+            tf.summary.scalar(k, v)
+
+    def __add_analysis(self):        
+        with tf.name_scope('analysis'):                            
+            with tf.name_scope('res_ref'):
+                res_refs = {k: tf.subtract(self.datas[self.sk[0]], self.itps[k], name=k) for k in self.itps}
+                self.__sum_imgs(res_refs)
+
+            with tf.name_scope('res_inf'):
+                res_infs = {k: tf.subtract(self.datas[self.sk[0]], self.infs[k], name=k) for k in self.infs}
+                self.__sum_imgs(res_infs)
+
+            with tf.name_scope('err_itp'):
+                err_itps = {k: tf.abs(res_refs[k], name=k) for k in res_refs}
+                self.__sum_imgs(err_itps)
+        
+            with tf.name_scope('err_inf'):
+                err_infs = {k: tf.abs(res_infs[k], name=k) for k in res_infs}
+                self.__sum_imgs(err_infs)
+
+            l2v = lambda d, k: tf.sqrt(tf.reduce_sum(tf.square(d[k]), axis=[1, 2, 3]), name=k)
+            with tf.name_scope('l2_itp'):
+                l2_itps = {k: l2v(err_itps, k) for k in err_itps}
+                with tf.name_scope('mean'):
+                    l2_itps_mean = {k: tf.reduce_mean(l2_itps[k]) for k in l2_itps}
+                self.__sum_scas(l2_itps_mean)
+            with tf.name_scope('l2_inf'):
+                l2_infs = {k: l2v(err_infs, k) for k in err_infs}
+                with tf.name_scope('mean'):
+                    l2_infs_mean = {k: tf.reduce_mean(l2_infs[k]) for k in l2_infs}
+                self.__sum_scas(l2_infs_mean)
+            with tf.name_scope('ratio'):
+                rv = lambda x, y, k: tf.reduce_mean(x[k] / (y[k] + 1e-3), name=k)                                
+                ratios = {k: rv(l2_infs, l2_itps, k) for k in l2_infs}
+                self.__sum_scas(ratios)
+        tf.summary.scalar('lr/train_pre', self.lr['train_pre'])
+        tf.summary.scalar('lr/train_all', self.lr['train_all'])
+            
+
+
+    def __add_merge(self):
+        outs = self.outs
+        
+        with tf.name_scope('merge'):
+            with tf.name_scope('infers'):
+                infs = {k[-2:]: tf.concat(outs[k], axis=0, name=k) for k in outs if 'inf' in k}                                               
+                for k in infs:
+                    self.add_node(infs[k],'inf_'+k)                
+                self.infs = infs                
+                self.__sum_imgs(infs)                
+            with tf.name_scope('interps'):
+                itps = {k[-2:]: tf.concat(outs[k], axis=0, name=k) for k in outs if 'itp' in k}                
+                for k in itps:
+                    self.add_node(itps[k], 'itp_'+k)
+                self.itps = itps
+                self.__sum_imgs(itps)
+            with tf.name_scope('labels'):
+                datas = {k[-2:]: tf.concat(outs[k], axis=0, name=k) for k in outs if 'data' in k}
+                self.datas = datas
+                self.__sum_imgs(datas)
+
+            with tf.name_scope('loss'):
+                self.losses['train_pre'] = tf.add_n(outs['loss_pre'], name='loss_pre')
+                self.losses['train_all'] = tf.add_n(outs['loss_all'], name='loss_all')
+            tf.summary.scalar('loss_pre', self.losses['train_pre'])
+            tf.summary.scalar('loss_all', self.losses['train_all'])
+
+            train_step_pre = self.train_step(outs['grad_pre'], self.optimizers['train_pre'], summary_verbose=0, name='train_pre')
+            train_step_all = self.train_step(outs['grad_all'], self.optimizers['train_all'], summary_verbose=0, name='train_all')        
+            
+            
+        self.train_steps['train_pre'] = train_step_pre
+        self.train_steps['train_all'] = train_step_all
+        return None
+    
+    def __add_api(self):
+ 
+
+        # self.summary_ops['all'] = tf.summary.merge_all()
+
+
+        common_list = ['data'+str(s) for s in range(self.p.nb_scale)] + ['training']
+        self.feed_dict['default'] = list()
+        self.feed_dict['train_pre'] = list(common_list) + ['lr/train_pre']
+        self.feed_dict['train_all'] = list(common_list) + ['lr/train_all']
+        for i, k in enumerate(self.sk[:-1]):
+            k0 = self.p.true_scale[self.sk[i+1]]
+            self.feed_dict['predict_%d'%k0] = ['data%d'%(i+1), 'training']
+        self.feed_dict['summary'] = list(common_list) + ['lr/train_pre', 'lr/train_all']
+        
+        self.run_op['train_pre'] = {'train_step_pre': self.train_steps['train_pre'],
+                                'loss': self.losses['train_pre'], 'global_step': self.gs}
+        self.run_op['train_all'] = {'train_step_all': self.train_steps['train_all'],
+                                'loss': self.losses['train_all'], 'global_step': self.gs}        
+        for s in self.sk[1:]:
+            self.run_op['predict_'+s] = {'inference': self.nodes['inf_'+s], 'interpolation': self.nodes['itp_'+s]}
+        self.run_op['summary'] = {'summary_all': self.summary_ops['all']}
+
+        
+
+    def _set_model(self):
+        bs_gpu = self.p.batch_size // self.p.nb_gpus
+        imgs_cpu = dict()
+        imgs_gpus = []
+        for i in range(self.p.nb_gpus):
+            imgs_gpus.append(dict())
+        with tf.device('/cpu:0'):
+            for i, k in enumerate(self.p.scale_keys):
+                data_cpu, data_gpus = self._add_data(i, self.shapes[k])
+                imgs_cpu[k] = data_cpu
+                for j in range(self.p.nb_gpus):
+                    imgs_gpus[j][k] = data_gpus[j]
+            if self.p.optimizer_name == 'Adam':
+                self.optimizers['train_pre'] = tf.train.AdamOptimizer(self.lr['train_pre'])
+                self.optimizers['train_all'] = tf.train.AdamOptimizer(self.lr['train_all'])
+            elif self.p.optimizer_name == 'rmsporp':
+                self.optimizers['train_pre'] = tf.train.RMSPropOptimizer(self.lr['train_pre'])
+                self.optimizers['train_all'] = tf.train.RMSPropOptimizer(self.lr['train_all'])
+            self._super_resolution(imgs_gpus[0], name='net_main', reuse=False)               
+        
+        # GPU models
+        outs = dict()
+        for i in range(self.p.nb_gpus):
+            device = '/gpu:%d' % i
+            with tf.device(device):
+                gpu_out = self._super_resolution(imgs_gpus[i], name='net_main', reuse=True)
+            for k in gpu_out:
+                item = outs.get(k)
+                if item is None:
+                    outs[k] = [gpu_out[k]]
+                else:
+                    outs[k].append(gpu_out[k])
+        
+        self.outs = outs
+        # for k in outs:
+        #     print(k, ': ', outs[k])
+
+        self.__add_merge()
+        self.__add_analysis()
+        self.summary_ops['all'] = tf.summary.merge_all()
+        self.__add_api()
+
+
+    def _set_train(self):
+        pass

@@ -13,7 +13,7 @@ from queue import Queue
 
 from ..utils.prints import pp_json
 from ..utils.general import with_config, empty_list
-from ..utils.tensor import down_sample_nd
+from ..utils.tensor import downsample
 from ..utils.cells import Sampler
 from ..utils.options import Params
 
@@ -326,7 +326,7 @@ class DataSetImages(DataSetBase):
     def downsample(self, image):
         """ down sample *ONE* image/patch """
         image = numpy.array(image, dtype=numpy.float32)
-        image_d = down_sample_nd(image, self.p.down_sample_ratio, method=self.p.down_sample_method)
+        image_d = downsample(image, self.p.down_sample_ratio, method=self.p.down_sample_method)
         return image_d
 
     def visualize(self, sample, is_no_change=False):
