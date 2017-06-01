@@ -132,12 +132,12 @@ class Net:
 
 # helper methods for constructing net:
     def init(self):
+        pp_json(self.params, self.params['name'] + " PARAMS:")
         self._set_model()
         self._set_train()
         self._set_saver()
         self._set_sesssv()
         self._set_summary()
-        pp_json(self.params, self.params['name'] + " PARAMS:")
         pp_json(self.run_op, "RUN OPS:")
         pp_json(self.feed_dict, "FEED DICTS:")
 

@@ -24,16 +24,19 @@ def auto():
         decay = train_task['decay']
         task = train_task.get('task')
         load_step = train_task.get('load_step')
-        filenames = train_task.get('filenames', [])
+        filenames = []
+        filenames.append(train_task.get('net_file'))
+        filenames.append(train_task.get('data_file'))
+        
     train_core(net_name, dataset_name, filenames, steps, decay, load_step, task)
 
 def train_core(net_name, dataset_name, filenames, steps, decay, load_step, task=None):        
         data_cls = getattr(datasets, dataset_name)
         net_cls = getattr(nets, net_name)
-        net = net_cls(filenames=filenames, load_step=load_step)
+        net = net_cls(filenames=[filenames[0], filenames[1]], load_step=load_step)
         net.init()
-        with data_cls(filenames=filenames, mode='train') as dataset_train:
-            with data_cls(filenames=filenames, mode='test') as dataset_test:
+        with data_cls(filenames=filenames[1], mode='train') as dataset_train:
+            with data_cls(filenames=filenames[1], mode='test') as dataset_test:
                 net.set_dataset('train', dataset_train)
                 net.set_dataset('test', dataset_test)
                 net.train(steps=steps, decay=decay, task=task)

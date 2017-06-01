@@ -1,8 +1,10 @@
 {
-    "net_name": "SRNet0",
-    "dataset_name": "SinoShep",
-    "steps": 100,
-    "decay": 2.0,
-    "filenames": ["net.srnet0.json", "data.sino8x.json"],
-    "load_step": -1
+    "net_name": "SRNet5",
+    "dataset_name": "SinoPhan",
+    "steps": [100000, 100000],
+    "decay": 10.0,
+    "net_file": "net.srnet5.json",
+    "data_file": "data.sinophan.json",
+    "load_step": -1,
+    "task": "train_all"
 }
