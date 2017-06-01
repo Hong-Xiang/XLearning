@@ -390,16 +390,16 @@ def downsample(inputs: np.ndarray, ratio: list, offset: list=None, method: str=N
         method = 'mean'
     result_shape = [s // r for s, r in zip(inputs.shape, ratio)]
     out = np.zeros(result_shape, dtype=dtype)
-    if method == 'mean' or 'sum':
+    if method == 'mean' or method=='sum':
         offset_iters = [list(range(o)) for o in ratio]
         offc = product(*offset_iters)
     elif method == 'fix':
-        offc = [o // 2 for o in ratio]
+        offc = [[o // 2 for o in ratio]]
     nb_samples = 0
     for offn in offc:
         offset_now = [o0 + o1 for o0, o1 in zip(offset, offn)]
         slices = tuple([slice(o, s // r * r, r)
-                        for o, s, r in zip(offset, inputs.shape, ratio)])
+                        for o, s, r in zip(offset_now, inputs.shape, ratio)])
         out += inputs[slices]
         nb_samples += 1
     if method == 'mean':

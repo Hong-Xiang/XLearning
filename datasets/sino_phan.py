@@ -66,6 +66,8 @@ class SinoPhan(DataSetImages):
                 raise ValueError('Tried load more than 100 images and failed.')
         if self.p.is_poi:
             image, noise_image, mean_value, std_value = self._add_noise(image)
+        else:
+            noise_image = None
         return image, noise_image, idx, mean_value, std_value
 
     def _add_noise(self, image):
@@ -85,16 +87,21 @@ class SinoPhan(DataSetImages):
             image = np.mean(image, axis=0, keepdims=True)
 
         if self.p.is_down_sample:
-            data_clean = []
-            data_noise = []
+            data_clean = []            
             data_clean.append(np.array(image))
-            data_noise.append(np.array(noise_image))
+            
             for i in range(self.p.nb_down_sample):
-                image = downsample(image, self.p.down_sample_ratio, method=self.p.down_sample_method)
-                noise_image = downsample(noise_image, self.p.down_sample_ratio, method=self.p.down_sample_method)
+                image = downsample(image, self.p.down_sample_ratio, method=self.p.down_sample_method)                
                 data_clean.append(image)
-                data_noise.append(noise_image)
-
+            
+            if self.p.is_poi:
+                data_noise = []
+                data_noise.append(np.array(noise_image))
+                for i in range(self.p.nb_down_sample):
+                    noise_image = downsample(noise_image, self.p.down_sample_ratio, method=self.p.down_sample_method)
+                    data_noise.append(noise_image)
+            else:
+                data_noise = data_clean
             out = {
                 'data': data_noise[self.p.data_down_sample],
                 'label': data_clean[self.p.label_down_sample],
