@@ -143,7 +143,7 @@ class DataSetBase(object):
             if std_value is None:
                 std_value = self.p.data_std
             normed = ip_ - mean_value
-            normed = normed * std_value
+            normed = normed / std_value
             if self.p.is_norm_gamma:
                 normed = np.power(normed, self.p.data_gamma)
         else:

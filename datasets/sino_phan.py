@@ -81,7 +81,6 @@ class SinoPhan(DataSetImages):
     def _sample_single(self):
         """ read from dataset HDF5 file and perform necessary preprocessings """
         image, noise_image, idx, mean_value, std_value = self._load_sample()
-
         if self.p.is_gray:
             image = np.mean(image, axis=0, keepdims=True)
 
@@ -117,15 +116,17 @@ class SinoPhan(DataSetImages):
                 shs.append(slice(slices[i].start*self.p.down_sample_ratio[i], slices[i].stop*self.p.down_sample_ratio[i]))
             shs = tuple(shs)      
             label = label[shs]
-            out['data'] = data
+            out['data'] = data/np.prod(self.p.down_sample_ratio)
             out['data0'] = label
-            out['data1'] = data
+            out['data1'] = data/np.prod(self.p.down_sample_ratio)
             out['label'] = label
 
         for k in out:
             if k == 'idx':
                 continue
             if self.p.is_norm:
-                out[k] = self.norm(out[k], mean_value, std_value)
+                mean_value = 0.0
+                std_value = max(std_value, 1.0)               
+                out[k] = self.norm(out[k], mean_value, std_value)                
             out[k] = self.padding_channel(out[k])
         return out
