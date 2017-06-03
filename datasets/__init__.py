@@ -5,3 +5,4 @@ from .pet_rebin import SinogramsPETRebin
 from .cali import CalibrationDataSet
 from .images import Celeba, Flickr25k, MNISTImage, SinoShep, SinoShepTest, PETRebin, SinoDero
 from .sino_phan import SinoPhan
+from .mnist_recon import MNISTRecon

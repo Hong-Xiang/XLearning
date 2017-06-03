@@ -14,7 +14,23 @@ from tensorflow.contrib.framework import arg_scope, add_arg_scope
 #                       name='upscale_%d_conv_1' % id)(x)
 #     x = ELU(name='upscale_%d_elu_1' % id)(x)
 #     return x
+def rmse(label, data):
+    with tf.name_scope('rmse'):
+        rmse = tf.sqrt(tf.reduce_mean(tf.square(label - data)))
+    return rmse
 
+def psnr(label, data):
+    with tf.name_scope('psnr'):
+        r = rmse(label, data)        
+        maxv = tf.reduce_max(label)
+        minv = tf.reduce_min(label)
+        sca = 255.0 / (maxv - minv)
+        ln = (label - minv) * sca
+        tn = (data - minv) * sca
+        rmv = rmse(ln, tn)
+        value = 10.0 * tf.log((255.0**2.0)/(rmv**2.0))/tf.log(10.0)
+    return value
+        
 def upsampling2d(inputs, size, method=None, filters=None, name='upsampling'):
     if method is None:
         method = 'bilinear'
@@ -252,105 +268,48 @@ def celu(x):
 
 
 @add_arg_scope
-def conv2d(inputs, filters, **kwargs):
-    defaults = {
-        'padding': 'same',
-        'kernel_size': 3
-    }
-    defaults.update(kwargs)
-    return tf.layers.conv2d(inputs, filters, **defaults)
-
+def conv2d(inputs, filters, kernel_size=3, *, activation=None, normalization=None, training=None, name=None, reuse=None, padding='same', pre_activation=None, **kwargs):
+    """ Warped conv2d
+        
+    """
+    with tf.variable_scope(name, 'convolution2d', reuse=reuse):
+        if pre_activation is not None:
+            h = pre_activation(inputs)
+        else:
+            h = inputs
+        h = tf.layers.conv2d(h, filters=filters, kernel_size=kernel_size, padding=padding, **kwargs)
+        scale = not normalization is None
+        if normalization == 'bn':
+            h = tf.layers.batch_normalization(h, scale=scale, training=training)
+        if activation is not None:
+            h = activation(h)
+    return h
 
 @add_arg_scope
 def bn(*args, **kwargs):
     return tf.layers.batch_normalization(*args, **kwargs)
 
-
-@add_arg_scope
-def res_inc_unit(inputs, activation=celu, normalization=None, training=True, reuse=None, scale=1.0, name=None):
-    filters = inputs.shape.as_list()[-1]
-    fc = filters // 4
-    default_name = 'residual_inception_unit'
-    with tf.variable_scope(name, default_name, reuse=reuse):
-        with arg_scope([conv2d], padding='same'):
-            with arg_scope([bn], training=training):
-                # with tf.name_scope(name, default_name):
-                # path 0
-                with tf.variable_scope('path_0'):
-                    h0 = inputs
-                    if normalization == 'bn':
-                        h0 = bn(h0, name='bn')
-                    h0 = activation(h0)
-                    h0 = conv2d(h0, fc, 1, name='conv')
-
-                # path 1
-                with tf.variable_scope('path_1'):
-                    h1 = inputs
-                    kernel_sizes = [1, 3]
-                    for i, ks in enumerate(kernel_sizes):
-                        if normalization == 'bn':
-                            h1 = bn(h1, name='bn_%d' % i)
-                        h1 = activation(h1)
-                        h1 = conv2d(h1, fc, ks, name='conv_%d' % i)
-
-                # path 2
-                with tf.variable_scope('path_2'):
-                    h2 = inputs
-                    kernel_sizes = [1, 3, 3]
-                    for i, ks in enumerate(kernel_sizes):
-                        if normalization == 'bn':
-                            h2 = bn(h2, name='bn_%d' % i)
-                        h2 = activation(h2)
-                        h2 = conv2d(h2, fc, ks, name='conv_%d' % i)
-
-                # concate
-                with tf.name_scope('concate'):
-                    h = tf.concat([h0, h1, h2], axis=-1)
-                with tf.variable_scope('path_merge'):
-                    kernel_sizes = [1, 3]
-                    for i, ks in enumerate(kernel_sizes):
-                        if normalization == 'bn':
-                            h = bn(h, name='bn_%d' % i)
-                        h = activation(h)
-                        h = conv2d(h, filters, ks, name='conv_%d' % i)
-                with tf.name_scope('add'):
-                    out = h * scale + inputs
-    return out
-
-
-@add_arg_scope
-def res2_unit(inputs, activation=tf.nn.elu, normalization=None, training=True, scale=0.1, reuse=None, name=None):
-    default_name = 'residual2_unit'
-    filters = inputs.shape.as_list()[-1]
-    with tf.name_scope(name, default_name):
-        with tf.variable_scope(name, reuse=reuse):
-            h = tf.layers.conv2d(
-                inputs, filters, 3, padding='same', activation=activation, name='conv0')
-            h = tf.layers.conv2d(h, filters, 1, padding='same',
-                                 activation=activation, name='conv1')
-            h = tf.layers.conv2d(h, filters, 3, padding='same', name='conv2')
-        with tf.name_scope('shorcut'):
-            out = scale * h + inputs
-    return out
-
-
-@add_arg_scope
-def stack_res_units(inputs, depths, basic_unit=res_inc_unit, activation=celu, normalization=None, training=None, scale=1.0, reuse=None, name=None):
-    default_name = 'stack_res_units'
-    with tf.variable_scope(name, default_name, reuse=reuse):
-        h = inputs
-        for i in range(depths):
-            h = basic_unit(h, activation=activation, normalization=normalization, training=training, scale=scale, name='unit_%d'%i)
-    return h
-
 @add_arg_scope
 def stem(inputs, filters, reuse=None, name=None):
+    """ Convolution start layer
+    """
     with tf.variable_scope(name, 'stem', reuse=reuse):
         out = conv2d(inputs, filters)
     return out
 
 @add_arg_scope
 def incept(inputs, filters, nb_path=3, activation=None, normalization=None, training=None, reuse=None, name=None):
+    """ Basic incept unit.
+    Inputs:
+        inputs: input tensor
+        filters: # of filters (maximum, summation of filters in seperated paths), # of channels of output tensor
+        nb_path: # of paths
+        activation: activation function
+        normalization: normalization function name (currently 'bn' or None)
+        training: if using batch normalization, training flag
+        reuse: bool
+        name: str
+    """
     default_name = 'incept'
     fp = filters // nb_path
     with tf.variable_scope(name, default_name, reuse=reuse):
@@ -381,164 +340,138 @@ def incept(inputs, filters, nb_path=3, activation=None, normalization=None, trai
     return h
 
 @add_arg_scope
-def residual(inputs, basic_unit, basic_unit_args, scale=None, reuse=None, name=None):
+def residual(inputs, basic_unit, basic_unit_args, nb_units=2, scale=None, reuse=None, name=None):
+    """ Residual block.
+        Automatically define filters, by adding a argument `filters` to basic_unit_args.
+        basic_unit can be any layer which support args `filters` and `name`.
+    """
     default_name = 'residual'
     filters = inputs.shape.as_list()[-1]
     basic_unit_args = dict(basic_unit_args)
     basic_unit_args.update({'filters': filters})
     if scale is None:
         scale = (1.0, 1.0)
+    h = inputs
     with tf.variable_scope(name, default_name, reuse=reuse):        
-        h = basic_unit(inputs, **basic_unit_args)
+        for i in range(nb_units):
+            h = basic_unit(h, name='unit_%d'%i, **basic_unit_args)
         with tf.name_scope('add'):
             out = scale[0]*inputs + scale[1]*h
     return out
 
 @add_arg_scope
-def stack_residuals(inputs, depths, residual_args, reuse=None, name=None):
-    default_name = 'stack_residual'
-    with tf.variable_scope(name, default_name, reuse=reuse):
-        h = inputs
-        for i in range(depths):
-            # name = residual_args.get('name')
-            # kwargs = dict(residual_args)
-            # kwargs.pop('name')
-            # if name is None:
-            #     name = 'residual_%d'%i
-            # else:
-            #     name = name[i]            
-            h = residual(h, name='residual_%d'%i, **residual_args)
-        out = h
-    return out
+def repeat(inputs, layer, depth, layer_args, prefix, name=None):
+    h = inputs
+    with tf.variable_scope(name, 'repeat'):
+        for i in range(depth):
+            h = layer(h, name=prefix+'_%d'%i, **layer_args)
+    return h
 
 @add_arg_scope
-def channel_change(inputs, filters, normalization=None, training=None, reuse=None, name=None):
-    default_name = 'channel_change'
-    fc = filters // 4
-    with tf.variable_scope(name, default_name, reuse=reuse):
-        with arg_scope([conv2d], padding='same'):
-            with arg_scope([bn], training=training):
-                # with tf.name_scope(name, default_name):
-                # path 0
-                with tf.variable_scope('path_0'):
-                    h0 = inputs
-                    if normalization == 'bn':
-                        h0 = bn(h0, name='bn')
-                    h0 = activation(h0)
-                    h0 = conv2d(h0, fc, 1, name='conv')
-
-                # path 1
-                with tf.variable_scope('path_1'):
-                    h1 = inputs
-                    kernel_sizes = [1, 3]
-                    for i, ks in enumerate(kernel_sizes):
-                        if normalization == 'bn':
-                            h1 = bn(h1, name='bn_%d' % i)
-                        h1 = activation(h1)
-                        h1 = conv2d(h1, fc, ks, name='conv_%d' % i)
-
-                # path 2
-                with tf.variable_scope('path_2'):
-                    h2 = inputs
-                    kernel_sizes = [1, 3, 3]
-                    for i, ks in enumerate(kernel_sizes):
-                        if normalization == 'bn':
-                            h2 = bn(h2, name='bn_%d' % i)
-                        h2 = activation(h2)
-                        h2 = conv2d(h2, fc, ks, name='conv_%d' % i)
-
-                # concate
-                with tf.name_scope('concate'):
-                    h = tf.concat([h0, h1, h2], axis=-1)
-                with tf.variable_scope('path_merge'):
-                    kernel_sizes = [1, 3]
-                    for i, ks in enumerate(kernel_sizes):
-                        if normalization == 'bn':
-                            h = bn(h, name='bn_%d' % i)
-                        h = activation(h)
-                        h = conv2d(h, filters, ks, name='conv_%d' % i)
-    return out
-
-@add_arg_scope
-def sr_infer(low_res, reps, size, reuse=None, name=None):
-    with tf.variable_scope(name, 'sr_infer', reuse=reuse):
-        interp = upsampling2d(low_res, size)
-        residual = conv2d(reps, 1, kernel_size=1, name='residual')
-        inference = interp + residual
-    return inference, residual, interp
-
-@add_arg_scope
-def super_resolution_unit(low_resolution,
-                          filters,
-                          depths,
-                          reps=None,
-                          normalization=None,
-                          training=True,
-                          activation=celu,
-                          down_sample_ratio=(2, 2),
-                          upsample_method=None,
-                          basic_unit=res_inc_unit,
-                          reuse=None,
-                          scale=0.1,
-                          name=None):
-    """ super resution block construsted by stack of basic units:
-        Supported basic units:
-            res2_unit
-            res_inc_unit
-        Return: A dict of tensors:
-            inference:
-            residual:
-            interpolation:
-            representations:
+def super_resolution_infer(low_res, reps, size=(2, 2), reuse:bool=None, method=None, name:str=None):
+    """Super resolution inference layer
+    Inputs:
+        low_res: low resolution tensor (NHW1)
+        reps: representation of low resolution shape(NHWC)
+        size: upsampling size
+    Returns:
+        `dict` of tensors:
+            'inf': inference high resolution tensor
+            'res': residual to interpolation tensor
+            'itp': interpolation
+    Yields:
+        None
     """
-    default_name = 'super_resolution_unit'
-    basic_unit_args = {
-        'filters': filters,
-        'activation': activation
+    with tf.variable_scope(name, 'super_resolution_infer', reuse=reuse):
+        interp = upsampling2d(low_res, size, method=method)
+        residual = conv2d(reps, 1, kernel_size=1)
+        with tf.name_scope('inference'):
+            inference = interp + residual
+    out = {
+        'inf': inference,
+        'res': residual,
+        'itp': interp
     }
-
-    if basic_unit == res2_unit:
-        basic_unit_args.update({'scale': scale})
-    else:
-        basic_unit_args.update({'normalization': normalization,
-                                'training': training})
-    with tf.variable_scope(name, default_name):
-        with tf.variable_scope('input'):
-            if reps is None:
-                h = low_resolution
-                with tf.variable_scope('stem'):
-                    h = conv2d(
-                        h, basic_unit_args['filters'], kernel_size=5)
-            else:
-                h = reps
-        for id_depth in range(depths):
-            with tf.variable_scope(None, basic_unit.__name__):
-                h = basic_unit(h, **basic_unit_args)
-        with tf.variable_scope('upsample_reps'):
-            h = upsampling2d(h, size=down_sample_ratio, method=upsample_method)
-        with tf.variable_scope('interpolation'):
-            interp = upsampling2d(
-                low_resolution, down_sample_ratio, method='nearest')
-        with tf.variable_scope(None, basic_unit.__name__):
-            reps_out = basic_unit(h, **basic_unit_args)
-        with tf.variable_scope('inference'):
-            with tf.variable_scope('conv_residual'):
-                residual = conv2d(reps_out, 1, 1, padding='same')
-            with tf.variable_scope('add'):
-                inference = residual + interp
-    out = {'inference': inference, 'residual': residual,
-           'interpolation': interp, 'representations': reps_out}
     return out
 
+# @add_arg_scope
+# def super_resolution_unit(low_resolution,
+#                           filters,
+#                           depths,
+#                           reps=None,
+#                           normalization=None,
+#                           training=True,
+#                           activation=celu,
+#                           down_sample_ratio=(2, 2),
+#                           upsample_method=None,
+#                           basic_unit=res_inc_unit,
+#                           reuse=None,
+#                           scale=0.1,
+#                           name=None):
+#     """ super resution block construsted by stack of basic units:
+#         Supported basic units:
+#             res2_unit
+#             res_inc_unit
+#         Return: A dict of tensors:
+#             inference:
+#             residual:
+#             interpolation:
+#             representations:
+#     """
+#     default_name = 'super_resolution_unit'
+#     basic_unit_args = {
+#         'filters': filters,
+#         'activation': activation
+#     }
+
+#     if basic_unit == res2_unit:
+#         basic_unit_args.update({'scale': scale})
+#     else:
+#         basic_unit_args.update({'normalization': normalization,
+#                                 'training': training})
+#     with tf.variable_scope(name, default_name):
+#         with tf.variable_scope('input'):
+#             if reps is None:
+#                 h = low_resolution
+#                 with tf.variable_scope('stem'):
+#                     h = conv2d(
+#                         h, basic_unit_args['filters'], kernel_size=5)
+#             else:
+#                 h = reps
+#         for id_depth in range(depths):
+#             with tf.variable_scope(None, basic_unit.__name__):
+#                 h = basic_unit(h, **basic_unit_args)
+#         with tf.variable_scope('upsample_reps'):
+#             h = upsampling2d(h, size=down_sample_ratio, method=upsample_method)
+#         with tf.variable_scope('interpolation'):
+#             interp = upsampling2d(
+#                 low_resolution, down_sample_ratio, method='nearest')
+#         with tf.variable_scope(None, basic_unit.__name__):
+#             reps_out = basic_unit(h, **basic_unit_args)
+#         with tf.variable_scope('inference'):
+#             with tf.variable_scope('conv_residual'):
+#                 residual = conv2d(reps_out, 1, 1, padding='same')
+#             with tf.variable_scope('add'):
+#                 inference = residual + interp
+#     out = {'inference': inference, 'residual': residual,
+#            'interpolation': interp, 'representations': reps_out}
+#     return out
+
 @add_arg_scope
-def crop(inputs, crop_size=None, name='crop'):
-    with tf.name_scope(name):
-        if isinstance(crop_size, int):
-            crop_size = [crop_size, crop_size]
-        target_shape = inputs.shape.as_list()
-        target_shape[1] -= 2 * crop_size[0]
-        target_shape[2] -= 2 * crop_size[1]
-        out = tf.slice(inputs, [0, crop_size[0], crop_size[1], 0], target_shape)        
+def crop(inputs, half_crop_size:list, offset:list=None, name='crop'):
+    """Crop tensors.
+    Inputs:
+        half_crop_size: crop size of one direction
+        offset: offset of begin. If `offset` is not None, no crop at begining after offset.
+    Returns:
+        croped tensor
+    """
+    with tf.name_scope(name):                
+        input_shape = inputs.shape.as_list()
+        if offset is None:
+            offset = half_crop_size
+        target_shape = [s0-o-c for s0, o, c in zip(input_shape, offset, half_crop_size)]
+        out = tf.slice(inputs, offset, target_shape)            
     return out
 
 @add_arg_scope

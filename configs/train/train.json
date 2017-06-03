@@ -1,10 +1,11 @@
 {
-    "net_name": "SRNet5",
-    "dataset_name": "SinoPhan",
+    "net_name": "SRCNN",
+    "dataset_name": "Celeba",
     "steps": [100000, 100000],
     "decay": 10.0,
-    "net_file": "net.srnet5.json",
-    "data_file": "data.sinophan.json",
+    "net_file": ["net.srcnn.json", "data.sino8x.json"],
+    "data_file": ["data.sino8x.json"],
     "load_step": -1,
-    "task": "train_all"
+    "exp_name": "train",
+    "task": "main"
 }

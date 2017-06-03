@@ -1,0 +1,10 @@
+{
+    "low_shape": [32, 32],
+    "model_dir": "./save",
+    "log_dir": "./log",
+    "summary_type": "step",
+    "summary_freq": 10,
+    "save_type": "step",
+    "save_freq": 100,
+    "lr": {"main": 1e-3}
+}

@@ -127,13 +127,15 @@ class DataSetBase(object):
 
         # sample single
         for i in range(self.p.batch_size):
-            ss = self._sample_single()
+            ss = self._sample_single()            
             for k in self.p.keys:
                 out[k].append(ss[k])
 
         # convert to numpy
         for k in self.p.keys:
             out[k] = numpy.array(out[k])
+            if len(out[k].shape) == 1:
+                out[k] = out[k].reshape([-1, 1])
         return out
 
     def norm(self, ip_, mean_value=None, std_value=None):

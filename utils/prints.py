@@ -8,6 +8,7 @@ import tensorflow as tf
 def pprint(contents, file=None):
     click.echo(contents, file=file)
 
+
 def hline(level=0, file=None):
     if level == 0:
         pprint("=" * 60, file)

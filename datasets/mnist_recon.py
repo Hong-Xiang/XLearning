@@ -17,7 +17,7 @@ class MNISTRecon(DataSetImages):
 
     def initialize(self):
         super(MNISTRecon, self).initialize()
-        if self.mode == 'train':
+        if self.p.mode == 'train':
             self.labels = self.fin['y_train']
         else:
             self.labels = self.fin['y_test']
@@ -25,7 +25,7 @@ class MNISTRecon(DataSetImages):
     def _sample_single(self):
         """ read from dataset HDF5 file and perform necessary preprocessings """
         ss = DataSetImages._sample_single(self)
-        image = ss{'data'}
-        idx = ss{'idx'}
-        label = self.labels[idx]        
-        return {'data': image, 'label': label}
+        image = ss['data']
+        idx = ss['idx']
+        label = self.labels[idx]  
+        return {'data': image, 'label': label, 'idx': idx}

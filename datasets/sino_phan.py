@@ -14,7 +14,7 @@ class SinoPhan(DataSetImages):
                  nb_evts=1e7,
                  is_poi=False,
                  dataset_name='sino_phan',
-                 mix_scale=False,
+                 mix_scale=False,                 
                  **kwargs):
         DataSetImages.__init__(self, dataset_name='sino_phan', **kwargs)
         nb_padding = int(np.ceil(self.p.crop_shape[1] / 320))
