@@ -351,6 +351,8 @@ def residual(inputs, basic_unit, basic_unit_args, nb_units=2, scale=None, reuse=
     basic_unit_args.update({'filters': filters})
     if scale is None:
         scale = (1.0, 1.0)
+    if not isinstance(scale, (list, tuple)):
+        scale = (1.0, scale)
     h = inputs
     with tf.variable_scope(name, default_name, reuse=reuse):        
         for i in range(nb_units):

@@ -22,6 +22,8 @@ def run(task_file=None):
             decay = task['decay']
             sub_task = task['task']                                          
             train_core(net_name, dataset_name, net_files, data_files, steps, decay, load_step, sub_task)
+        if exp_name == 'init_net':
+            init_test(net_name, net_files)
 
 def train_core(net_name, dataset_name, net_files, data_files, steps, decay, load_step, task=None):        
         data_cls = getattr(datasets, dataset_name)
@@ -33,3 +35,5 @@ def train_core(net_name, dataset_name, net_files, data_files, steps, decay, load
                 net.set_dataset_auto(dataset_train, dataset_test)
                 net.train(task, steps=steps, decay=decay)
                 net.save()
+
+# def init_test(net_name, dataset_name, net_files, data_files):   

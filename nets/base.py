@@ -16,7 +16,7 @@ class Net:
     Which is used for:
         configs
         # TODO complete doc.
-
+        # TODO deprecate device type, use auto inference by nb_gpus
     Level0:
         node: {node name: tensor}
         nodes_name_proxy: {node name: data name}
@@ -69,6 +69,7 @@ class Net:
                  keep_prob=0.5,
                  grad_clip=1.0,
                  nb_gpus=1,
+                 is_bn=False,
                  is_show_device_placement=False,
                  warmup_step=100,
                  optimizer_name={'main':'Adam'},
@@ -103,7 +104,7 @@ class Net:
         self.params['is_show_device_placement'] = is_show_device_placement
         self.params['warmup_step'] = warmup_step
         self.params['optimizer_name'] = optimizer_name
-        
+        self.params['is_bn'] = is_bn
         self.params['device_type'] = device_type
 
         self.params.update_short_cut()
@@ -175,7 +176,8 @@ class Net:
         self.summary_writer = None
         self.supervisor = None
 
-        
+        # Quick flags
+        self.is_multi_gpu = self.p.nb_gpus > 1        
 
     def init(self):
         pp_json(self.params, self.params['name'] + " PARAMS:")
@@ -207,23 +209,42 @@ class Net:
             feed_dict: { task names : list of name of nodes to be feeded }
         """
         pass
+    
+    def _get_optimizer(self, sub_task_name):
+        optim = self.optimizers.get(sub_task_name)
+        if optim is None:
+            name = self.p.optimizer_name.get(sub_task_name)
+            if name in ['Adam', 'adam']:
+                optim = tf.train.AdamOptimizer(self.lr[sub_task_name])
+            elif name in ['RMSProp', 'rmsprop']:
+                optim = tf.train.RMSPropOptimizer(self.lr[sub_task_name])
+        return optim
+
+    def _get_train_vars(self, sub_task_name):
+        vars_list = self.train_vars.get(sub_task_name)
+        return vars_list
 
     def _set_train(self):
         """ Construct train steps.
+        After calling this method, all train_steps[train_tasks.kyes()] should be constructed.
+        
+        Automatically construct train/sub_task tasks with sub_task in train_tasks.        
+        Be careful on naming:
+            train_tasks: list of sub_task names
+            losses: dict of losses, value can be scalar(single gpu) or list of scalar(multi gpus)
+            optimizers: dict of optimizers 
+        
+        Generate:
+            grads
+            train_steps
+
         """
+        #TODO: seperate optimizer getter.
         for k in self.train_tasks:
             with tf.name_scope('train_step_'+k):
-                optim_name = self.p.optimizer_name[k]
-                var_list = self.train_vars.get(k)
-                if optim_name in ['Adam', 'adam']:
-                    optim = tf.train.AdamOptimizer(self.lr[k])
-                elif optim_name in ['RMSProp', 'rmsprop']:
-                    optim = tf.train.RMSPropOptimizer(self.lr[k])
-                self.optimizers[k] = optim
-                if self.p.device_type == 'auto':
-                    self.grads[k] = optim.compute_gradients(self.losses[k], var_list)                
-                    self.train_steps[k] = self.train_step([self.grads[k]], optim, self.p.summary_train)
-                elif self.p.device_type == 'gpus':
+                optim = self._get_optimizer(k)
+                var_list = self._get_train_vars(k)                
+                if self.is_multi_gpu:                                    
                     self.grads = defaultdict(list)
                     for i in range(self.p.nb_gpus):
                         with tf.device('/gpu:%d' % i):
@@ -232,10 +253,12 @@ class Net:
                     with tf.device('/cpu:0'):                        
                         self.train_steps[k] = self.train_step(self.grads[k], optim, self.p.summary_train)
                 else:
-                    raise ValueError('Invalid device type {0}.'.format(self.p.device_type))
+                    self.grads[k] = optim.compute_gradients(self.losses[k], var_list)                
+                    self.train_steps[k] = self.train_step([self.grads[k]], optim, self.p.summary_train)
 
     
     def _set_saver(self):
+        #TODO: partial saver and loader.
         self.saver = tf.train.Saver()
         pass
 
@@ -282,7 +305,7 @@ class Net:
             is_multi_gpu: split tensor into multiple partial mini-batches.
         Returns:
             tensor: main part of tensor
-            tensors_gpu: dict of splited tensors
+            tensors_gpu: list of splited tensors
         Raises:
             ValueError
         """
@@ -383,20 +406,7 @@ class Net:
                         tf.summary.histogram(var.op.name, var)
         return train_op
 
-    # def _run_helper(self, run_ops, feed_dict_keys, feed_dict_values_list):
-    #     feed_dict = dict()
-    #     for key in feed_dict_keys:
-    #         key = self.nodes_name_proxy.get(key, key)
-    #         value = None
-    #         for d in feed_dict_values_list:
-    #             if value is not None:
-    #                 break
-    #             value = d.get(key)
-    #         if value is None:
-    #             raise KeyError('No value of key: {} in all dicts.'.format(key))
-    #         feed_dict[self.nodes[key]] = value
-    #     results = self.sess.run(run_ops, feed_dict=feed_dict)
-    #     return results
+
 
     def reset_lr(self, name=None, lr=None, decay=10.0):
         """ reset learning rate by value or decay.
@@ -533,6 +543,12 @@ class Net:
         self.dataset['train'] = dataset_train
         self.dataset['test'] = dataset_test
 
+    def _train_sub_task_schadule(self, sub_task=None):
+        if sub_task is None:
+            sub_task = 'main'
+        while True:
+            yield sub_task
+
     def train(self, sub_task=None, steps=None, phase=1, decay=2.0, warmup=False):
         """ high level train.
         Inputs:
@@ -546,6 +562,8 @@ class Net:
             steps = [steps] * phase
         total_step = sum(steps)
 
+        
+        task_gen = self._train_sub_task_schadule(sub_task)
 
         if warmup:
             # warmup
@@ -558,7 +576,7 @@ class Net:
             warmup_step = self.params['warmup_step']
             for i in range(warming_up_phase):
                 for j in range(warmup_step):
-                    _, msg = self.train_kernel(sub_task)
+                    _, msg = self.train_kernel(next(task_gen))
                     cstep += 1
                     pt.event(cstep, "[WARM]"+msg)
                 self.reset_lr(decay=0.5)
@@ -578,7 +596,7 @@ class Net:
                 # if res['loss'] > 1e-2:
                 #     self.dump(ss)
                 cstep += 1
-                _, msg = self.train_kernel(sub_task)
+                _, msg = self.train_kernel(next(task_gen))
                 pt.event(cstep, msg)
                 if self.params['summary_type'] == 'step':
                     if i % self.params['summary_freq'] == 0 and i > 0:

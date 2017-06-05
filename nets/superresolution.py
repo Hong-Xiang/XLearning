@@ -1,7 +1,10 @@
-from collections import defaultdict
-
+from collections import defaultdict, OrderedDict, ChainMap
+import re
 import numpy as np
 import tensorflow as tf
+
+from xlearn.utils.collections import DefaultDict
+
 
 from ..utils.general import with_config
 from tensorflow.contrib.framework import arg_scope, add_arg_scope
@@ -9,24 +12,29 @@ from ..models.image import conv2d, upsampling2d, super_resolution_infer, repeat,
 from ..models import image as layers
 from .base import Net
 from xlearn.utils.prints import pp_json
+import pprint
 
 class SRNetBase(Net):
+    """ Base class for super resolution nets.
+    Nodes:
+        <image_keys>_<xN>
+    """
     @with_config
     def __init__(self,
-                 low_shape=None,
-                 nb_down_sample=None,
+                 low_shape,
+                 nb_down_sample,
                  is_down_sample_0=True,
                  is_down_sample_1=True,
                  upsampling_method='bilinear',
+                 image_keys=('data', 'label'),                 
                  crop_size=None,
                  **kwargs):
         Net.__init__(self, **kwargs)
         self.params['is_down_sample_0'] = is_down_sample_0
-        self.params['is_down_sample_1'] = is_down_sample_1
-        if nb_down_sample is None:
-            nb_down_sample = 3
-
+        self.params['is_down_sample_1'] = is_down_sample_1        
         self.params['nb_down_sample'] = nb_down_sample
+
+        self.params['image_keys'] = image_keys
 
         self.params['upsampling_method'] = upsampling_method
         self.params['crop_size'] = crop_size
@@ -44,11 +52,15 @@ class SRNetBase(Net):
         self.params['low_shape'] = [
             self.params['batch_size']] + list(low_shape) + [1]
         self.params['nb_scale'] = self.params['nb_down_sample'] + 1
+
         self.params['scale_keys'] = ['x%d' %
                                      (2**i) for i in range(self.params['nb_scale'])]
+                                     
         self.params.update_short_cut()
         self.sk = self.params['scale_keys']
+
         self.params['scale'] = {k: 2**i for i, k in enumerate(self.sk)}
+
         self.shapes = {self.sk[-1]: self.params['low_shape']}
         for i in reversed(range(0, self.params['nb_down_sample'])):
             sk_pre = self.sk[i + 1]
@@ -58,39 +70,146 @@ class SRNetBase(Net):
             shapes_new[2] *= self.params['down_sample_ratio'][1]
             self.shapes[self.sk[i]] = shapes_new
         self.params['shapes'] = dict(self.shapes)
-        self.params.update_short_cut()
 
-    def _merge(self, inputs_dict_to_concat, inputs_dict_to_sum):
-        with tf.name_scope('merge'):
-            merged_cat = defaultdict(list)        
-            for d in inputs_dict_to_concat:
-                for k in d:
-                    merged_cat[k].append(d[k])
-            with tf.name_scope('concate'):
-                for k in merged_cat:            
-                    merged_cat[k] = tf.concat(merged_cat[k], axis=0)
+        self.params.update_short_cut()
+    
+    def _default_proxy_name(self, node_name):        
+        pattern = re.compile(r'(\w+)_(x\d+)')
+        match = pattern.match(node_name)
+        idx = self.sk.index(match[2])
+        return '{img_key}{idx}'.format(img_key=match[1], idx=idx)
+
+    def _add_input_nodes(self, proxy_name_fn=None):
+        """ A quick helper method to construct input nodes.        
+
+        Uses parameters:
+
+        `nb_gpus`, `shapes`, `image_keys`
+        Inputs:
+
+        proxy_name_fn: a function returns proxy_name with node_name in format <image_key>_<scale_key>
+
+        Returns:
+
+        `out`:    `dict` of `list` of tensors, for each `key` in images_keys:
+
+            output[key] = [tensor_node, tensor_0, tensor_1, ... tensor_(nb_gpus-1)]
+
+        _Note_: `tensor_node` and `tensor_0` may share same tensor if `nb_gpus == 1`.
+        """
+        is_multi_gpu = self.p.nb_gpus > 1        
+        out = dict()
+        for image_key in self.p.image_keys:
+            for i, k in enumerate(self.sk, 1):
+                node_name = '{image_key}_{scale_key}'.format(image_key=image_key, scale_key=k)
+                proxy_name = proxy_name_fn(node_name) if proxy_name_fn else None
+                shape = self.shapes[k]
+                tensor_node, tensors_gpu = self.add_node(node_name, shape=shape, proxy_name=proxy_name, is_multi_gpu=is_multi_gpu)
+                out[node_name] = [tensor_node] + tensors_gpu
+        return out
+    
+    def _kernel(self, inputs, *, device=None, idx=None, reuse=None, name='kernel'):
+        """ Super resolution kernel function.
+        Inputs:
+            inputs: dict of tensors
+            reuse:
+            name:
+
+        Returns:
+            tensors2concat:
+            tensors2sum:
+            tensors
+        Raises:
+        """
+        pass
+
+    def _apply_kernel_callback(self, outs_cat, outs_sum, outs_update, device, idx, reuse=None):
+        if reuse:
+            value = self.losses.get('main')
+            if value is None:
+                self.losses['main'] = []
+            self.losses['main'].append(outs_sum['loss/main'])            
+    def _fetch_image_nodes(self, nodes, index):
+        out = dict()
+        for ik in self.p.image_keys:
+            for sk in self.sk:
+                node_name = '{image_key}_{scale_key}'.format(image_key=ik, scale_key=sk)
+                out.update({node_name: nodes[node_name][index]})
+        return out
+    def _apply_kernel(self, nodes):
+        """ Quick method of apply kernel to nodes for multiple gpus.
+        Returns:
+        out: A dict of merged tensors
+        """
+        out = dict()
         
-            merged_sum = defaultdict(list)        
-            for d in inputs_dict_to_sum:
-                for k in d:
-                    merged_sum[k].append(d[k])
+        if self.is_multi_gpu:
+            with tf.device('/cpu:0'):                                
+                _ = self._kernel(self._fetch_image_nodes(nodes, 1), name='kernel')            
+            
+            outs_cat = DefaultDict(list)
+            outs_sum = DefaultDict(list)            
+            for i in range(self.p.nb_gpus):                
+                with tf.device('/gpu:%d'%i):                    
+                    inputs = self._fetch_image_nodes(nodes, i+1)
+                    outs_cat_now, outs_sum_now, outs_update = self._kernel(inputs, reuse=True, name='kernel')
+                    self._apply_kernel_callback(outs_cat_now, outs_sum_now, outs_update, 'gpu', i, reuse=True)
+                    outs_cat.append(outs_cat_now)
+                    outs_sum.append(outs_sum_now)        
+                    if outs_update is not None:  
+                        out.update(outs_update)
+        else:            
+            outs_cat, outs_sum, outs_update = self._kernel(inputs, name='kernel')
+            if outs_update is not None:  
+                out.update(outs_update)
+        out.update(self._merge(outs_cat, outs_sum))
+        return out
+        
+    def _merge(self, dict_to_concat, dict_to_sum):
+        """ Merge tensors from mulitple gpus, by cat or sum.
+        """
+        with tf.name_scope('merge'):
+            merged_cat = dict()            
+            with tf.name_scope('concate'):
+                for k, v in dict_to_concat.items():            
+                    merged_cat[k] = tf.concat(v, axis=0)
+        
+            merged_sum = dict()            
             with tf.name_scope('summation'):
-                for k in merged_sum:            
-                    merged_sum[k] = tf.add_n(merged_sum[k])
-        out = merged_cat
-        out.update(merged_sum)
+                for k, v in dict_to_sum.items():
+                    merged_sum[k] = tf.add_n(v)
+        out = ChainMap(merged_cat, merged_sum)
         return out
 
+    def _set_model(self):
+        """ Default implementation of set model of super resolution.            
+        """
+        nodes = self._add_input_nodes(proxy_name_fn=self._default_proxy_name)
+        result = self._apply_kernel(nodes)
+
+        self.add_node('inf', tensor=result['inf'])
+        self.add_node('itp', tensor=result['itp'])
+        self._add_image_summary(**result)
+        
+        self.losses['main/sum'] = result['loss/main']
+        tf.summary.scalar('loss', self.losses['main/sum'])
+
+        tf.summary.scalar('learning_rate/main', self.lr['main'])
+        self.summary_ops['all'] = tf.summary.merge_all()
+
     def _set_task(self):
-        """ Constrcut tasks for net.
+        """ Constrcut tasks template for net.
         Tasks like train, evaluate, summary, predict, etc.
         """
+        for k in self.train_tasks:
+            k_dict = {'train/'+k: 
+                {'train': self.train_steps[k],
+                 'global_step': self.gs,
+                 'loss': self.losses[k+'/sum'] if self.is_multi_gpu else self.losses[k]
+                }}
+            self.run_op.update(k_dict)
+
         self.run_op.update({
-            'train/main': {
-                'train': self.train_steps['main'],
-                'global_step': self.gs,
-                'loss': self.losses['main'] if self.p.device_type == 'auto' else self.nodes['loss_main_all']
-            },
             'predict': {
                 'inf': self.nodes['inf']
             },
@@ -103,10 +222,11 @@ class SRNetBase(Net):
         })
 
         self.feed_dict.update({
-            'train/main': ['low_res', 'high_res'],
-            'predict': ['low_res'],
-            'interp': ['low_res'],
-            'summary': ['low_res', 'high_res']
+            # 'train/main': ['data_'+self.sk[-1], 'label_'+self.sk[0]],
+            "train/main": ['data_'+k for k in self.sk] + ['label_'+k for k in self.sk],
+            'predict': ['data_'+self.sk[-1]],
+            'interp': ['data_'+self.sk[-1]],
+            'summary': ['data_'+k for k in self.sk] + ['label_'+k for k in self.sk],
         })
 
     def _add_image_summary(self, low, high, itp, inf, res, *args, **kwargs):        
@@ -152,38 +272,51 @@ class SRCNN(SRNetBase):
         self.params['name'] = "SRCNN"
         self.params.update_short_cut()
 
-    def _set_model(self):
-        """ Construct model(s) for net.
-            Construct of nodes (and node_data_name_proxy) need to be finished in this method.
+    def _kernel(self, inputs, *, device=None, idx=None, reuse=None, name='kernel'):
+        """ Super resolution kernel function.
+        Inputs:
+            inputs: dict of tensors
+            reuse:
+            name:
+
+        Returns:
+            tensors2concat:
+            tensors2sum:
+            tensors
+        Raises:
         """
-        low_res, _ = self.add_node(
-            'low_res', self.p.shapes[self.sk[-1]], proxy_name='data')
-        
-        high_res, _ = self.add_node(
-            'high_res', self.p.shapes[self.sk[0]], proxy_name='label')
-        
-        h = low_res
-        itp = upsampling2d(
-            low_res, size=self.params['down_sample_ratio_full'], method=self.p.upsampling_method)
-        self.add_node('itp', tensor=itp)
+        with tf.variable_scope(name, 'kernel', reuse=reuse):
+            low_res = inputs['data_'+self.sk[-1]]
+            high_res = inputs['label_'+self.sk[0]]
+            h = low_res
+            itp = upsampling2d(
+                low_res, size=self.params['down_sample_ratio_full'], method=self.p.upsampling_method)
+            with arg_scope([conv2d], activation=tf.nn.elu):
+                h = conv2d(itp, 64, kernel_size=9, name='conv0')
+                h = conv2d(h, 32, kernel_size=1, name='conv1')
+            sri = super_resolution_infer(low_res, h,
+                                         size=self.p.down_sample_ratio_full,
+                                         method=self.p.upsampling_method,
+                                         name='infer')
+            inf = sri['inf']
+            
+            with tf.name_scope('loss/main'):
+                loss = tf.losses.mean_squared_error(high_res, inf)
 
-        with arg_scope([conv2d], activation=tf.nn.elu):
-            h = conv2d(itp, 64, kernel_size=9, name='conv0')
-            h = conv2d(h, 32, kernel_size=1, name='conv1')
-        sri = super_resolution_infer(low_res, h,
-                                     size=self.p.down_sample_ratio_full,
-                                     method=self.p.upsampling_method,
-                                     name='infer')
-        inf = sri['inf']
-        self.add_node('inf', tensor=inf)
-        self._add_image_summary(low_res, high_res, **sri)
+        outs_cat = {
+            'low': low_res,
+            'high': high_res,
+            'itp': itp,
+            'inf': inf,
+            'res': sri['res']
+        }
 
-        with tf.name_scope('loss_main'):
-            self.losses['main'] = tf.losses.mean_squared_error(high_res, inf)
-        tf.summary.scalar('loss', self.losses['main'])
+        outs_sum = {'loss/main': loss}
 
-        tf.summary.scalar('learning_rate/main', self.lr['main'])
-        self.summary_ops['all'] = tf.summary.merge_all()
+        return outs_cat, outs_sum, None
+
+
+
 
 
 class SRVD(SRNetBase):
@@ -196,66 +329,49 @@ class SRVD(SRNetBase):
         SRNetBase.__init__(self, **kwargs)
         self.params['name'] = "SRVD"
         self.params.update_short_cut()
-    
-    def _sr_kernel(self, low_res, high_res, reuse=None, name='kernel'):
+
+    def _kernel(self, inputs, *, device=None, idx=None, reuse=None, name='kernel'):
+        """ Super resolution kernel function.
+        Inputs:
+            inputs: dict of tensors
+            reuse:
+            name:
+
+        Returns:
+            tensors2concat:
+            tensors2sum:
+            tensors
+        Raises:
+        """
         with tf.variable_scope(name, 'kernel', reuse=reuse):
-            itp = upsampling2d(low_res, size=self.params['down_sample_ratio_full'], method=self.p.upsampling_method)
+            low_res = inputs['data_'+self.sk[-1]]
+            high_res = inputs['label_'+self.sk[0]]
+            h = low_res
+            itp = upsampling2d(
+                low_res, size=self.params['down_sample_ratio_full'], method=self.p.upsampling_method)
             with arg_scope([conv2d], activation=tf.nn.elu):
                 h = repeat(itp, conv2d, 20, 'conv2d', filters=64)
             sri = super_resolution_infer(low_res, h,
-                                        size=self.p.down_sample_ratio_full,
-                                        method=self.p.upsampling_method,
-                                        name='infer')
-            with tf.name_scope('loss_main'):
-                loss = tf.losses.mean_squared_error(high_res, sri['inf'])
-            out = {'low': low_res, 'high': high_res}
-            out.update(sri)
-        return out, loss
+                                         size=self.p.down_sample_ratio_full,
+                                         method=self.p.upsampling_method,
+                                         name='infer')
+            inf = sri['inf']
+            
+            with tf.name_scope('loss/main'):
+                loss = tf.losses.mean_squared_error(high_res, inf)
 
-    def _set_model(self):
-        """ Construct model(s) for net.
-            Construct of nodes (and node_data_name_proxy) need to be finished in this method.
-        """
-        is_multi_gpu = self.p.device_type == 'gpus'
-        low_res, low_res_gpu = self.add_node(
-            'low_res', self.p.shapes[self.sk[-1]], proxy_name='data', is_multi_gpu=is_multi_gpu)
-        
-        high_res, high_res_gpu = self.add_node(
-            'high_res', self.p.shapes[self.sk[0]], proxy_name='label', is_multi_gpu=is_multi_gpu)
-        
-        if is_multi_gpu:
-            dummy_low = tf.placeholder(dtype=tf.float32, shape=low_res_gpu[0].shape, name='dummy_low')
-            dummy_high = tf.placeholder(dtype=tf.float32, shape=high_res_gpu[0].shape, name='dummy_high')
-            with tf.device('/cpu:0'):
-                _ = self._sr_kernel(dummy_low, dummy_high, name='kernel')        
-            outs_cat = []
-            outs_sum = []
-            self.losses['main'] = []
-            for i in range(self.p.nb_gpus):
-                with tf.device('/gpu:%d'%i):
-                    out, loss = self._sr_kernel(low_res_gpu[i], high_res_gpu[i], reuse=True, name='kernel')
-                    outs_cat.append(out)
-                    outs_sum.append({'loss': loss})
-                    self.losses['main'].append(loss)
-            sri = self._merge(outs_cat, outs_sum)
-        else:
-            sri, self.losses['main'] = self._sr_kernel(low_res, high_res, name='kernel')
+        outs_cat = {
+            'low': low_res,
+            'high': high_res,
+            'itp': itp,
+            'inf': inf,
+            'res': sri['res']
+        }
 
+        outs_sum = {'loss/main': loss}
 
-        self.add_node('itp', tensor=sri['itp'])
-        inf = sri['inf']
-        self.add_node('inf', tensor=inf)
-        self._add_image_summary(**sri)
+        return outs_cat, outs_sum, None
 
-        if is_multi_gpu:
-            loss_all = sri['loss']
-        else:
-            loss_all = self.losses['main']
-        self.add_node('loss_main_all', tensor=loss_all)            
-        tf.summary.scalar('loss', loss_all)
-
-        tf.summary.scalar('learning_rate/main', self.lr['main'])
-        self.summary_ops['all'] = tf.summary.merge_all()
 
 class SRRes(SRNetBase):
     """
@@ -265,81 +381,120 @@ class SRRes(SRNetBase):
                  filters,
                  depths,
                  scale=(1.0, 1.0),
+                 basic_unit=None,
+                 nb_units=2,
+                 loss_weight=None,
                  **kwargs):
         SRNetBase.__init__(self, **kwargs)
         self.params['filters'] = filters
         self.params['depths'] = depths
         self.params['scale'] = scale
         self.params['name'] = "SRRes"
+        self.params['basic_unit'] = basic_unit
+        self.params['nb_units'] = nb_units
+        self.params['loss_weight'] = loss_weight
         self.params.update_short_cut()
     
-    def _sr_kernel(self, low_res, high_res, reuse=None, name='kernel'):
-        with tf.variable_scope(name, 'kernel', reuse=reuse):            
-            h = stem(low_res, self.p.filters)
-            conv_args = {'pre_activation': layers.celu}
-            res_args = {'basic_unit': conv2d, 'basic_unit_args': conv_args}
-            h = repeat(h, layers.residual, self.p.depths, res_args, 'res_unit')
+    
+    def _get_basic_unit_and_args(self, basic_unit_name=None):
+        if basic_unit_name is None:
+            basic_unit_name = self.p.basic_unit
+        if basic_unit_name == 'conv2d':
+            unit = layers.conv2d
+            args = {'pre_activation': layers.celu}            
+        elif basic_unit_name == 'incept':
+            unit = layers.incept, args
+            args = {'activation': layers.celu}            
+        else:
+            raise ValueError('Known ')
+        if self.p.is_bn:
+            args.update({'normalization': 'bn'})
+            args.update({'training': self.training})
+        return {'basic_unit': unit, 'basic_unit_args': args, 'scale': self.p.scale}
+
+    def _kernel(self, inputs, reuse=None, name='kernel'):
+        with tf.variable_scope(name, 'kernel', reuse=reuse):
+            low_res = inputs['data_'+self.sk[-1]]
+            high_res = inputs['label_'+self.sk[0]]
+            # h = low_res
+            # h = stem(low_res, self.p.filters)
+            # res_args = self._get_basic_unit_and_args()
+            # reuse_infer = None
+            # sris = dict()
+            # losses = []
+            # itp = low_res
+            # up_time = 0
+            # for i in reversed(range(self.p.nb_down_sample)):
+            #     up_time += 1
+            #     sk_now = self.sk[i]
+            #     with tf.variable_scope('stage_%d'%(i+1)):
+            #         h = repeat(h, layers.residual, self.p.depths, res_args, 'res_unit')
+            #         itp = upsampling2d(itp, size=self.params['down_sample_ratio'], method=self.p.upsampling_method)
+            #         reps = h
+            #         for _ in range(up_time):
+            #             reps = upsampling2d(reps, size=self.params['down_sample_ratio'], method=self.p.upsampling_method)
+            #     sri = super_resolution_infer(low_res, reps,
+            #                                 reuse=reuse_infer,
+            #                                 size=self.p.down_sample_ratio,
+            #                                 method=self.p.upsampling_method,
+            #                                 name='infer')
+            #     inf0 = sri['inf']
+            #     high_res = inputs['label_'+self.sk[i]]
+            #     with tf.name_scope('crops'):
+            #         crop_size = [0, self.p.crop_size, self.p.crop_size, 0]
+            #         with arg_scope([layers.crop], half_crop_size=crop_size):
+            #             high_res = layers.crop(high_res, name='high')
+            #             for k in sri:
+            #                 sri[k] = layers.crop(sri[k], name=k)                        
+            #     inf1 = sri['inf']
+                
+            #     with tf.name_scope('loss/'+sk_now):
+            #         loss_now = tf.losses.mean_squared_error(high_res, inf1)
+            #     losses.append(loss_now)
+            #     low_res = inf0                                    
+            #     reuse_infer = True
+            # low_res = inputs['data_'+self.sk[-1]]
+
+            # loss_weight = self.p.loss_weight or [1.0]*self.p.nb_down_sample
+            # with tf.name_scope('loss/main'):
+            #     with tf.name_scope('weight'):
+            #         losses_weighted = [l*w for l, w in zip(losses, loss_weight)]
+            #     with tf.name_scope('summation'):
+            #         loss = tf.add_n(losses_weighted)
+            
+            # with tf.name_scope('itp_crop'):
+            #     itp = layers.crop(itp, half_crop_size=crop_size)
+
+
+            itp = upsampling2d(
+                low_res, size=self.params['down_sample_ratio_full'], method=self.p.upsampling_method)
+            res_args = self._get_basic_unit_and_args()
+            h = repeat(low_res, layers.residual, self.p.depths, res_args, 'res_unit')
             h = upsampling2d(h, size=self.params['down_sample_ratio_full'], method=self.p.upsampling_method)
             sri = super_resolution_infer(low_res, h,
-                                        size=self.p.down_sample_ratio_full,
-                                        method=self.p.upsampling_method,
-                                        name='infer')
-            with tf.name_scope('crops'):
-                crop_size = [0, self.p.crop_size, self.p.crop_size, 0]
-                with arg_scope([layers.crop], half_crop_size=crop_size):
-                    high_res = layers.crop(high_res, name='high')
-                    for k in sri:
-                        sri[k] = layers.crop(sri[k], name=k)
-            with tf.name_scope('loss_main'):
-                loss = tf.losses.mean_squared_error(high_res, sri['inf'])
-            out = {'low': low_res, 'high': high_res}
-            out.update(sri)            
-        return out, loss
+                                         size=self.p.down_sample_ratio_full,
+                                         method=self.p.upsampling_method,
+                                         name='infer')
+            inf = sri['inf']
+            
+            with tf.name_scope('loss/main'):
+                loss = tf.losses.mean_squared_error(high_res, inf)
 
-    def _set_model(self):
-        """ Construct model(s) for net.
-            Construct of nodes (and node_data_name_proxy) need to be finished in this method.
-        """
-        is_multi_gpu = self.p.device_type == 'gpus'
-        low_res, low_res_gpu = self.add_node(
-            'low_res', self.p.shapes[self.sk[-1]], proxy_name='data', is_multi_gpu=is_multi_gpu)
-        
-        high_res, high_res_gpu = self.add_node(
-            'high_res', self.p.shapes[self.sk[0]], proxy_name='label', is_multi_gpu=is_multi_gpu)
-        
-        if is_multi_gpu:
-            dummy_low = tf.placeholder(dtype=tf.float32, shape=low_res_gpu[0].shape, name='dummy_low')
-            dummy_high = tf.placeholder(dtype=tf.float32, shape=high_res_gpu[0].shape, name='dummy_high')
-            with tf.device('/cpu:0'):
-                _ = self._sr_kernel(dummy_low, dummy_high, name='kernel')        
-            outs_cat = []
-            outs_sum = []
-            self.losses['main'] = []
-            for i in range(self.p.nb_gpus):
-                with tf.device('/gpu:%d'%i):
-                    out, loss = self._sr_kernel(low_res_gpu[i], high_res_gpu[i], reuse=True, name='kernel')
-                    outs_cat.append(out)
-                    outs_sum.append({'loss': loss})
-                    self.losses['main'].append(loss)
-            sri = self._merge(outs_cat, outs_sum)
-        else:
-            sri, self.losses['main'] = self._sr_kernel(low_res, high_res, name='kernel')
+            outs_cat = {
+                'low': low_res,
+                'high': high_res,
+                'itp': itp,
+                'inf': sri['inf'],
+                'res': sri['res']
+            }
+            outs_sum = {'loss/main': loss}           
+        return outs_cat, outs_sum, None
 
-
-        self.add_node('itp', tensor=sri['itp'])
-        inf = sri['inf']
-        self.add_node('inf', tensor=inf)
-        self._add_image_summary(**sri)
-
-        if is_multi_gpu:
-            loss_all = sri['loss']
-        else:
-            loss_all = self.losses['main']
-        self.add_node('loss_main_all', tensor=loss_all)            
-        tf.summary.scalar('loss', loss_all)
-
-        tf.summary.scalar('learning_rate/main', self.lr['main'])
-        self.summary_ops['all'] = tf.summary.merge_all()
+    def _set_task(self):
+        super(SRRes, self)._set_task()
+        if self.p.is_bn:
+            for k in self.feed_dict:
+                self.feed_dict[k] += ['training']
 
 # class SRNet1(SRNetBase):
 #     @with_config

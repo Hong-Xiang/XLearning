@@ -12,5 +12,7 @@
     "lr": {"main": 1e-4},
     "nb_gpus": 2,
     "device_type": "gpus",
-    "crop_size": 8
+    "crop_size": 8,
+    "basic_unit": "conv2d",
+    "grad_clip": 0.1
 }
