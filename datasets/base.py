@@ -55,6 +55,7 @@ class DataSetBase(object):
                  file_type='h5',
                  data_key=None,
                  name='dataset',
+                 fix_idx=None,
                  **kwargs):
         """
         Dataset Base class
@@ -70,6 +71,8 @@ class DataSetBase(object):
         self.params['is_norm_gamma'] = is_norm_gamma
         self.params['data_gamma'] = data_gamma
         self.params['name'] = name
+
+        self.params['fix_idx'] = fix_idx
 
         # Cls specifict parames
         self.params['keys'] = ['data', 'label']

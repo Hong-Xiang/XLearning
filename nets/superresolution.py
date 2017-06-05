@@ -28,6 +28,7 @@ class SRNetBase(Net):
                  upsampling_method='bilinear',
                  image_keys=('data', 'label'),                 
                  crop_size=None,
+                 loss_fn='mse',
                  **kwargs):
         Net.__init__(self, **kwargs)
         self.params['is_down_sample_0'] = is_down_sample_0
@@ -38,6 +39,8 @@ class SRNetBase(Net):
 
         self.params['upsampling_method'] = upsampling_method
         self.params['crop_size'] = crop_size
+
+        self.params['loss_fn'] = loss_fn
 
         down_sample_ratio = [1, 1]
         if self.params['is_down_sample_0']:
@@ -72,7 +75,20 @@ class SRNetBase(Net):
         self.params['shapes'] = dict(self.shapes)
 
         self.params.update_short_cut()
-    
+        
+        if self.params['loss_fn'] == 'mse':
+            self.loss_fn = tf.losses.mean_squared_error
+        elif self.params['loss_fn'] == 'psnr':
+            self.loss_fn = self.psnr_loss
+        else:
+            raise ValueError('Invalid loss fn.')
+
+    def psnr_loss(self, label, data):
+        with tf.name_scope('psnr'):
+            pt = layers.psnr(label, data)
+            loss = tf.reduce_mean(pt)
+            return -loss
+
     def _default_proxy_name(self, node_name):        
         pattern = re.compile(r'(\w+)_(x\d+)')
         match = pattern.match(node_name)
@@ -477,15 +493,25 @@ class SRRes(SRNetBase):
                                          size=self.p.down_sample_ratio_full,
                                          method=self.p.upsampling_method,
                                          name='infer')
-            inf = sri['inf']
             
+            with tf.name_scope('crops'):
+                if isinstance(self.p.crop_size, (list, tuple)):
+                    crop_size = [0] + list(self.p.crop_size) + [0]
+                else:
+                    crop_size = [0, self.p.crop_size, self.p.crop_size, 0]
+                with arg_scope([layers.crop], half_crop_size=crop_size):
+                    high_res = layers.crop(high_res, name='high')
+                    for k in sri:
+                        sri[k] = layers.crop(sri[k], name=k)
+
+            inf = sri['inf']
             with tf.name_scope('loss/main'):
                 loss = tf.losses.mean_squared_error(high_res, inf)
 
             outs_cat = {
                 'low': low_res,
                 'high': high_res,
-                'itp': itp,
+                'itp': sri['itp'],
                 'inf': sri['inf'],
                 'res': sri['res']
             }
