@@ -62,7 +62,7 @@ class SRNetBase(Net):
         self.params.update_short_cut()
         self.sk = self.params['scale_keys']
 
-        self.params['scale'] = {k: 2**i for i, k in enumerate(self.sk)}
+        self.params['scale_value'] = {k: 2**i for i, k in enumerate(self.sk)}
 
         self.shapes = {self.sk[-1]: self.params['low_shape']}
         for i in reversed(range(0, self.params['nb_down_sample'])):
@@ -433,55 +433,6 @@ class SRRes(SRNetBase):
         with tf.variable_scope(name, 'kernel', reuse=reuse):
             low_res = inputs['data_'+self.sk[-1]]
             high_res = inputs['label_'+self.sk[0]]
-            # h = low_res
-            # h = stem(low_res, self.p.filters)
-            # res_args = self._get_basic_unit_and_args()
-            # reuse_infer = None
-            # sris = dict()
-            # losses = []
-            # itp = low_res
-            # up_time = 0
-            # for i in reversed(range(self.p.nb_down_sample)):
-            #     up_time += 1
-            #     sk_now = self.sk[i]
-            #     with tf.variable_scope('stage_%d'%(i+1)):
-            #         h = repeat(h, layers.residual, self.p.depths, res_args, 'res_unit')
-            #         itp = upsampling2d(itp, size=self.params['down_sample_ratio'], method=self.p.upsampling_method)
-            #         reps = h
-            #         for _ in range(up_time):
-            #             reps = upsampling2d(reps, size=self.params['down_sample_ratio'], method=self.p.upsampling_method)
-            #     sri = super_resolution_infer(low_res, reps,
-            #                                 reuse=reuse_infer,
-            #                                 size=self.p.down_sample_ratio,
-            #                                 method=self.p.upsampling_method,
-            #                                 name='infer')
-            #     inf0 = sri['inf']
-            #     high_res = inputs['label_'+self.sk[i]]
-            #     with tf.name_scope('crops'):
-            #         crop_size = [0, self.p.crop_size, self.p.crop_size, 0]
-            #         with arg_scope([layers.crop], half_crop_size=crop_size):
-            #             high_res = layers.crop(high_res, name='high')
-            #             for k in sri:
-            #                 sri[k] = layers.crop(sri[k], name=k)                        
-            #     inf1 = sri['inf']
-                
-            #     with tf.name_scope('loss/'+sk_now):
-            #         loss_now = tf.losses.mean_squared_error(high_res, inf1)
-            #     losses.append(loss_now)
-            #     low_res = inf0                                    
-            #     reuse_infer = True
-            # low_res = inputs['data_'+self.sk[-1]]
-
-            # loss_weight = self.p.loss_weight or [1.0]*self.p.nb_down_sample
-            # with tf.name_scope('loss/main'):
-            #     with tf.name_scope('weight'):
-            #         losses_weighted = [l*w for l, w in zip(losses, loss_weight)]
-            #     with tf.name_scope('summation'):
-            #         loss = tf.add_n(losses_weighted)
-            
-            # with tf.name_scope('itp_crop'):
-            #     itp = layers.crop(itp, half_crop_size=crop_size)
-
 
             itp = upsampling2d(
                 low_res, size=self.params['down_sample_ratio_full'], method=self.p.upsampling_method)
@@ -523,6 +474,118 @@ class SRRes(SRNetBase):
         if self.p.is_bn:
             for k in self.feed_dict:
                 self.feed_dict[k] += ['training']
+
+
+class SRMS(SRNetBase):
+    """
+    """
+    @with_config
+    def __init__(self,
+                 filters,
+                 depths,
+                 scale=(1.0, 1.0),
+                 basic_unit=None,
+                 nb_units=2,
+                 loss_weight=None,
+                 **kwargs):
+        SRNetBase.__init__(self, **kwargs)
+        self.params['filters'] = filters
+        self.params['depths'] = depths
+        self.params['scale'] = scale
+        self.params['name'] = "SRMS"
+        self.params['basic_unit'] = basic_unit
+        self.params['nb_units'] = nb_units
+        self.params['loss_weight'] = loss_weight
+        self.params.update_short_cut()
+    
+    
+    def _get_basic_unit_and_args(self, basic_unit_name=None):
+        if basic_unit_name is None:
+            basic_unit_name = self.p.basic_unit
+        if basic_unit_name == 'conv2d':
+            unit = layers.conv2d
+            args = {'pre_activation': layers.celu}            
+        elif basic_unit_name == 'incept':
+            unit = layers.incept
+            args = {'activation': layers.celu}            
+        else:
+            raise ValueError('Known ')
+        if self.p.is_bn:
+            args.update({'normalization': 'bn'})
+            args.update({'training': self.training})
+        return {'basic_unit': unit, 'basic_unit_args': args, 'scale': self.p.scale}
+    
+    def _ms_kernel(self, scale, low_res, high_res, reuse=None, name='ms_kernel'):
+        with tf.variable_scope(name, 'ms_kernel', reuse=reuse):
+            res_args = self._get_basic_unit_and_args()
+            h = stem(low_res, self.p.filters)
+            h = repeat(h, layers.residual, self.p.depths, res_args, 'res_unit')            
+            h = upsampling2d(h, size=self.params['down_sample_ratio'], method=self.p.upsampling_method)                
+            h = tf.nn.dropout(h, self.kp)
+            sri = super_resolution_infer(low_res, h,                                        
+                                         size=self.p.down_sample_ratio,
+                                         method=self.p.upsampling_method,
+                                         name='infer')
+            if isinstance(self.p.crop_size, (list, tuple)):
+                crop_size = [0] + list(self.p.crop_size) + [0]
+            else:
+                crop_size = [0, self.p.crop_size, self.p.crop_size, 0]
+            crop_size[1] // scale
+            crop_size[2] // scale
+            with arg_scope([layers.crop], half_crop_size=crop_size):
+                high_res = layers.crop(high_res, name='high')
+                for k in sri:
+                    sri[k] = layers.crop(sri[k], name=k)
+            with tf.name_scope('loss'):
+                loss = tf.losses.mean_squared_error(high_res, sri['inf'])
+                high_shape = high_res.shape.as_list()
+                img_size = high_shape[1] * high_shape[2]
+                loss = loss / img_size
+        out = dict()
+        out['high'] = high_res
+        out.update(sri)
+        out['loss'] = loss
+        return out
+
+    def _kernel(self, inputs, reuse=None, name='kernel'):        
+        with tf.variable_scope(name, 'kernel', reuse=reuse):
+            reuse_ms_kernel = None
+            losses = []
+            api_nodes = dict()
+            for i, k in enumerate(self.sk):
+                if i == 0:
+                    continue
+                low_res = inputs['data_'+k]
+                high_res = inputs['label_'+self.sk[i-1]]
+                res = self._ms_kernel(self.p.scale_value[k], low_res, high_res, reuse=reuse_ms_kernel)
+                reuse_ms_kernel = True
+                losses.append(res['loss'])
+                api_nodes['low'] = low_res
+                api_nodes['high'] = res['high']
+                api_nodes['itp'] = res['itp']
+                api_nodes['res'] = res['res']
+                api_nodes['inf'] = res['inf']
+
+            with tf.name_scope('loss/main'):
+                if self.p.loss_weight is None:
+                    loss_weight = [1.0]*len(losses)
+                else:
+                    loss_weight = self.p.loss_weight
+                with tf.name_scope('weight'):                    
+                    losses_weighted = [l*w for l, w in zip(losses, loss_weight)]
+                with tf.name_scope('summation'):
+                    loss = tf.add_n(losses_weighted)
+
+            outs_cat = api_nodes
+            outs_sum = {'loss/main': loss}           
+        return outs_cat, outs_sum, None
+
+    def _set_task(self):
+        super(SRMS, self)._set_task()
+        for k in self.feed_dict:
+            if self.p.is_bn:            
+                self.feed_dict[k] += ['training']
+            self.feed_dict[k] += ['keep_prob']
 
 # class SRNet1(SRNetBase):
 #     @with_config
