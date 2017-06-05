@@ -661,8 +661,8 @@ class SRMSL(SRNetBase):
 
     def _kernel(self, inputs, reuse=None, name='kernel'):        
         with tf.variable_scope(name, 'kernel', reuse=reuse):
-            low_res = self.nodes['data_'+self.sk[-1]]
-            labels = [self.nodes['label_'+k] for k in self.sk]
+            low_res = inputs['data_'+self.sk[-1]]
+            labels = [inputs['label_'+k] for k in self.sk]
             h = stem(low_res, self.p.filters)
             res_args = self._get_basic_unit_and_args()
             losses = []
