@@ -619,13 +619,16 @@ class SRMSL(SRNetBase):
             args = {'pre_activation': layers.celu}            
         elif basic_unit_name == 'incept':
             unit = layers.incept
-            args = {'activation': layers.celu}            
+            args = {'activation': layers.celu}      
+        elif basic_unit_name == 'nin':
+            unit = layers.nin
+            args = {'activation': layers.celu}
         else:
             raise ValueError('Known ')
         if self.p.is_bn:
             args.update({'normalization': 'bn'})
             args.update({'training': self.training})
-        return {'basic_unit': unit, 'basic_unit_args': args, 'scale': self.p.scale}
+        return {'basic_unit': unit, 'basic_unit_args': args, 'scale': self.p.scale, 'nb_units': self.p.nb_units}
     
     def _ms_kernel(self, scale, low_res, high_res, reuse=None, name='ms_kernel'):
         with tf.variable_scope(name, 'ms_kernel', reuse=reuse):

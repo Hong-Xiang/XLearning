@@ -266,6 +266,15 @@ def celu(x):
         x = tf.nn.elu(tf.concat([x, -x], axis=-1))
     return x
 
+def nin(inputs, filters, activation=celu, name='nin', reuse=None, **kwargs):
+    with tf.variable_scope(name, 'nin', reuse=reuse):
+        h = conv2d(inputs, filters, 3)
+        h = activation(h)
+        h = conv2d(h, filters, 1)
+        h = activation(h)
+        h = conv2d(h, filters, 3)
+    return h
+        
 
 @add_arg_scope
 def conv2d(inputs, filters, kernel_size=3, *, activation=None, normalization=None, training=None, name=None, reuse=None, padding='same', pre_activation=None, **kwargs):
