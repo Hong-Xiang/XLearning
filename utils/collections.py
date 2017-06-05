@@ -5,6 +5,7 @@ class DefaultDict(defaultdict):
         defaultdict(*args, **kwargs)
     
     def append(self, d):
+        #TODO: why?
         for k, v in d.items():
             tmp = self.get(k)
             if tmp is None:

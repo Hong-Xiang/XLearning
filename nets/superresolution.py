@@ -80,6 +80,7 @@ class SRNetBase(Net):
         return '{img_key}{idx}'.format(img_key=match[1], idx=idx)
 
     def _add_input_nodes(self, proxy_name_fn=None):
+        from xlearn.utils.general import add_breakpoint
         """ A quick helper method to construct input nodes.        
 
         Uses parameters:
@@ -96,7 +97,7 @@ class SRNetBase(Net):
             output[key] = [tensor_node, tensor_0, tensor_1, ... tensor_(nb_gpus-1)]
 
         _Note_: `tensor_node` and `tensor_0` may share same tensor if `nb_gpus == 1`.
-        """
+        """        
         is_multi_gpu = self.p.nb_gpus > 1        
         out = dict()
         for image_key in self.p.image_keys:
@@ -403,7 +404,7 @@ class SRRes(SRNetBase):
             unit = layers.conv2d
             args = {'pre_activation': layers.celu}            
         elif basic_unit_name == 'incept':
-            unit = layers.incept, args
+            unit = layers.incept
             args = {'activation': layers.celu}            
         else:
             raise ValueError('Known ')
@@ -468,8 +469,9 @@ class SRRes(SRNetBase):
 
             itp = upsampling2d(
                 low_res, size=self.params['down_sample_ratio_full'], method=self.p.upsampling_method)
+            h = layers.stem(low_res, self.p.filters)
             res_args = self._get_basic_unit_and_args()
-            h = repeat(low_res, layers.residual, self.p.depths, res_args, 'res_unit')
+            h = repeat(h, layers.residual, self.p.depths, res_args, 'res_unit')
             h = upsampling2d(h, size=self.params['down_sample_ratio_full'], method=self.p.upsampling_method)
             sri = super_resolution_infer(low_res, h,
                                          size=self.p.down_sample_ratio_full,

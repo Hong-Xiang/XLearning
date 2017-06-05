@@ -51,21 +51,24 @@ class Net:
             train_step {name: tf.op}
     """
     @with_config
-    def __init__(self,
-                 log_dir=None,
-                 model_dir=None,
-                 
+    def __init__(self,                 
+                 model_dir=None,                 
                  is_load=False,
-                 batch_size=None,
+                 load_step=None,
+                 save_freq=100,
+                 save_type='time',
+                 ckpt_name='model.ckpt',
+
+                 log_dir=None,
                  summary_modes=('train', 'test'),
                  summary_freq=10,
                  summary_type='time',
                  summary_train=False,
-                 save_freq=100,
-                 save_type='time',
+                 
+                 batch_size=None,
+
                  dataset=None,
-                 load_step=None,
-                 ckpt_name='model.ckpt',
+                                  
                  keep_prob=0.5,
                  grad_clip=1.0,
                  nb_gpus=1,
@@ -353,11 +356,12 @@ class Net:
                 batch_size_gpu = self.p.batch_size // self.p.nb_gpus
                 shape_gpu = list(shape)
                 shape_gpu[0] = batch_size_gpu
+                tensors_gpu = []
                 for i in range(self.p.nb_gpus):                    
                     name_part = 'part_%d'%i
-                    device = '/cpu:0' if self.p.device_type == 'gpus' else None                        
+                    device = '/gpu:%d'%i
                     with tf.device(device):
-                        tensors_gpu = [tf.slice(tensor, [i*batch_size_gpu, 0, 0, 0], shape_gpu, name=name_part) for i in range(self.p.nb_gpus)]                    
+                        tensors_gpu.append(tf.slice(tensor, [i*batch_size_gpu, 0, 0, 0], shape_gpu, name=name_part))
             else:
                 tensors_gpu = [tensor]
         return tensor, tensors_gpu

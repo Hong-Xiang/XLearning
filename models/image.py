@@ -324,7 +324,8 @@ def incept(inputs, filters, nb_path=3, activation=None, normalization=None, trai
                         for i, ks in enumerate(kernel_sizes):
                             if normalization == 'bn':
                                 h = bn(h, name='bn_%d' % i)
-                            h = activation(h)
+                            if activation is not None:
+                                h = activation(h)
                             h = conv2d(h, fp, kernel_size=ks, name='conv_%d' % i)
                         h_paths.append(h)
                 # concate
@@ -335,7 +336,8 @@ def incept(inputs, filters, nb_path=3, activation=None, normalization=None, trai
                     for i, ks in enumerate(kernel_sizes):
                         if normalization == 'bn':
                             h = bn(h, name='bn_%d' % i)
-                        h = activation(h)
+                        if activation is not None:
+                                h = activation(h)                        
                         h = conv2d(h, filters, kernel_size=ks, name='conv_%d' % i)
     return h
 
