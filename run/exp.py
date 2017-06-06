@@ -36,4 +36,11 @@ def train_core(net_name, dataset_name, net_files, data_files, steps, decay, load
                 net.train(task, steps=steps, decay=decay)
                 net.save()
 
+# def predict(net_name, dataset_name, net_files, data_files, nb_samples, load_step, task=None):
+#     data_cls = getattr(datasets, dataset_name)
+#     net_cls = getattr(nets, net_name)
+#     net = net_cls(filenames=net_files, load_step=load_step)
+#     net.init()
+#     with data_cls(filenames=data_files) as dataset:
+#         ss = dataset.
 # def init_test(net_name, dataset_name, net_files, data_files):   

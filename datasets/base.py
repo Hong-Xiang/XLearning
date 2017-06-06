@@ -55,7 +55,7 @@ class DataSetBase(object):
                  file_type='h5',
                  data_key=None,
                  name='dataset',
-                 fix_idx=None,
+                 is_fix_idx=None,
                  **kwargs):
         """
         Dataset Base class
@@ -72,7 +72,7 @@ class DataSetBase(object):
         self.params['data_gamma'] = data_gamma
         self.params['name'] = name
 
-        self.params['fix_idx'] = fix_idx
+        self.params['is_fix_idx'] = is_fix_idx
 
         # Cls specifict parames
         self.params['keys'] = ['data', 'label']
@@ -161,9 +161,9 @@ class DataSetBase(object):
                 mean_value = self.p.data_mean
             if std_value is None:
                 std_value = self.p.data_std
-            denormed = np.array(ip_)
+            denormed = numpy.array(ip_)
             if self.p.is_norm_gamma:
-                normed = np.power(normed, 1.0/self.p.data_gamma)
+                normed = numpy.power(normed, 1.0/self.p.data_gamma)
             denormed = denormed * self.p.data_std
             denormed = denormed + self.p.data_mean
         else:
@@ -188,16 +188,16 @@ class DataSetBase(object):
 
     def gather_examples(self, nb_examples=64):
         """ gather given numbers of examples """
-        nb_samples = int(numpy.ceil(nb_examples / self.batch_size))
+        nb_samples = int(numpy.ceil(nb_examples / self.p.batch_size))
         out = None
         for _ in range(nb_samples):
             s = self.sample()
             if out is None:
                 out = s
             else:
-                for k in self.keys:
+                for k in s:
                     out[k] = numpy.concatenate([out[k], s[k]], axis=0)
-        for k in self.keys:
+        for k in out:
             out[k] = out[k][:nb_examples, ...]
         return out
 
@@ -230,7 +230,7 @@ class DataSetImages(DataSetBase):
                  nnz_ratio=0.0,
                  padding=None,
                  period=None,
-                 data_format='channels_last',
+                 data_format='channels_last',                 
                  **kwargs):
         super(DataSetImages, self).__init__(**kwargs)
         self.params['dataset_name'] = dataset_name
@@ -375,15 +375,20 @@ class DataSetImages(DataSetBase):
                 list(range(self.nb_examples)), is_shuffle=True)
         else:
             nb_data = self.dataset.shape[0]
-            nb_train = nb_data // 5 * 4
-            if self.p.mode == 'train':
-                self.nb_examples = nb_train
-                self.sampler = Sampler(
-                    list(range(self.nb_examples)), is_shuffle=True)
+            nb_train = nb_data // 5 * 4    
+            if self.p.is_fix_idx:
+                idxs = np.load('idx_'+self.p.mode+'.npy')
+                self.sampler = Sampler(idxs, is_shuffle=True)
+                self.nb_examples = len(idxs)
             else:
-                self.nb_examples = nb_data - nb_train
-                self.sampler = Sampler(
-                    list(range(nb_train, nb_data)), is_shuffle=True)
+                if self.p.mode == 'train':
+                    self.nb_examples = nb_train                
+                    self.sampler = Sampler(
+                        list(range(self.nb_examples)), is_shuffle=True)
+                else:
+                    self.nb_examples = nb_data - nb_train
+                    self.sampler = Sampler(
+                        list(range(nb_train, nb_data)), is_shuffle=True)
 
     def finalize(self):
         super(DataSetImages, self).finalize()

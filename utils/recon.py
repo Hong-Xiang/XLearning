@@ -151,10 +151,13 @@ def recon(sino, imgsize, num_sen, sen_width, theta, method='FBP_CUDA', run_time=
 
 def padding_sino(sinos, crop_size=8, period=360, mid=False):
     shape = list(sinos.shape)
-    shape[1] += crop_size*2
-    shape[2] += crop_size*2
+    if not isinstance(crop_size, (list, tuple)):
+        crop_size = [crop_size, crop_size]
+    shape[1] += crop_size[0]*2
+    shape[2] += crop_size[1]*2
     sino_full = np.zeros(shape)
     half_period = period // 2
+    crop_size = crop_size[0]
     if not mid:
         sino_full[:, crop_size:-crop_size, crop_size:-crop_size, :] = sinos
         for i in range(crop_size):        
@@ -168,6 +171,14 @@ def padding_sino(sinos, crop_size=8, period=360, mid=False):
         for i in range(crop_size//2):        
             sino_full[:, :, shape[2]-i-1, :] = sino_full[:, ::-1, shape[2]-i-1-half_period, :]
     return sino_full
+
+def denorm(datas, mean_values, std_values):
+    nb_samples = datas.shape[0]
+    datas = np.array(datas)
+    for i in range(nb_samples):
+        datas[i] *= std_values[i]
+        datas[i] += mean_values[i]
+    return datas
 
 def process(data0, data1, data2, data3, sino_sr, sino_it, phan, num_sen, sen_width, theta, half_recon=False, crop_size=8, period=360):
     ida = list(range(64,64+180))

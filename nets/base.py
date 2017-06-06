@@ -9,7 +9,7 @@ from collections import ChainMap
 from ..utils.general import with_config, ProgressTimer
 from ..utils.prints import pp_json, pprint
 from ..utils.options import Params
-
+from tqdm import tqdm
 
 class Net:
     """ Base class of nets.
@@ -615,9 +615,11 @@ class Net:
             if not idx == len(steps) - 1:
                 self.reset_lr(decay=decay)
 
-    def predict_auto(self, data, sub_task=None, batch_size=32, **kwargs):
+    def predict_auto(self, data, sub_task=None, batch_size=None, **kwargs):
         """ predict a large tensor, automatically seperate it into mini-batches. """
         nb_sample = None
+        if batch_size is None:
+            batch_size = self.p.batch_size
         for k in data.keys():
             if nb_sample is None:
                 nb_sample = data[k].shape[0]
@@ -628,14 +630,17 @@ class Net:
         preds = []
         pt = ProgressTimer(nb_blocks)
         for i in range(nb_blocks):
+            skip = False
             data_block = dict()
             for k in data.keys():
-                i_start = (i - 1) * batch_size
-                i_end = min([i * batch_size, nb_sample])
+                i_start = i * batch_size
+                i_end = min([(i + 1) * batch_size, nb_sample])                
                 if i_start >= i_end:
+                    skip = True
                     break
                 data_block[k] = data[k][i_start:i_end, ...]
-            preds.append(self.predict(data_block))
+            if not skip:
+                preds.append(self.predict(data_block))
             pt.event(i)
         results = dict()
         for k in preds[0].keys():

@@ -23,6 +23,7 @@ class SinoPhan(DataSetImages):
         self.params['is_poi'] = is_poi
         self.params.update_short_cut()
         self.params['keys'] = ['data', 'label', 'idx']
+        self.params['keys'] += ['mean_value', 'std_value']
         self.params['mix_scale'] = mix_scale
         if self.params['is_down_sample']:
             for i in range(self.p.nb_down_sample + 1):
@@ -127,13 +128,14 @@ class SinoPhan(DataSetImages):
             out['data0'] = label
             out['data1'] = data/np.prod(self.p.down_sample_ratio)
             out['label'] = label
-
+        mean_value = 0.0
+        std_value = max(std_value, 1.0)               
+        out['mean_value'] = mean_value
+        out['std_value'] = std_value
         for k in out:
-            if k == 'idx':
-                continue
-            if self.p.is_norm:
-                mean_value = 0.0
-                std_value = max(std_value, 1.0)               
-                out[k] = self.norm(out[k], mean_value, std_value)                
+            if k in ['idx', 'mean_value', 'std_value']:
+                continue            
+            if self.p.is_norm:                
+                out[k] = self.norm(out[k], mean_value, std_value)                            
             out[k] = self.padding_channel(out[k])
         return out
