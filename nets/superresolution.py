@@ -599,6 +599,7 @@ class SRMSL(SRNetBase):
                  basic_unit=None,
                  nb_units=2,
                  loss_weight=None,
+                 is_clean_input= False,
                  **kwargs):
         SRNetBase.__init__(self, **kwargs)
         self.params['filters'] = filters
@@ -608,6 +609,7 @@ class SRMSL(SRNetBase):
         self.params['basic_unit'] = basic_unit
         self.params['nb_units'] = nb_units
         self.params['loss_weight'] = loss_weight
+        self.params['is_clean_input'] = is_clean_input
         self.params.update_short_cut()
     
     
@@ -664,7 +666,10 @@ class SRMSL(SRNetBase):
 
     def _kernel(self, inputs, reuse=None, name='kernel'):        
         with tf.variable_scope(name, 'kernel', reuse=reuse):
-            low_res = inputs['data_'+self.sk[-1]]
+            if self.p.is_clean_input:
+                low_res = inputs['label_'+self.sk[-1]]
+            else:
+                low_res = inputs['data_'+self.sk[-1]]
             labels = [inputs['label_'+k] for k in self.sk]
             h = stem(low_res, self.p.filters)
             res_args = self._get_basic_unit_and_args()
