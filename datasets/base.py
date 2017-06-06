@@ -377,7 +377,7 @@ class DataSetImages(DataSetBase):
             nb_data = self.dataset.shape[0]
             nb_train = nb_data // 5 * 4    
             if self.p.is_fix_idx:
-                idxs = np.load('idx_'+self.p.mode+'.npy')
+                idxs = numpy.load('idx_'+self.p.mode+'.npy')
                 self.sampler = Sampler(idxs, is_shuffle=True)
                 self.nb_examples = len(idxs)
             else:
