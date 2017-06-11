@@ -21,7 +21,7 @@ def run(task_file=None):
             steps = task['steps']
             decay = task['decay']
             sub_task = task['task']                                          
-            dataset_type_name = task.get['dataset_type_name']
+            dataset_type_name = task.get('dataset_type_name')
             train_core(net_name, dataset_name, net_files, data_files, steps, decay, load_step, sub_task, dataset_type_name=dataset_type_name)
         if exp_name == 'init_net':
             init_test(net_name, net_files)
