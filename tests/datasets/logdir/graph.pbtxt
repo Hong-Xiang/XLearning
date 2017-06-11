@@ -1,0 +1,274 @@
+node {
+  name: "dataset/dataset/train/single_op"
+  op: "PyFunc"
+  attr {
+    key: "Tin"
+    value {
+      list {
+      }
+    }
+  }
+  attr {
+    key: "Tout"
+    value {
+      list {
+        type: DT_FLOAT
+        type: DT_INT64
+      }
+    }
+  }
+  attr {
+    key: "_output_shapes"
+    value {
+      list {
+        shape {
+          unknown_rank: true
+        }
+        shape {
+          unknown_rank: true
+        }
+      }
+    }
+  }
+  attr {
+    key: "token"
+    value {
+      s: "pyfunc_0"
+    }
+  }
+}
+node {
+  name: "dataset/dataset/train/queue"
+  op: "FIFOQueueV2"
+  attr {
+    key: "_output_shapes"
+    value {
+      list {
+        shape {
+        }
+      }
+    }
+  }
+  attr {
+    key: "capacity"
+    value {
+      i: 32
+    }
+  }
+  attr {
+    key: "component_types"
+    value {
+      list {
+        type: DT_FLOAT
+        type: DT_INT64
+      }
+    }
+  }
+  attr {
+    key: "container"
+    value {
+      s: ""
+    }
+  }
+  attr {
+    key: "shapes"
+    value {
+      list {
+        shape {
+          dim {
+            size: 320
+          }
+          dim {
+            size: 640
+          }
+          dim {
+            size: 1
+          }
+        }
+        shape {
+        }
+      }
+    }
+  }
+  attr {
+    key: "shared_name"
+    value {
+      s: ""
+    }
+  }
+}
+node {
+  name: "dataset/dataset/train/queue_enqueue"
+  op: "QueueEnqueueV2"
+  input: "dataset/dataset/train/queue"
+  input: "dataset/dataset/train/single_op"
+  input: "dataset/dataset/train/single_op:1"
+  attr {
+    key: "Tcomponents"
+    value {
+      list {
+        type: DT_FLOAT
+        type: DT_INT64
+      }
+    }
+  }
+  attr {
+    key: "timeout_ms"
+    value {
+      i: -1
+    }
+  }
+}
+node {
+  name: "dataset/dataset/train/queue_DequeueMany/n"
+  op: "Const"
+  attr {
+    key: "_output_shapes"
+    value {
+      list {
+        shape {
+        }
+      }
+    }
+  }
+  attr {
+    key: "dtype"
+    value {
+      type: DT_INT32
+    }
+  }
+  attr {
+    key: "value"
+    value {
+      tensor {
+        dtype: DT_INT32
+        tensor_shape {
+        }
+        int_val: 8
+      }
+    }
+  }
+}
+node {
+  name: "dataset/dataset/train/queue_DequeueMany"
+  op: "QueueDequeueManyV2"
+  input: "dataset/dataset/train/queue"
+  input: "dataset/dataset/train/queue_DequeueMany/n"
+  attr {
+    key: "_output_shapes"
+    value {
+      list {
+        shape {
+          dim {
+            size: 8
+          }
+          dim {
+            size: 320
+          }
+          dim {
+            size: 640
+          }
+          dim {
+            size: 1
+          }
+        }
+        shape {
+          dim {
+            size: 8
+          }
+        }
+      }
+    }
+  }
+  attr {
+    key: "component_types"
+    value {
+      list {
+        type: DT_FLOAT
+        type: DT_INT64
+      }
+    }
+  }
+  attr {
+    key: "timeout_ms"
+    value {
+      i: -1
+    }
+  }
+}
+node {
+  name: "dataset/dataset/train/queue_Close"
+  op: "QueueCloseV2"
+  input: "dataset/dataset/train/queue"
+  attr {
+    key: "cancel_pending_enqueues"
+    value {
+      b: false
+    }
+  }
+}
+node {
+  name: "dataset/dataset/train/queue_Close_1"
+  op: "QueueCloseV2"
+  input: "dataset/dataset/train/queue"
+  attr {
+    key: "cancel_pending_enqueues"
+    value {
+      b: true
+    }
+  }
+}
+node {
+  name: "report_uninitialized_variables/Const"
+  op: "Const"
+  attr {
+    key: "_output_shapes"
+    value {
+      list {
+        shape {
+          dim {
+          }
+        }
+      }
+    }
+  }
+  attr {
+    key: "dtype"
+    value {
+      type: DT_STRING
+    }
+  }
+  attr {
+    key: "value"
+    value {
+      tensor {
+        dtype: DT_STRING
+        tensor_shape {
+          dim {
+          }
+        }
+      }
+    }
+  }
+}
+node {
+  name: "init"
+  op: "NoOp"
+}
+node {
+  name: "init_1"
+  op: "NoOp"
+}
+node {
+  name: "init_all_tables"
+  op: "NoOp"
+}
+node {
+  name: "group_deps"
+  op: "NoOp"
+  input: "^init_1"
+  input: "^init_all_tables"
+}
+versions {
+  producer: 21
+}

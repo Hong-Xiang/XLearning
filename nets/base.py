@@ -226,7 +226,7 @@ class Net:
     def _get_train_vars(self, sub_task_name):
         vars_list = self.train_vars.get(sub_task_name)
         return vars_list
-
+        
     def _set_train(self):
         """ Construct train steps.
         After calling this method, all train_steps[train_tasks.kyes()] should be constructed.

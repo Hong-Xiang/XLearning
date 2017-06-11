@@ -8,13 +8,22 @@ import json
 from inspect import getfullargspec, signature
 import click
 from xlearn.utils.prints import pp_json, pprint
-
+from xlearn.utils.dataset import analysis_dataset
 
 @click.group()
 def workdir():
     """ Work directory utils. """
     click.echo("WORKDIR UTILS CALLED.")
 
+@workdir.command()
+@click.option('--filename', '-f', type=str)
+def analysis(filename):
+    click.echo("ANALYSIS OF: {}.".format(filename))
+    if 'h5' in filename:
+        infos = analysis_dataset(filename)
+        # pp_json(infos, "PARAS OF DATASET:")
+        click.echo(infos)
+        
 
 @workdir.command()
 @click.option('--target', '-t', type=str, default='.')

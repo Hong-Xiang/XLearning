@@ -55,7 +55,7 @@ class DataSetBase(object):
                  file_type='h5',
                  data_key=None,
                  name='dataset',
-                 is_fix_idx=None,
+                 is_fix_idx=None,                 
                  **kwargs):
         """
         Dataset Base class

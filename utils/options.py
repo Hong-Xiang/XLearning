@@ -5,13 +5,96 @@ Arguments
 JSON files
 Default values
 """
-
-
-# TODO: Implementation of json reader, herachy support.
-
 import json
-import click
+import inspect
+from functools import wraps
 from pathlib import Path
+from collections import ChainMap
+
+from xlearn.utils.collections import AttrDict
+
+def analysis_config_args(func, *args, config_files, **kwargs):
+    """ Analysic func args and inputs/.json file.
+    Returns:
+        args: tuple of args
+        kwargs: dict of args
+    """
+    #TODO: refine doc, add test.
+    if isinstance(config_files, str):
+            config_files = [config_files]
+    if config_files is None:
+        config_files = []        
+    json_dicts = []
+    for fn in config_files:
+        with open(fn, 'r') as fin:
+            json_dicts.append(json.load(fin))
+    sig = inspect.signature(func)        
+    kwargs['config_files'] = config_files
+    kwargs = ChainMap(*([kwargs]+json_dicts))
+    func_arg_keys = [k for k in sig.parameters]
+    poped_keys = []
+    func_arg_keys_tmp = list(func_arg_keys)
+    for a, k in zip(args, func_arg_keys_tmp):
+        poped_keys.append(func_arg_keys.pop(func_arg_keys.index(k)))
+    kwargs_fine = {k: kwargs.get(k) for k in func_arg_keys if kwargs.get(k) is not None}
+    ba = sig.bind(*args, **kwargs_fine)
+    ba.apply_defaults()
+    return ba.args, ba.kwargs, poped_keys
+
+def json_config(func):
+    """ Add auto jason kwargs to function, by adding a preserved keyword 'config_files' """
+    @wraps(func)
+    def wrapper(*args, config_files=None, **kwargs):
+        f_args, f_kwargs, _ = analysis_config_args(func, *args, config_files=config_files, **kwargs)
+        return func(*f_args, **f_kwargs)
+    return wrapper
+
+
+def auto_configs(include=None, exclude=None):
+    """ Quick config adder. Add preserved attr 'c'.
+    Add all arguments with its keys to obj.c, which is a Configs object.
+    Ommits args and kwargs
+    """
+    def decorator(func):
+        @wraps(func)
+        def wrapper(obj, *args, **kwargs):
+            sig = inspect.signature(func)
+            ba = sig.bind(obj, *args, **kwargs)
+            ba.apply_defaults()
+            args = ba.args[1:]
+            kwargs = ba.kwargs
+            func_arg_keys = []      
+            for k in sig.parameters:
+                if not sig.parameters[k].kind in [inspect.Parameter.VAR_POSITIONAL, inspect.Parameter.VAR_KEYWORD]:
+                    func_arg_keys.append(k)
+            func_arg_keys = func_arg_keys[1:]
+
+            if hasattr(obj, 'c') and obj.c is not None:
+                if not isinstance(obj.c, AttrDict):
+                    raise TypeError("{obj} has attr c which is {type}, not {tyep_c}.".format(obj, tyep(obj.c), Configs))
+            else:
+                obj.c = AttrDict()
+            func_arg_keys_tmp = list(func_arg_keys)
+            kvdict = dict()
+            for a, k in zip(args, func_arg_keys_tmp):
+                func_arg_keys.pop(func_arg_keys.index(k))        
+                kvdict[k] = a            
+            for k in func_arg_keys:
+                kvdict[k] = kwargs[k]
+            
+            keys_to_add = set()
+            if include is None:
+                keys_to_add.update(set(kvdict.keys()))
+            else:
+                keys_to_add.update(set(include))
+            if exclude is not None:
+                keys_to_add.difference_update(set(exclude))
+            for k in keys_to_add:
+                obj.c[k] = kvdict[k]
+            return func(obj, *args, **kwargs)
+        return wrapper
+    return decorator
+
 
 
 class Params(dict):

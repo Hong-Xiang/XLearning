@@ -3,7 +3,7 @@ from .base import DataSetImages
 from ..utils.general import with_config
 from xlearn.utils.tensor import downsample, crop
 
-class SinoPhan(DataSetImages):
+class SinoPhan2(DataSetImages):
     """ Sinogram of phantoms
     is_poi: switch to add poisson noise
     nb_evts: total number of events if add poisson noise
@@ -13,7 +13,7 @@ class SinoPhan(DataSetImages):
     def __init__(self,
                  nb_evts=1e7,
                  is_poi=False,
-                 dataset_name='sino_phan_3',
+                 dataset_name='sino_phan',
                  mix_scale=False,                 
                  **kwargs):
         DataSetImages.__init__(self, dataset_name=dataset_name, **kwargs)

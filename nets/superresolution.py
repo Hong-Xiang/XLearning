@@ -29,13 +29,13 @@ class SRNetBase(Net):
                  image_keys=('data', 'label'),                 
                  crop_size=None,
                  loss_fn='mse',
-                 
+                 is_up_first=False,
                  **kwargs):
         Net.__init__(self, **kwargs)
         self.params['is_down_sample_0'] = is_down_sample_0
         self.params['is_down_sample_1'] = is_down_sample_1        
         self.params['nb_down_sample'] = nb_down_sample
-
+        self.params['is_up_first'] = is_up_first
         self.params['image_keys'] = image_keys
         
         self.params['upsampling_method'] = upsampling_method
