@@ -85,7 +85,7 @@
         "file_data": "pet_rebin2.h5",
         "file_type": "h5",
         "data_key": "sinograms",
-        "data_mean": 0.2,
+        "data_mean": 0.0,
         "data_std": 50,
         "period": [128, 320],
         "allow_padding": [false, true]

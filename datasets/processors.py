@@ -11,8 +11,6 @@ def get_instance(name, *args, **kwargs):
     return name2cls[name](*args, **kwargs)
 
 class Proc:
-    @json_config
-    @auto_configs()
     def __init__(self, keys_out, keys_map=None, pass_keys=None):
         self.keys_out = keys_out
         if keys_map is None:
@@ -36,13 +34,11 @@ class Proc:
         return out
 
 class Norm(Proc):
-    @json_config
-    @auto_configs()
-    def __init__(self, keys_out, keys_map=None,
+    def __init__(self, keys_out, keys_map=None, pass_keys=None,
                  gamma=1.0,
                  mean=0.0,
                  std=1.0):
-        super(Norm, self).__init__(keys_out, keys_map)
+        super(Norm, self).__init__(keys_out, keys_map, pass_keys)
         self.gamma = gamma
         self.mean = mean
         self.std = std
@@ -75,13 +71,20 @@ class Norm(Proc):
     def __call__(self, data_dict, mean_value=None, std_value=None):
         return {k: self.norm(data_dict[k], mean_value, std_value) if k in self.keys else data_dict[k] for k in data_dict}
 
-class PoissonNoise(Proc):
-    @json_config
-    @auto_configs()
-    def __init__(self, keys,
+class PoissonNoise(Proc):    
+    def __init__(self, keys_out, keys_map=None, pass_keys=None,
                  nb_events):
-        pass
-
+        super(PoissonNoise, self).__init__(keys_out, keys_map, pass_keys)
+        self.nb_events = nb_events
+    
+    def __call__(self, data_dict):
+        out = dict()
+        for k in self.keys_out:
+            if k in self.pass_keys:
+                out[k] = data_dict[self.keys_map[k]]
+            else:
+                out[k] = self._proc(k, self.keys_map[k], data_dict[self.keys_map[k]])
+        return out
 
 class Crop(Proc):
     pass
