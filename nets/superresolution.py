@@ -600,6 +600,7 @@ class SRMSL(SRNetBase):
                  nb_units=2,
                  loss_weight=None,
                  is_clean_input= False,
+                 activation='celu',
                  **kwargs):
         SRNetBase.__init__(self, **kwargs)
         self.params['filters'] = filters
@@ -610,21 +611,26 @@ class SRMSL(SRNetBase):
         self.params['nb_units'] = nb_units
         self.params['loss_weight'] = loss_weight
         self.params['is_clean_input'] = is_clean_input
+        self.params['activation'] = activation
         self.params.update_short_cut()
     
     
     def _get_basic_unit_and_args(self, basic_unit_name=None):
+        if self.p.activation == 'celu':
+            activ_fn = layers.celu
+        elif self.p.activation == 'relu':
+            activ_fn = tf.nn.relu
         if basic_unit_name is None:
             basic_unit_name = self.p.basic_unit
         if basic_unit_name == 'conv2d':
             unit = layers.conv2d
-            args = {'pre_activation': layers.celu}            
+            args = {'pre_activation': activ_fn}            
         elif basic_unit_name == 'incept':
             unit = layers.incept
-            args = {'activation': layers.celu}      
+            args = {'activation': activ_fn}      
         elif basic_unit_name == 'nin':
             unit = layers.nin
-            args = {'activation': layers.celu}
+            args = {'activation': activ_fn}
         else:
             raise ValueError('Known ')
         if self.p.is_bn:
