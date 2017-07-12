@@ -19,8 +19,6 @@ def psnr(label, target):
     return value
 
 
-
-
 '''
 The function to compute SSIM
 @param param: img_mat_1 1st 2D matrix
@@ -101,6 +99,19 @@ def ssim(label, target):
 
     return index
 
+def stat_many(refs, imgs, is_psnr=True, is_rmse=True, is_ssim=False):
+    nb_imgs = refs.shape[0]
+    psnrs = []
+    rmses = []
+    ssims = []
+    for i in range(nb_imgs):
+        if is_psnr:
+            psnrs.append(psnr(refs[i, ...], imgs[i, ...]))
+        if is_rmse:
+            rmses.append(psnr(refs[i, ...], imgs[i, ...]))
+        if is_ssim:
+            ssims.append(psnr(refs[i, ...], imgs[i, ...]))
+    return {'psnr': psnrs, 'rmse': rmses, 'ssim': ssims}
 
 def proj(img, num_sen, sen_width, theta):    
     shape = img.shape
@@ -115,6 +126,11 @@ def proj(img, num_sen, sen_width, theta):
     astra.projector.clear()
     astra.algorithm.clear()
     return sinogram
+
+def recon_auto(sino, imgsize, full_sen_width, method='FBP_CUDA', run_time=1):
+    nb_sen = sino.shape[0]
+    theta = np.linspace(0, np.pi, sino.shape[1], False)
+    return recon(sino, imgsize, nb_sen, full_sen_width/nb_sen, theta, method, run_time)
 
 def recon(sino, imgsize, num_sen, sen_width, theta, method='FBP_CUDA', run_time=1):
     sino = np.array(sino)
@@ -148,6 +164,30 @@ def recon(sino, imgsize, num_sen, sen_width, theta, method='FBP_CUDA', run_time=
     astra.projector.clear()
     astra.algorithm.clear()
     return rec
+
+def pad_period(sinos, half_crop_size=[0, 8, 8, 0], period=[None, None, 320, None], to_pad=[False, False, True, False]):
+    shape = list(sinos.shape)
+    for i, c in enumerate(half_crop_size):        
+        shape[i] += 2*c
+    padded = np.zeros(shape)
+    idx = [slice(c, -c) if c > 0 else slice(0, sz) for c, sz in zip(half_crop_size, shape)]
+    padded[idx] = sinos
+    for i, c in enumerate(half_crop_size):
+        if c == 0:
+            continue
+        if not to_pad[i]:
+            continue
+        sli_pre = [slice(0, sz) for sz in shape]
+        sli_pre[i] = slice(0, c)
+        sli_post = [slice(0, sz) for sz in shape]
+        sli_post[i] = slice(period[i], period[i]+c)
+        padded[sli_pre] = padded[sli_post]
+        sli_pre = [slice(0, sz) for sz in shape]
+        sli_pre[i] = slice(-c, shape[i])
+        sli_post = [slice(0, sz) for sz in shape]
+        sli_post[i] = slice(-c-period[i], shape[i]-period[i])
+        padded[sli_pre] = padded[sli_post]
+    return padded
 
 def padding_sino(sinos, crop_size=8, period=360, mid=False):
     shape = list(sinos.shape)

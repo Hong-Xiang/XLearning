@@ -225,6 +225,7 @@ class DataSetImages(DataSetBase):
                  nb_down_sample=3,
                  is_down_sample_0=True,
                  is_down_sample_1=True,
+                 is_shuffle=True,
                  down_sample_method='mean',
                  data_key='images',
                  nnz_ratio=0.0,
@@ -235,7 +236,7 @@ class DataSetImages(DataSetBase):
         super(DataSetImages, self).__init__(**kwargs)
         self.params['dataset_name'] = dataset_name
         self.params['is_using_default'] = is_using_default
-
+        self.params['is_shuffle'] = is_shuffle
  
 
         self.params['is_full_load'] = is_full_load
@@ -372,23 +373,23 @@ class DataSetImages(DataSetBase):
         if len(self.p.data_key.keys()) > 1:
             self.nb_examples = self.dataset.shape[0]
             self.sampler = Sampler(
-                list(range(self.nb_examples)), is_shuffle=True)
+                list(range(self.nb_examples)), is_shuffle=self.params['is_shuffle'])
         else:
             nb_data = self.dataset.shape[0]
             nb_train = nb_data // 5 * 4    
             if self.p.is_fix_idx:
                 idxs = numpy.load('idx_'+self.p.mode+'.npy')
-                self.sampler = Sampler(idxs, is_shuffle=True)
+                self.sampler = Sampler(idxs, is_shuffle=self.params['is_shuffle'])
                 self.nb_examples = len(idxs)
             else:
                 if self.p.mode == 'train':
                     self.nb_examples = nb_train                
                     self.sampler = Sampler(
-                        list(range(self.nb_examples)), is_shuffle=True)
+                        list(range(self.nb_examples)), is_shuffle=self.params['is_shuffle'])
                 else:
                     self.nb_examples = nb_data - nb_train
                     self.sampler = Sampler(
-                        list(range(nb_train, nb_data)), is_shuffle=True)
+                        list(range(nb_train, nb_data)), is_shuffle=self.params['is_shuffle'])
 
     def finalize(self):
         super(DataSetImages, self).finalize()

@@ -242,8 +242,8 @@ class SRNetBase(Net):
         self.feed_dict.update({
             # 'train/main': ['data_'+self.sk[-1], 'label_'+self.sk[0]],
             "train/main": ['data_'+k for k in self.sk] + ['label_'+k for k in self.sk],
-            'predict': ['data_'+self.sk[-1]],
-            'interp': ['data_'+self.sk[-1]],
+            'predict': ['data_'+self.sk[-1], 'label_'+self.sk[-1]],
+            'interp': ['data_'+self.sk[-1], 'label_'+self.sk[-1]],
             'summary': ['data_'+k for k in self.sk] + ['label_'+k for k in self.sk],
         })
 
