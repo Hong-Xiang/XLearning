@@ -108,9 +108,9 @@ def stat_many(refs, imgs, is_psnr=True, is_rmse=True, is_ssim=False):
         if is_psnr:
             psnrs.append(psnr(refs[i, ...], imgs[i, ...]))
         if is_rmse:
-            rmses.append(psnr(refs[i, ...], imgs[i, ...]))
+            rmses.append(rmse(refs[i, ...], imgs[i, ...]))
         if is_ssim:
-            ssims.append(psnr(refs[i, ...], imgs[i, ...]))
+            ssims.append(ssim(refs[i, ...], imgs[i, ...]))
     return {'psnr': psnrs, 'rmse': rmses, 'ssim': ssims}
 
 def proj(img, num_sen, sen_width, theta):    
