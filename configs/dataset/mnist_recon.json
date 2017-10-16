@@ -1,4 +1,5 @@
 {
+    "dataset_name": "mnist",
     "batch_size": 32,
     "mode": "train",
     "is_norm": true,

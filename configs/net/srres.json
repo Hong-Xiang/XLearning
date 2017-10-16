@@ -1,0 +1,18 @@
+{
+    "low_shape": [32, 32],
+    "filters": 64,
+    "depths": 10,
+    "scale": [1.0, 0.1],
+    "model_dir": "./save",
+    "log_dir": "./log",
+    "summary_type": "step",
+    "summary_freq": 10,
+    "save_type": "step",
+    "save_freq": 100,
+    "lr": {"main": 1e-4},
+    "nb_gpus": 2,
+    "device_type": "gpus",
+    "crop_size": 8,
+    "basic_unit": "conv2d",
+    "grad_clip": 0.1
+}

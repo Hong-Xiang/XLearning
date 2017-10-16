@@ -8,6 +8,7 @@ import tensorflow as tf
 def pprint(contents, file=None):
     click.echo(contents, file=file)
 
+
 def hline(level=0, file=None):
     if level == 0:
         pprint("=" * 60, file)
@@ -27,8 +28,10 @@ def pp_json(dict_to_print, title=None, length=30, file=None):
     if title is not None:
         pprint(title, file)
         hline(1, file)
-    pprint(json.dumps(dict_to_print, indent=4,
-                      separators=[',', '： '], sort_keys=True, cls=SpecialEncoder), file)
+    # pprint(json.dumps(dict_to_print, indent=4,
+    #                   separators=[',', '： '], sort_keys=True, cls=SpecialEncoder), file)
+    from pprint import pprint as pp
+    pp(dict_to_print)
     hline(file)
 
 

@@ -17,6 +17,9 @@ import tensorflow as tf
 import click
 from inspect import getfullargspec, signature
 from functools import wraps
+from pdb import set_trace
+
+DEBUG = True
 
 def analysis_device(device):
     p = re.compile('/([a-z]*):([0-9]*)')
@@ -141,6 +144,9 @@ class ExceptionHook:
 def enter_debug():
     sys.excepthook = ExceptionHook()
 
+def add_breakpoint():
+    if DEBUG:
+        set_trace()
 
 def show_debug_logs():
     """ print debug logging info """

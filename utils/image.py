@@ -40,6 +40,16 @@ def psnr(target, label, max_value=None, tor=1e-7):
     psnr_value = 10.0 * (1.0 + np.log(np.prod(target.shape[1:])*max_value*max_value/err_sum))    
     return psnr_value
 
+def imshow_save_clean(img, filename, **kwargs):
+    fig = plt.figure()
+    fig.set_size_inches(img.shape[0]/100,img.shape[1]/100)
+    fig.set_dpi(100)
+    plt.imshow(img, **kwargs)
+    plt.axis('off')
+    plt.subplots_adjust(0,0,1,1,0,0)
+    # plt.savefig(filename, bbox_inches='tight', pad_inches = 0)
+    plt.savefig(filename)
+
 def subplot_images(images, nb_max_row=8, cmap=None, is_gray=True, size=2.0, is_axis=False, tight_c=0.3, is_save=False, filename='images.png', window=None):
     """ subplot list of images of multiple categories into grid subplots
     Args:
@@ -62,7 +72,7 @@ def subplot_images(images, nb_max_row=8, cmap=None, is_gray=True, size=2.0, is_a
             for j in range(nb_max_row):
                 id_img = i * nb_max_row + j
                 id_img = min(id_img, nb_images - 1)
-                ax = plt.subplot(nb_row * nb_cata, nb_max_row, cid)
+                ax = plt.subplot(nb_row * nb_cata, nb_max_row, cid)                
                 plt.imshow(images[k][id_img], cmap=cmap,
                            vmin=window[k][0], vmax=window[k][1])
                 if is_gray:

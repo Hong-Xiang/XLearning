@@ -9,10 +9,11 @@ import random
 import numpy
 import h5py
 import pathlib
+from queue import Queue
 
 from ..utils.prints import pp_json
 from ..utils.general import with_config, empty_list
-from ..utils.tensor import down_sample_nd
+from ..utils.tensor import downsample
 from ..utils.cells import Sampler
 from ..utils.options import Params
 
@@ -54,6 +55,7 @@ class DataSetBase(object):
                  file_type='h5',
                  data_key=None,
                  name='dataset',
+                 is_fix_idx=None,                 
                  **kwargs):
         """
         Dataset Base class
@@ -70,6 +72,8 @@ class DataSetBase(object):
         self.params['data_gamma'] = data_gamma
         self.params['name'] = name
 
+        self.params['is_fix_idx'] = is_fix_idx
+
         # Cls specifict parames
         self.params['keys'] = ['data', 'label']
 
@@ -80,6 +84,9 @@ class DataSetBase(object):
         # To be calculated in initialize
         self.nb_examples = None
         self.sampler = None
+
+        self.mean_cache = Queue()
+        self.std_cache = Queue()
 
     def rand_int(self, minv=0, maxv=100):
         return random.randint(minv, maxv)
@@ -111,6 +118,11 @@ class DataSetBase(object):
         Returns:
             A dict of mini-batch tensors.
         """
+        while not self.mean_cache.empty():
+            self.mean_cache.get_nowait()
+        while not self.std_cache.empty():
+            self.std_cache.get_nowait()
+
         out = {}
         # init output dict
         for k in self.p.keys:
@@ -118,30 +130,40 @@ class DataSetBase(object):
 
         # sample single
         for i in range(self.p.batch_size):
-            ss = self._sample_single()
+            ss = self._sample_single()            
             for k in self.p.keys:
                 out[k].append(ss[k])
 
         # convert to numpy
         for k in self.p.keys:
             out[k] = numpy.array(out[k])
+            if len(out[k].shape) == 1:
+                out[k] = out[k].reshape([-1, 1])
         return out
 
-    def norm(self, ip_):
+    def norm(self, ip_, mean_value=None, std_value=None):
         if self.p.is_norm:
-            normed = ip_ - self.p.data_mean
-            normed = normed / self.p.data_std
+            if mean_value is None:
+                mean_value = self.p.data_mean
+            if std_value is None:
+                std_value = self.p.data_std
+            normed = ip_ - mean_value
+            normed = normed / std_value
             if self.p.is_norm_gamma:
                 normed = np.power(normed, self.p.data_gamma)
         else:
             return ip_
         return normed
 
-    def denorm(self, ip_):
+    def denorm(self, ip_, mean_value=None, std_value=None):        
         if self.p.is_norm:
-            denormed = np.array(ip_)
+            if mean_value is None:
+                mean_value = self.p.data_mean
+            if std_value is None:
+                std_value = self.p.data_std
+            denormed = numpy.array(ip_)
             if self.p.is_norm_gamma:
-                normed = np.power(normed, 1.0/self.p.data_gamma)
+                normed = numpy.power(normed, 1.0/self.p.data_gamma)
             denormed = denormed * self.p.data_std
             denormed = denormed + self.p.data_mean
         else:
@@ -166,16 +188,16 @@ class DataSetBase(object):
 
     def gather_examples(self, nb_examples=64):
         """ gather given numbers of examples """
-        nb_samples = int(numpy.ceil(nb_examples / self.batch_size))
+        nb_samples = int(numpy.ceil(nb_examples / self.p.batch_size))
         out = None
         for _ in range(nb_samples):
             s = self.sample()
             if out is None:
                 out = s
             else:
-                for k in self.keys:
+                for k in s:
                     out[k] = numpy.concatenate([out[k], s[k]], axis=0)
-        for k in self.keys:
+        for k in out:
             out[k] = out[k][:nb_examples, ...]
         return out
 
@@ -203,17 +225,18 @@ class DataSetImages(DataSetBase):
                  nb_down_sample=3,
                  is_down_sample_0=True,
                  is_down_sample_1=True,
+                 is_shuffle=True,
                  down_sample_method='mean',
                  data_key='images',
                  nnz_ratio=0.0,
                  padding=None,
                  period=None,
-                 data_format='channels_last',
+                 data_format='channels_last',                 
                  **kwargs):
         super(DataSetImages, self).__init__(**kwargs)
         self.params['dataset_name'] = dataset_name
         self.params['is_using_default'] = is_using_default
-
+        self.params['is_shuffle'] = is_shuffle
  
 
         self.params['is_full_load'] = is_full_load
@@ -267,6 +290,7 @@ class DataSetImages(DataSetBase):
         self.params.update_short_cut()
         self.dataset = None
         self.fin = None
+        
 
     def load_default_json(self):
         p = pathlib.Path(PATH_XLEARN) / 'configs' / 'dataset' / IMAGE_CONFIG_FILE
@@ -308,7 +332,7 @@ class DataSetImages(DataSetBase):
     def downsample(self, image):
         """ down sample *ONE* image/patch """
         image = numpy.array(image, dtype=numpy.float32)
-        image_d = down_sample_nd(image, self.p.down_sample_ratio, method=self.p.down_sample_method)
+        image_d = downsample(image, self.p.down_sample_ratio, method=self.p.down_sample_method)
         return image_d
 
     def visualize(self, sample, is_no_change=False):
@@ -349,18 +373,23 @@ class DataSetImages(DataSetBase):
         if len(self.p.data_key.keys()) > 1:
             self.nb_examples = self.dataset.shape[0]
             self.sampler = Sampler(
-                list(range(self.nb_examples)), is_shuffle=True)
+                list(range(self.nb_examples)), is_shuffle=self.params['is_shuffle'])
         else:
             nb_data = self.dataset.shape[0]
-            nb_train = nb_data // 5 * 4
-            if self.p.mode == 'train':
-                self.nb_examples = nb_train
-                self.sampler = Sampler(
-                    list(range(self.nb_examples)), is_shuffle=True)
+            nb_train = nb_data // 5 * 4    
+            if self.p.is_fix_idx:
+                idxs = numpy.load('idx_'+self.p.mode+'.npy')
+                self.sampler = Sampler(idxs, is_shuffle=self.params['is_shuffle'])
+                self.nb_examples = len(idxs)
             else:
-                self.nb_examples = nb_data - nb_train
-                self.sampler = Sampler(
-                    list(range(nb_train, nb_data)), is_shuffle=True)
+                if self.p.mode == 'train':
+                    self.nb_examples = nb_train                
+                    self.sampler = Sampler(
+                        list(range(self.nb_examples)), is_shuffle=self.params['is_shuffle'])
+                else:
+                    self.nb_examples = nb_data - nb_train
+                    self.sampler = Sampler(
+                        list(range(nb_train, nb_data)), is_shuffle=self.params['is_shuffle'])
 
     def finalize(self):
         super(DataSetImages, self).finalize()

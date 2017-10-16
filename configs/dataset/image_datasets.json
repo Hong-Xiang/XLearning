@@ -16,19 +16,22 @@
         "file_data": "celeba.h5",
         "file_type": "h5",
         "data_key": "images",
-        "is_uint8": "true"
+        "is_uint8": "true",
+        "allow_padding": [false, false]
     },
     "flickr25k": {
         "file_data": "flickr25k.h5",
         "file_type": "h5",
         "data_key": "images",
-        "is_uint8": "true"
+        "is_uint8": "true",
+        "allow_padding": [false, false]
     },
     "svhn": {
         "file_data": "svhn_small.h5",
         "file_type": "h5",
         "data_key": "images",
-        "is_uint8": "true"
+        "is_uint8": "true",
+        "allow_padding": [false, false]
     },
     "sino_shep": {
         "file_data": "shepplogan_sinograms.h5",
@@ -36,7 +39,8 @@
         "data_key": "sinograms",
         "data_mean": 26.0,
         "data_std": 27.0,
-        "period": [363, 360]
+        "period": [363, 360],
+        "allow_padding": [false, true]
     },
     "sino_shep_test": {
         "file_data": "shepplogan_sinograms_test.h5",
@@ -44,7 +48,8 @@
         "data_key": "sinograms",
         "data_mean": 26.0,
         "data_std": 27.0,
-        "period": [360, 360]
+        "period": [360, 360],
+        "allow_padding": [false, true]
     },
     "sino_dero": {
         "file_data": "derenzo_sinograms.h5",
@@ -52,7 +57,26 @@
         "data_key": "sinograms",
         "data_mean": 15.8,
         "data_std": 17.8,
-        "period": [360, 360]
+        "period": [360, 360],
+        "allow_padding": [false, true]
+    },
+    "sino_phan": {
+        "file_data": "phantom_sinograms.h5",
+        "file_type": "h5",
+        "data_key": "sinograms",
+        "data_mean": 0.0,
+        "data_std": null,
+        "period": [320, 640],
+        "allow_padding": [false, true]
+    },
+    "sino_phan_3": {
+        "file_data": "phantom_sinograms_3.h5",
+        "file_type": "h5",
+        "data_key": "sinograms",
+        "data_mean": 0.0,
+        "data_std": null,
+        "period": [320, 640],
+        "allow_padding": [false, true]
     },
     "sino_obil": {
         "todo": true
@@ -61,9 +85,10 @@
         "file_data": "pet_rebin2.h5",
         "file_type": "h5",
         "data_key": "sinograms",
-        "data_mean": 0.2,
+        "data_mean": 0.0,
         "data_std": 50,
-        "period": [128, 320]
+        "period": [128, 320],
+        "allow_padding": [false, true]
     },
     "sino_spect": {
         "todo": true
